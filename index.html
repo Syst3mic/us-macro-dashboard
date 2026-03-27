@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>US Macro Dashboard</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🇺🇸</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;0,9..40,800;1,9..40,400&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg-deep:#06080C;--bg-card:#0D1017;--bg-card-hover:#111620;
+    --bg-surface:#151A24;--bg-elevated:#1C2230;
+    --border:#1A2030;--border-active:#2A3550;
+    --text-primary:#E2E6EE;--text-secondary:#7A8499;--text-muted:#4A5268;
+    --accent-red:#F0475A;--accent-green:#00D68F;--accent-blue:#3B82F6;
+    --accent-purple:#8B5CF6;--accent-amber:#F59E0B;--accent-cyan:#06B6D4;
+    --accent-pink:#EC4899;--accent-orange:#F97316;
+    --font-display:'DM Sans',system-ui,sans-serif;
+    --font-mono:'JetBrains Mono',monospace;
+  }
+  html{background:var(--bg-deep);color:var(--text-primary);font-family:var(--font-display)}
+  body{min-height:100vh;overflow-x:hidden}
+  #root{min-height:100vh}
+  ::-webkit-scrollbar{width:6px;height:6px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:#2A3550;border-radius:3px}
+  ::-webkit-scrollbar-thumb:hover{background:#3A4560}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+  .card-enter{animation:fadeIn .4s ease both}
+  .shimmer{background:linear-gradient(90deg,var(--bg-card) 25%,var(--bg-surface) 50%,var(--bg-card) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback, useMemo, useRef } = React;
+const {
+  LineChart, Line, BarChart, Bar, AreaChart, Area,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  ReferenceLine, Cell
+} = Recharts;
+
+// ════════════════════════════════════════════════════════════════
+// ▸▸▸  PASTE YOUR FRED API KEY BELOW  ◂◂◂
+// Get one free at: https://fred.stlouisfed.org/docs/api/api_key.html
+// ════════════════════════════════════════════════════════════════
+const FRED_API_KEY = "2447c708f1ac5ca4cbb087ef3e57d8d6";
+// ════════════════════════════════════════════════════════════════
+
+const INDICATORS = {
+  cpi:            { label:"CPI (YoY%)",              series:"CPIAUCSL",        cat:"inflation", desc:"Consumer Price Index, All Urban Consumers",        tx:"pct_yr", unit:"%",  chart:"area",      color:"#F0475A", freq:"Monthly" },
+  coreCpi:        { label:"Core CPI (YoY%)",         series:"CPILFESL",        cat:"inflation", desc:"CPI Less Food & Energy",                           tx:"pct_yr", unit:"%",  chart:"area",      color:"#FB7185", freq:"Monthly" },
+  pce:            { label:"PCE Price Index (YoY%)",   series:"PCEPI",           cat:"inflation", desc:"Personal Consumption Expenditures Price Index",     tx:"pct_yr", unit:"%",  chart:"area",      color:"#E11D48", freq:"Monthly" },
+  ppi:            { label:"PPI (YoY%)",              series:"PPIACO",          cat:"inflation", desc:"Producer Price Index, All Commodities",             tx:"pct_yr", unit:"%",  chart:"bar",       color:"#F97316", freq:"Monthly" },
+  fedFunds:       { label:"Fed Funds Rate",          series:"FEDFUNDS",        cat:"rates",     desc:"Effective Federal Funds Rate",                      tx:"lin",    unit:"%",  chart:"step",      color:"#8B5CF6", freq:"Monthly" },
+  treasury10y2y:  { label:"10Y–2Y Spread",           series:"T10Y2Y",          cat:"rates",     desc:"10-Year minus 2-Year Treasury Spread",              tx:"lin",    unit:"%",  chart:"area_zero", color:"#6366F1", freq:"Daily" },
+  treasury10y:    { label:"10Y Treasury Yield",      series:"DGS10",           cat:"rates",     desc:"10-Year Treasury Constant Maturity Rate",           tx:"lin",    unit:"%",  chart:"line",      color:"#A78BFA", freq:"Daily" },
+  unemployment:   { label:"Unemployment Rate",       series:"UNRATE",          cat:"labor",     desc:"Civilian Unemployment Rate",                       tx:"lin",    unit:"%",  chart:"area",      color:"#3B82F6", freq:"Monthly" },
+  nfp:            { label:"Nonfarm Payrolls (MoM Δ)",series:"PAYEMS",          cat:"labor",     desc:"Total Nonfarm Payrolls, Month-over-Month Change",  tx:"chg",    unit:"K",  chart:"bar_pn",    color:"#60A5FA", freq:"Monthly" },
+  initialClaims:  { label:"Initial Jobless Claims",  series:"ICSA",            cat:"labor",     desc:"Initial Claims for Unemployment Insurance",        tx:"lin",    unit:"K",  chart:"line",      color:"#38BDF8", freq:"Weekly", div:1000 },
+  participRate:   { label:"Labor Force Participation",series:"CIVPART",        cat:"labor",     desc:"Civilian Labor Force Participation Rate",           tx:"lin",    unit:"%",  chart:"line",      color:"#7DD3FC", freq:"Monthly" },
+  gdp:            { label:"Real GDP Growth (QoQ%)",  series:"A191RL1Q225SBEA", cat:"growth",    desc:"Real GDP, Quarterly Annualized",                   tx:"lin",    unit:"%",  chart:"bar_pn",    color:"#00D68F", freq:"Quarterly" },
+  retailSales:    { label:"Retail Sales (MoM%)",     series:"RSAFS",           cat:"growth",    desc:"Advance Retail Sales: Total",                      tx:"pct_mo", unit:"%",  chart:"bar_pn",    color:"#34D399", freq:"Monthly" },
+  indProd:        { label:"Industrial Production (YoY%)", series:"INDPRO",     cat:"growth",    desc:"Industrial Production: Total Index",                tx:"pct_yr", unit:"%",  chart:"area",      color:"#6EE7B7", freq:"Monthly" },
+  capUtil:        { label:"Capacity Utilization",    series:"TCU",             cat:"growth",    desc:"Total Industry Capacity Utilization",               tx:"lin",    unit:"%",  chart:"line",      color:"#A7F3D0", freq:"Monthly" },
+  umich:          { label:"Consumer Sentiment",      series:"UMCSENT",         cat:"sentiment", desc:"University of Michigan Consumer Sentiment",         tx:"lin",    unit:"",   chart:"area",      color:"#FBBF24", freq:"Monthly" },
+  confBoard:      { label:"Consumer Confidence",     series:"CSCICP03USM665S", cat:"sentiment", desc:"OECD Consumer Confidence Indicator",               tx:"lin",    unit:"",   chart:"line",      color:"#FCD34D", freq:"Monthly" },
+  housingStarts:  { label:"Housing Starts",          series:"HOUST",           cat:"housing",   desc:"New Privately-Owned Housing Units Started (Thousands)", tx:"lin", unit:"K",  chart:"bar",       color:"#06B6D4", freq:"Monthly" },
+  buildPermits:   { label:"Building Permits",        series:"PERMIT",          cat:"housing",   desc:"New Private Housing Units Authorized (Thousands)",  tx:"lin",    unit:"K",  chart:"line",      color:"#22D3EE", freq:"Monthly" },
+  caseShiller:    { label:"Case-Shiller Home Price (YoY%)", series:"CSUSHPINSA", cat:"housing", desc:"S&P/Case-Shiller U.S. National Home Price Index",  tx:"pct_yr", unit:"%",  chart:"area",      color:"#67E8F9", freq:"Monthly" },
+  tradeBal:       { label:"Trade Balance",           series:"BOPGSTB",         cat:"trade",     desc:"Trade Balance: Goods and Services (Billions $)",    tx:"lin",    unit:"$B", chart:"area_zero", color:"#EC4899", freq:"Monthly" },
+  m2:             { label:"M2 Money Supply (YoY%)",  series:"M2SL",            cat:"monetary",  desc:"M2 Money Stock",                                   tx:"pct_yr", unit:"%",  chart:"area",      color:"#C084FC", freq:"Monthly" },
+};
+
+const CATEGORIES = {
+  all:        { label:"All Indicators",  icon:"◉" },
+  inflation:  { label:"Inflation",       icon:"🔥" },
+  rates:      { label:"Rates & Yields",  icon:"📐" },
+  labor:      { label:"Labor Market",    icon:"👷" },
+  growth:     { label:"Growth & Output", icon:"🏭" },
+  sentiment:  { label:"Sentiment",       icon:"📊" },
+  housing:    { label:"Housing",         icon:"🏠" },
+  trade:      { label:"Trade",           icon:"🚢" },
+  monetary:   { label:"Monetary",        icon:"💰" },
+};
+
+const TIMEFRAMES = { "1Y":12, "2Y":24, "5Y":60, "10Y":120, "MAX":9999 };
+
+// ─── Fetch & Transform ───
+async function fetchFRED(seriesId, limit=180) {
+  const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${FRED_API_KEY}&file_type=json&sort_order=desc&limit=${limit}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`FRED ${r.status}`);
+  const j = await r.json();
+  return j.observations.filter(o => o.value !== ".").map(o => ({ date:o.date, value:parseFloat(o.value) })).reverse();
+}
+
+function transform(raw, cfg) {
+  let d = [...raw];
+  if (cfg.tx === "pct_yr" && d.length > 12)
+    d = d.slice(12).map((v,i) => ({ date:v.date, value:((v.value - raw[i].value)/raw[i].value)*100 }));
+  else if (cfg.tx === "pct_mo" && d.length > 1)
+    d = d.slice(1).map((v,i) => ({ date:v.date, value:((v.value - raw[i].value)/raw[i].value)*100 }));
+  else if (cfg.tx === "chg" && d.length > 1)
+    d = d.slice(1).map((v,i) => ({ date:v.date, value:v.value - raw[i].value }));
+  if (cfg.div) d = d.map(v => ({ ...v, value:v.value/cfg.div }));
+  return d;
+}
+
+// ─── Chart Renderer ───
+function ChartBlock({ data, cfg, timeframe }) {
+  const tf = TIMEFRAMES[timeframe] || 60;
+  const sliced = data.slice(-tf);
+  const fmt = v => cfg.unit === "$B" ? `$${v.toFixed(1)}B` : cfg.unit === "K" ? `${v.toFixed(0)}K` : cfg.unit ? `${v.toFixed(2)}${cfg.unit}` : v.toFixed(2);
+
+  const xp = {
+    dataKey:"date",
+    tick:{ fontSize:10, fill:"#4A5268", fontFamily:"var(--font-mono)" },
+    tickFormatter: d => { const [y,m] = d.split("-"); return `${m}/${y.slice(2)}`; },
+    interval: Math.max(0, Math.floor(sliced.length/5)),
+    axisLine:{ stroke:"#1A2030" }, tickLine:false,
+  };
+  const yp = {
+    tick:{ fontSize:10, fill:"#4A5268", fontFamily:"var(--font-mono)" },
+    tickFormatter: v => Math.abs(v)>=1000 ? `${(v/1000).toFixed(0)}k` : Number.isInteger(v) ? v : v.toFixed(1),
+    axisLine:false, tickLine:false, width:48,
+  };
+  const tip = {
+    contentStyle:{ background:"#151A24", border:"1px solid #2A3550", borderRadius:8, fontSize:12, color:"#E2E6EE", fontFamily:"var(--font-mono)" },
+    labelStyle:{ color:"#7A8499", fontFamily:"var(--font-display)", marginBottom:4 },
+    formatter: v => [fmt(v), ""],
+    cursor:{ stroke:"#2A3550" },
+  };
+  const grid = <CartesianGrid strokeDasharray="3 3" stroke="#141925" />;
+
+  if (cfg.chart === "bar" || cfg.chart === "bar_pn") {
+    return (
+      <ResponsiveContainer width="100%" height={210}>
+        <BarChart data={sliced} margin={{top:10,right:8,left:0,bottom:0}}>
+          {grid}<XAxis {...xp}/><YAxis {...yp}/><Tooltip {...tip}/>
+          {cfg.chart==="bar_pn" && <ReferenceLine y={0} stroke="#3A4560"/>}
+          <Bar dataKey="value" radius={[3,3,0,0]} maxBarSize={14}>
+            {sliced.map((e,i) => <Cell key={i} fill={cfg.chart==="bar_pn" ? (e.value>=0 ? "#00D68F" : "#F0475A") : cfg.color} fillOpacity={0.8}/>)}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  }
+  if (cfg.chart === "area" || cfg.chart === "area_zero") {
+    const gid = `g_${cfg.series}`;
+    return (
+      <ResponsiveContainer width="100%" height={210}>
+        <AreaChart data={sliced} margin={{top:10,right:8,left:0,bottom:0}}>
+          <defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={cfg.color} stopOpacity={0.25}/>
+            <stop offset="100%" stopColor={cfg.color} stopOpacity={0.01}/>
+          </linearGradient></defs>
+          {grid}<XAxis {...xp}/><YAxis {...yp}/><Tooltip {...tip}/>
+          {cfg.chart==="area_zero" && <ReferenceLine y={0} stroke="#4A5268" strokeDasharray="6 4"/>}
+          <Area type="monotone" dataKey="value" stroke={cfg.color} strokeWidth={2} fill={`url(#${gid})`} dot={false}/>
+        </AreaChart>
+      </ResponsiveContainer>
+    );
+  }
+  if (cfg.chart === "step") {
+    return (
+      <ResponsiveContainer width="100%" height={210}>
+        <LineChart data={sliced} margin={{top:10,right:8,left:0,bottom:0}}>
+          {grid}<XAxis {...xp}/><YAxis {...yp}/><Tooltip {...tip}/>
+          <Line type="stepAfter" dataKey="value" stroke={cfg.color} strokeWidth={2.5} dot={false}/>
+        </LineChart>
+      </ResponsiveContainer>
+    );
+  }
+  // default: line
+  return (
+    <ResponsiveContainer width="100%" height={210}>
+      <LineChart data={sliced} margin={{top:10,right:8,left:0,bottom:0}}>
+        {grid}<XAxis {...xp}/><YAxis {...yp}/><Tooltip {...tip}/>
+        <Line type="monotone" dataKey="value" stroke={cfg.color} strokeWidth={2} dot={false}/>
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+// ─── Stat Helpers ───
+function delta(data) {
+  if (data.length < 2) return { change:0, pct:0 };
+  const l = data[data.length-1].value, p = data[data.length-2].value;
+  return { change: l-p, pct: p !== 0 ? ((l-p)/Math.abs(p))*100 : 0 };
+}
+
+function fmtVal(v, cfg) {
+  if (cfg.unit === "$B") return `$${v.toFixed(1)}B`;
+  if (cfg.unit === "K") return `${v.toFixed(0)}K`;
+  if (cfg.unit === "%") return `${v.toFixed(2)}%`;
+  return v.toFixed(2);
+}
+
+// ─── Indicator Card ───
+function Card({ id, cfg, data, timeframe, isOpen, toggle, delay }) {
+  if (!data || !data.length) return (
+    <div className="card-enter" style={{
+      background:"var(--bg-card)", border:"1px solid var(--border)", borderRadius:14,
+      padding:24, animationDelay:`${delay}ms`, minHeight:100,
+    }}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+        <div style={{width:8,height:8,borderRadius:"50%",background:cfg.color,opacity:.4}}/>
+        <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"1px",fontWeight:500}}>{cfg.label}</span>
+      </div>
+      <div className="shimmer" style={{height:28,borderRadius:6,width:"60%"}}/>
+    </div>
+  );
+
+  const latest = data[data.length-1];
+  const { change, pct } = delta(data);
+  const up = change >= 0;
+
+  return (
+    <div className="card-enter" onClick={toggle} style={{
+      background: isOpen ? "var(--bg-card-hover)" : "var(--bg-card)",
+      border: `1px solid ${isOpen ? cfg.color+"30" : "var(--border)"}`,
+      borderRadius:14, cursor:"pointer", transition:"all .25s ease",
+      animationDelay:`${delay}ms`, overflow:"hidden",
+      boxShadow: isOpen ? `0 0 30px ${cfg.color}08` : "none",
+    }}>
+      {/* Header */}
+      <div style={{padding:"18px 20px 14px",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+            <div style={{width:7,height:7,borderRadius:"50%",background:cfg.color,boxShadow:`0 0 8px ${cfg.color}60`}}/>
+            <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.8px",fontWeight:600}}>
+              {cfg.label}
+            </span>
+          </div>
+          <div style={{fontSize:26,fontWeight:700,color:"var(--text-primary)",fontFamily:"var(--font-mono)",letterSpacing:"-0.5px"}}>
+            {fmtVal(latest.value, cfg)}
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}>
+            <span style={{
+              fontSize:12, fontWeight:600, fontFamily:"var(--font-mono)",
+              color: up ? "var(--accent-green)" : "var(--accent-red)",
+              display:"inline-flex", alignItems:"center", gap:3,
+              background: up ? "#00D68F12" : "#F0475A12",
+              padding:"2px 8px", borderRadius:4,
+            }}>
+              <span style={{fontSize:9}}>{up ? "▲" : "▼"}</span>
+              {Math.abs(change).toFixed(2)}
+            </span>
+            <span style={{fontSize:11,color:"var(--text-muted)",fontFamily:"var(--font-mono)"}}>
+              {pct >= 0 ? "+" : ""}{pct.toFixed(2)}%
+            </span>
+          </div>
+        </div>
+        <div style={{textAlign:"right",flexShrink:0}}>
+          <div style={{fontSize:10,color:"var(--text-muted)",fontFamily:"var(--font-mono)"}}>{latest.date}</div>
+          <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2,opacity:.6}}>{cfg.freq}</div>
+          <div style={{
+            fontSize:14, color:"var(--text-muted)", marginTop:10,
+            transform: isOpen ? "rotate(180deg)" : "rotate(0)",
+            transition:"transform .25s ease",
+          }}>▾</div>
+        </div>
+      </div>
+      {/* Expanded Chart */}
+      {isOpen && (
+        <div style={{padding:"0 12px 16px",borderTop:"1px solid var(--border)"}}>
+          <p style={{fontSize:11,color:"var(--text-muted)",margin:"10px 8px 6px",fontStyle:"italic",opacity:.7}}>
+            {cfg.desc}
+          </p>
+          <ChartBlock data={data} cfg={cfg} timeframe={timeframe}/>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main App ───
+function App() {
+  const [allData, setAllData] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [progress, setProgress] = useState({ done:0, total:0 });
+  const [lastRefresh, setLastRefresh] = useState(null);
+  const [expanded, setExpanded] = useState({});
+  const [timeframe, setTimeframe] = useState("5Y");
+  const [activeCat, setActiveCat] = useState("all");
+  const [error, setError] = useState("");
+
+  const fetchAll = useCallback(async (tf) => {
+    if (FRED_API_KEY === "YOUR_FRED_API_KEY_HERE") {
+      setError("Please replace YOUR_FRED_API_KEY_HERE in the HTML file with your actual FRED API key.");
+      setLoading(false);
+      return;
+    }
+    setLoading(true); setError("");
+    const entries = Object.entries(INDICATORS);
+    setProgress({ done:0, total:entries.length });
+    const results = {};
+    let done = 0;
+
+    for (let i = 0; i < entries.length; i += 4) {
+      const batch = entries.slice(i, i+4);
+      await Promise.all(batch.map(async ([id, cfg]) => {
+        try {
+          const lim = tf === "MAX" ? 600 : (TIMEFRAMES[tf]||60) + 30;
+          const raw = await fetchFRED(cfg.series, Math.max(lim, 160));
+          results[id] = transform(raw, cfg);
+        } catch(e) { console.warn(`Fail ${id}:`, e); results[id] = []; }
+        done++;
+        setProgress({ done, total:entries.length });
+      }));
+      if (i+4 < entries.length) await new Promise(r => setTimeout(r, 250));
+    }
+    setAllData(results); setLastRefresh(new Date()); setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchAll(timeframe); }, []);
+
+  const filtered = useMemo(() =>
+    Object.entries(INDICATORS).filter(([,c]) => activeCat === "all" || c.cat === activeCat),
+    [activeCat]
+  );
+
+  const hasData = Object.keys(allData).length > 0;
+
+  // Count by category
+  const catCounts = useMemo(() => {
+    const c = {};
+    Object.values(INDICATORS).forEach(v => { c[v.cat] = (c[v.cat]||0)+1; });
+    return c;
+  }, []);
+
+  return (
+    <div style={{minHeight:"100vh",background:"var(--bg-deep)"}}>
+      {/* ─── Header ─── */}
+      <header style={{
+        padding:"16px 28px", borderBottom:"1px solid var(--border)",
+        display:"flex", alignItems:"center", justifyContent:"space-between",
+        flexWrap:"wrap", gap:12,
+        position:"sticky", top:0, zIndex:100,
+        background:"#06080CE8", backdropFilter:"blur(16px) saturate(1.4)",
+      }}>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <div style={{
+            width:36, height:36, borderRadius:10,
+            background:"linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            fontSize:18, fontWeight:800, color:"#fff",
+          }}>M</div>
+          <div>
+            <h1 style={{fontSize:17,fontWeight:800,color:"var(--text-primary)",letterSpacing:"-0.3px",lineHeight:1.2}}>
+              US Macro Dashboard
+            </h1>
+            <div style={{fontSize:11,color:"var(--text-muted)",marginTop:1}}>
+              {lastRefresh ? `Updated ${lastRefresh.toLocaleTimeString()}` : "Loading..."}
+              {hasData && ` · ${Object.keys(INDICATORS).length} indicators`}
+            </div>
+          </div>
+        </div>
+
+        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          {/* Timeframe pills */}
+          <div style={{display:"flex",gap:2,background:"var(--bg-surface)",borderRadius:8,padding:3}}>
+            {Object.keys(TIMEFRAMES).map(tf => (
+              <button key={tf} onClick={() => { setTimeframe(tf); fetchAll(tf); }} style={{
+                padding:"5px 12px", border:"none", borderRadius:6, fontSize:11, fontWeight:600,
+                cursor:"pointer", fontFamily:"var(--font-mono)", transition:"all .2s",
+                background: timeframe===tf ? "var(--bg-elevated)" : "transparent",
+                color: timeframe===tf ? "var(--text-primary)" : "var(--text-muted)",
+              }}>{tf}</button>
+            ))}
+          </div>
+          {/* Refresh */}
+          <button onClick={() => fetchAll(timeframe)} disabled={loading} style={{
+            padding:"7px 16px", border:"1px solid var(--border)", borderRadius:8,
+            background: loading ? "var(--bg-surface)" : "transparent",
+            color:"var(--text-secondary)", fontSize:12, fontWeight:600,
+            cursor: loading ? "default" : "pointer", fontFamily:"var(--font-display)",
+            transition:"all .2s",
+          }}>
+            {loading ? `${progress.done}/${progress.total}` : "↻ Refresh"}
+          </button>
+        </div>
+      </header>
+
+      {/* ─── Category Tabs ─── */}
+      <nav style={{
+        padding:"10px 28px", display:"flex", gap:4,
+        overflowX:"auto", borderBottom:"1px solid #0D1017",
+        background:"var(--bg-deep)",
+      }}>
+        {Object.entries(CATEGORIES).map(([key, cat]) => {
+          const isActive = activeCat === key;
+          return (
+            <button key={key} onClick={() => setActiveCat(key)} style={{
+              padding:"6px 14px", border:"none", borderRadius:20, fontSize:12, fontWeight:600,
+              cursor:"pointer", whiteSpace:"nowrap", transition:"all .2s",
+              fontFamily:"var(--font-display)",
+              background: isActive ? "var(--bg-elevated)" : "transparent",
+              color: isActive ? "var(--text-primary)" : "var(--text-muted)",
+            }}>
+              <span style={{marginRight:5}}>{cat.icon}</span>
+              {cat.label}
+              {key !== "all" && <span style={{marginLeft:5,fontSize:10,opacity:.5}}>{catCounts[key]||0}</span>}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* ─── Loading Bar ─── */}
+      {loading && (
+        <div style={{padding:"0 28px",marginTop:6}}>
+          <div style={{height:2,background:"var(--bg-surface)",borderRadius:2,overflow:"hidden"}}>
+            <div style={{
+              height:"100%", borderRadius:2,
+              width:`${(progress.done/Math.max(progress.total,1))*100}%`,
+              background:`linear-gradient(90deg, var(--accent-blue), var(--accent-purple))`,
+              transition:"width .3s ease",
+            }}/>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Error ─── */}
+      {error && (
+        <div style={{
+          margin:"24px 28px", padding:"16px 20px",
+          background:"#F0475A12", border:"1px solid #F0475A30",
+          borderRadius:12, color:"var(--accent-red)", fontSize:13,
+        }}>
+          ⚠️ {error}
+        </div>
+      )}
+
+      {/* ─── Cards Grid ─── */}
+      <main style={{
+        padding:"20px 28px 40px",
+        display:"grid",
+        gridTemplateColumns:"repeat(auto-fill, minmax(360px, 1fr))",
+        gap:10,
+      }}>
+        {filtered.map(([id, cfg], i) => (
+          <Card
+            key={id} id={id} cfg={cfg}
+            data={allData[id] || []}
+            timeframe={timeframe}
+            isOpen={!!expanded[id]}
+            toggle={() => setExpanded(prev => ({...prev, [id]: !prev[id]}))}
+            delay={i * 40}
+          />
+        ))}
+      </main>
+
+      {/* ─── Footer ─── */}
+      <footer style={{
+        padding:"20px 28px", textAlign:"center",
+        borderTop:"1px solid var(--border)",
+        color:"var(--text-muted)", fontSize:11,
+        lineHeight:1.8,
+      }}>
+        Data sourced from <span style={{color:"var(--text-secondary)"}}>Federal Reserve Economic Data (FRED)</span> · Federal Reserve Bank of St. Louis
+        <br/>
+        Dashboard auto-refreshes on page load · Free &amp; open source
+      </footer>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
