@@ -94,28 +94,28 @@ var PROXY_LIST = [
 var workingProxy = null;
 
 var INDICATORS = [
-  { id:"cpi",           label:"CPI (YoY%)",               series:"CPIAUCSL",        cat:"inflation", desc:"Consumer Price Index, All Urban Consumers",       tx:"pct_yr", unit:"%",  type:"area",      color:"#F0475A", freq:"Monthly" },
-  { id:"coreCpi",       label:"Core CPI (YoY%)",           series:"CPILFESL",        cat:"inflation", desc:"CPI Less Food & Energy",                          tx:"pct_yr", unit:"%",  type:"area",      color:"#FB7185", freq:"Monthly" },
-  { id:"pce",           label:"PCE Inflation (YoY%)",      series:"PCEPI",           cat:"inflation", desc:"Personal Consumption Expenditures Price Index",    tx:"pct_yr", unit:"%",  type:"area",      color:"#E11D48", freq:"Monthly" },
-  { id:"ppi",           label:"PPI (YoY%)",               series:"PPIACO",          cat:"inflation", desc:"Producer Price Index, All Commodities",            tx:"pct_yr", unit:"%",  type:"bar",       color:"#F97316", freq:"Monthly" },
-  { id:"fedFunds",      label:"Fed Funds Rate",            series:"FEDFUNDS",        cat:"rates",     desc:"Effective Federal Funds Rate",                     tx:"lin",    unit:"%",  type:"step",      color:"#8B5CF6", freq:"Monthly" },
-  { id:"treasury10y2y", label:"10Y-2Y Spread",             series:"T10Y2Y",          cat:"rates",     desc:"10-Year minus 2-Year Treasury Spread",             tx:"lin",    unit:"%",  type:"area_zero", color:"#6366F1", freq:"Daily" },
-  { id:"treasury10y",   label:"10Y Treasury Yield",        series:"DGS10",           cat:"rates",     desc:"10-Year Treasury Constant Maturity Rate",          tx:"lin",    unit:"%",  type:"line",      color:"#A78BFA", freq:"Daily" },
-  { id:"unemployment",  label:"Unemployment Rate",         series:"UNRATE",          cat:"labor",     desc:"Civilian Unemployment Rate",                      tx:"lin",    unit:"%",  type:"area",      color:"#3B82F6", freq:"Monthly" },
-  { id:"nfp",           label:"Nonfarm Payrolls (MoM)",    series:"PAYEMS",          cat:"labor",     desc:"Total Nonfarm Payrolls, Month-over-Month Change", tx:"chg",    unit:"K",  type:"bar_pn",    color:"#60A5FA", freq:"Monthly" },
-  { id:"initialClaims", label:"Initial Jobless Claims",    series:"ICSA",            cat:"labor",     desc:"Initial Claims for Unemployment Insurance",       tx:"lin",    unit:"K",  type:"line",      color:"#38BDF8", freq:"Weekly", div:1000 },
-  { id:"participRate",  label:"Labor Force Participation", series:"CIVPART",         cat:"labor",     desc:"Civilian Labor Force Participation Rate",          tx:"lin",    unit:"%",  type:"line",      color:"#7DD3FC", freq:"Monthly" },
-  { id:"gdp",           label:"Real GDP Growth (QoQ%)",    series:"A191RL1Q225SBEA", cat:"growth",    desc:"Real GDP, Quarterly Annualized",                  tx:"lin",    unit:"%",  type:"bar_pn",    color:"#00D68F", freq:"Quarterly" },
-  { id:"retailSales",   label:"Retail Sales (MoM%)",       series:"RSAFS",           cat:"growth",    desc:"Advance Retail Sales: Total",                     tx:"pct_mo", unit:"%",  type:"bar_pn",    color:"#34D399", freq:"Monthly" },
-  { id:"indProd",       label:"Industrial Prod. (YoY%)",   series:"INDPRO",          cat:"growth",    desc:"Industrial Production: Total Index",               tx:"pct_yr", unit:"%",  type:"area",      color:"#6EE7B7", freq:"Monthly" },
-  { id:"capUtil",       label:"Capacity Utilization",      series:"TCU",             cat:"growth",    desc:"Total Industry Capacity Utilization",              tx:"lin",    unit:"%",  type:"line",      color:"#A7F3D0", freq:"Monthly" },
-  { id:"umich",         label:"Consumer Sentiment",        series:"UMCSENT",         cat:"sentiment", desc:"University of Michigan Consumer Sentiment",        tx:"lin",    unit:"",   type:"area",      color:"#FBBF24", freq:"Monthly" },
-  { id:"confBoard",     label:"Consumer Confidence",       series:"CSCICP03USM665S", cat:"sentiment", desc:"OECD Consumer Confidence Indicator",              tx:"lin",    unit:"",   type:"line",      color:"#FCD34D", freq:"Monthly" },
-  { id:"housingStarts", label:"Housing Starts",            series:"HOUST",           cat:"housing",   desc:"New Privately-Owned Housing Units Started (K)",    tx:"lin",    unit:"K",  type:"bar",       color:"#06B6D4", freq:"Monthly" },
-  { id:"buildPermits",  label:"Building Permits",          series:"PERMIT",          cat:"housing",   desc:"New Private Housing Units Authorized (K)",         tx:"lin",    unit:"K",  type:"line",      color:"#22D3EE", freq:"Monthly" },
-  { id:"caseShiller",   label:"Case-Shiller Home (YoY%)",  series:"CSUSHPINSA",      cat:"housing",   desc:"S&P/Case-Shiller National Home Price Index",      tx:"pct_yr", unit:"%",  type:"area",      color:"#67E8F9", freq:"Monthly" },
-  { id:"tradeBal",      label:"Trade Balance",             series:"BOPGSTB",         cat:"trade",     desc:"Trade Balance: Goods & Services ($B)",             tx:"lin",    unit:"$B", type:"area_zero", color:"#EC4899", freq:"Monthly" },
-  { id:"m2",            label:"M2 Money Supply (YoY%)",    series:"M2SL",            cat:"monetary",  desc:"M2 Money Stock",                                  tx:"pct_yr", unit:"%",  type:"area",      color:"#C084FC", freq:"Monthly" }
+  { id:"cpi",           label:"CPI (YoY%)",               series:"CPIAUCNS",        cat:"inflation", desc:"Consumer Price Index, All Urban (NSA, matches BLS headline)", fredUnits:"pc1", unit:"%",  type:"area",      color:"#F0475A", freq:"Monthly" },
+  { id:"coreCpi",       label:"Core CPI (YoY%)",           series:"CPILFESL",        cat:"inflation", desc:"CPI Less Food & Energy",                          fredUnits:"pc1", unit:"%",  type:"area",      color:"#FB7185", freq:"Monthly" },
+  { id:"pce",           label:"PCE Inflation (YoY%)",      series:"PCEPI",           cat:"inflation", desc:"Personal Consumption Expenditures Price Index",    fredUnits:"pc1", unit:"%",  type:"area",      color:"#E11D48", freq:"Monthly" },
+  { id:"ppi",           label:"PPI (YoY%)",               series:"PPIACO",          cat:"inflation", desc:"Producer Price Index, All Commodities",            fredUnits:"pc1", unit:"%",  type:"bar",       color:"#F97316", freq:"Monthly" },
+  { id:"fedFunds",      label:"Fed Funds Rate",            series:"FEDFUNDS",        cat:"rates",     desc:"Effective Federal Funds Rate",                     fredUnits:"lin", unit:"%",  type:"step",      color:"#8B5CF6", freq:"Monthly" },
+  { id:"treasury10y2y", label:"10Y-2Y Spread",             series:"T10Y2Y",          cat:"rates",     desc:"10-Year minus 2-Year Treasury Spread",             fredUnits:"lin", unit:"%",  type:"area_zero", color:"#6366F1", freq:"Daily" },
+  { id:"treasury10y",   label:"10Y Treasury Yield",        series:"DGS10",           cat:"rates",     desc:"10-Year Treasury Constant Maturity Rate",          fredUnits:"lin", unit:"%",  type:"line",      color:"#A78BFA", freq:"Daily" },
+  { id:"unemployment",  label:"Unemployment Rate",         series:"UNRATE",          cat:"labor",     desc:"Civilian Unemployment Rate",                      fredUnits:"lin", unit:"%",  type:"area",      color:"#3B82F6", freq:"Monthly" },
+  { id:"nfp",           label:"Nonfarm Payrolls (MoM)",    series:"PAYEMS",          cat:"labor",     desc:"Total Nonfarm Payrolls, Month-over-Month Change", fredUnits:"ch1", unit:"K",  type:"bar_pn",    color:"#60A5FA", freq:"Monthly", note:"chg" },
+  { id:"initialClaims", label:"Initial Jobless Claims",    series:"ICSA",            cat:"labor",     desc:"Initial Claims for Unemployment Insurance",       fredUnits:"lin", unit:"K",  type:"line",      color:"#38BDF8", freq:"Weekly", div:1000 },
+  { id:"participRate",  label:"Labor Force Participation", series:"CIVPART",         cat:"labor",     desc:"Civilian Labor Force Participation Rate",          fredUnits:"lin", unit:"%",  type:"line",      color:"#7DD3FC", freq:"Monthly" },
+  { id:"gdp",           label:"Real GDP Growth (QoQ%)",    series:"A191RL1Q225SBEA", cat:"growth",    desc:"Real GDP, Quarterly Annualized",                  fredUnits:"lin", unit:"%",  type:"bar_pn",    color:"#00D68F", freq:"Quarterly" },
+  { id:"retailSales",   label:"Retail Sales (MoM%)",       series:"RSAFS",           cat:"growth",    desc:"Advance Retail Sales: Total",                     fredUnits:"pch", unit:"%",  type:"bar_pn",    color:"#34D399", freq:"Monthly" },
+  { id:"indProd",       label:"Industrial Prod. (YoY%)",   series:"INDPRO",          cat:"growth",    desc:"Industrial Production: Total Index",               fredUnits:"pc1", unit:"%",  type:"area",      color:"#6EE7B7", freq:"Monthly" },
+  { id:"capUtil",       label:"Capacity Utilization",      series:"TCU",             cat:"growth",    desc:"Total Industry Capacity Utilization",              fredUnits:"lin", unit:"%",  type:"line",      color:"#A7F3D0", freq:"Monthly" },
+  { id:"umich",         label:"Consumer Sentiment",        series:"UMCSENT",         cat:"sentiment", desc:"University of Michigan Consumer Sentiment",        fredUnits:"lin", unit:"",   type:"area",      color:"#FBBF24", freq:"Monthly" },
+  { id:"confBoard",     label:"Consumer Confidence",       series:"CSCICP03USM665S", cat:"sentiment", desc:"OECD Consumer Confidence Indicator",              fredUnits:"lin", unit:"",   type:"line",      color:"#FCD34D", freq:"Monthly" },
+  { id:"housingStarts", label:"Housing Starts",            series:"HOUST",           cat:"housing",   desc:"New Privately-Owned Housing Units Started (K)",    fredUnits:"lin", unit:"K",  type:"bar",       color:"#06B6D4", freq:"Monthly" },
+  { id:"buildPermits",  label:"Building Permits",          series:"PERMIT",          cat:"housing",   desc:"New Private Housing Units Authorized (K)",         fredUnits:"lin", unit:"K",  type:"line",      color:"#22D3EE", freq:"Monthly" },
+  { id:"caseShiller",   label:"Case-Shiller Home (YoY%)",  series:"CSUSHPINSA",      cat:"housing",   desc:"S&P/Case-Shiller National Home Price Index",      fredUnits:"pc1", unit:"%",  type:"area",      color:"#67E8F9", freq:"Monthly" },
+  { id:"tradeBal",      label:"Trade Balance",             series:"BOPGSTB",         cat:"trade",     desc:"Trade Balance: Goods & Services ($B)",             fredUnits:"lin", unit:"$B", type:"area_zero", color:"#EC4899", freq:"Monthly" },
+  { id:"m2",            label:"M2 Money Supply (YoY%)",    series:"M2SL",            cat:"monetary",  desc:"M2 Money Stock",                                  fredUnits:"pc1", unit:"%",  type:"area",      color:"#C084FC", freq:"Monthly" }
 ];
 
 var CATEGORIES=[
@@ -163,9 +163,10 @@ function fetchWithProxy(url) {
   return tryNext();
 }
 
-function fetchFRED(seriesId, limit) {
+function fetchFRED(seriesId, limit, fredUnits) {
   var url = "https://api.stlouisfed.org/fred/series/observations?series_id=" + seriesId
-    + "&api_key=" + FRED_API_KEY + "&file_type=json&sort_order=desc&limit=" + limit;
+    + "&api_key=" + FRED_API_KEY + "&file_type=json&sort_order=desc&limit=" + limit
+    + "&units=" + (fredUnits || "lin");
   return fetchWithProxy(url).then(function(j) {
     if (j.error_code) throw new Error(j.error_message || "FRED error");
     return j.observations.filter(function(o){return o.value!=="."}).map(function(o){return{date:o.date,value:parseFloat(o.value)}}).reverse();
@@ -174,9 +175,8 @@ function fetchFRED(seriesId, limit) {
 
 function transform(raw,cfg){
   var d=raw.slice();
-  if(cfg.tx==="pct_yr"&&d.length>12) d=d.slice(12).map(function(v,i){return{date:v.date,value:((v.value-raw[i].value)/raw[i].value)*100}});
-  else if(cfg.tx==="pct_mo"&&d.length>1) d=d.slice(1).map(function(v,i){return{date:v.date,value:((v.value-raw[i].value)/raw[i].value)*100}});
-  else if(cfg.tx==="chg"&&d.length>1) d=d.slice(1).map(function(v,i){return{date:v.date,value:v.value-raw[i].value}});
+  // FRED now handles pct_yr/pct_mo/chg via units parameter
+  // Only need to apply divisor for display scaling (e.g. jobless claims /1000)
   if(cfg.div) d=d.map(function(v){return{date:v.date,value:v.value/cfg.div}});
   return d;
 }
@@ -243,8 +243,8 @@ function loadAll(){
   function next(){
     if(queue.length===0) return;
     var ind=queue.shift();
-    var lim=currentTF==="MAX"?600:(TF_MAP[currentTF]||60)+30;
-    fetchFRED(ind.series,Math.max(lim,160))
+    var lim=currentTF==="MAX"?600:200;
+    fetchFRED(ind.series,lim,ind.fredUnits)
       .then(function(raw){allData[ind.id]=transform(raw,ind);successCount++;if(successCount%4===0)renderGrid()})
       .catch(function(e){console.warn("Failed:",ind.id,e.message);failedList.push(ind.id+": "+e.message);allData[ind.id]=[]})
       .then(function(){tick();if(queue.length>0) setTimeout(next,200)});
