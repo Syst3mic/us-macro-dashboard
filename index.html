@@ -6,7 +6,43 @@
 <title>US Macro Dashboard</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🇺🇸</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,500;9..40,700;9..40,800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+// Chart.js loader with multiple CDN fallbacks
+(function(){
+  var cdns = [
+    "https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js",
+    "https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js",
+    "https://cdn.jsdelivr.net/npm/chart.js/dist/chart.umd.min.js"
+  ];
+  var i = 0;
+  function tryNext(){
+    if(i >= cdns.length){
+      console.error("ALL Chart.js CDNs failed!");
+      return;
+    }
+    var url = cdns[i++];
+    console.log("Trying Chart.js CDN: " + url);
+    var s = document.createElement("script");
+    s.src = url;
+    s.onload = function(){
+      if(typeof Chart !== "undefined"){
+        console.log("Chart.js loaded successfully from: " + url);
+      } else {
+        console.warn("Script loaded but Chart is undefined, trying next...");
+        tryNext();
+      }
+    };
+    s.onerror = function(){
+      console.warn("Failed to load: " + url);
+      tryNext();
+    };
+    document.head.appendChild(s);
+  }
+  tryNext();
+})();
+</script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -439,6 +475,10 @@ function buildCard(ind, idx){
 }
 
 function renderChart(canvas, ind, data){
+  if(typeof Chart === "undefined"){
+    console.warn("renderChart called but Chart.js not loaded yet for: " + ind.id);
+    return;
+  }
   var labels = data.map(function(d){
     var p = d.date.split("-");
     return p[1] + "/" + p[0].slice(2);
@@ -569,6 +609,19 @@ function loadAll(){
 
 // Init
 buildTFBar(); buildTabs(); renderGrid();
+
+// Wait for Chart.js to load (it loads async via fallback loader)
+// Once loaded, re-render grid so charts appear
+var chartCheckInterval = setInterval(function(){
+  if(typeof Chart !== "undefined"){
+    clearInterval(chartCheckInterval);
+    console.log("Chart.js is now available, re-rendering grid...");
+    renderGrid();
+  }
+}, 200);
+// Stop checking after 15s
+setTimeout(function(){ clearInterval(chartCheckInterval); }, 15000);
+
 if(FRED_API_KEY === "YOUR_FRED_API_KEY_HERE"){
   showStatus("⚠️ Replace YOUR_FRED_API_KEY_HERE with your FRED API key. Get one free at <a href='https://fred.stlouisfed.org/docs/api/api_key.html' style='color:inherit' target='_blank'>fred.stlouisfed.org</a>","error");
 } else {
