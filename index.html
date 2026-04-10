@@ -15,12 +15,10 @@
   ];
   var i=0;
   function tryNext(){
-    if(i>=cdns.length){console.error("ALL Chart.js CDNs failed!");return;}
+    if(i>=cdns.length){console.error("Chart.js failed to load");return;}
     var url=cdns[i++],s=document.createElement("script");
-    s.src=url;
-    s.onload=function(){if(typeof Chart==="undefined")tryNext();};
-    s.onerror=tryNext;
-    document.head.appendChild(s);
+    s.src=url; s.onload=function(){if(typeof Chart==="undefined")tryNext();};
+    s.onerror=tryNext; document.head.appendChild(s);
   }
   tryNext();
 })();
@@ -28,93 +26,93 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#070C18;--bg-secondary:#0A1020;--card:#0D1526;--card-hover:#111C30;
-  --surface:#141E33;--elevated:#1A2640;
-  --border:rgba(148,163,210,0.08);--border-hover:rgba(148,163,210,0.18);--border-accent:rgba(99,130,255,0.3);
-  --t1:#F0F4FF;--t2:#8FA4C8;--t3:#4D6080;--t4:#2D3D55;
-  --indigo:#6382FF;--cyan:#22D3EE;--green:#10E8A0;--red:#FF4D6A;
-  --glow-green:rgba(16,232,160,.1);--glow-red:rgba(255,77,106,.1);--glow-indigo:rgba(99,130,255,.12);
-  --header-line:linear-gradient(90deg,var(--indigo),var(--cyan),var(--green));
+  --bg:#070C18;--bg2:#0A1020;--card:#0D1526;--card-h:#111C30;
+  --surf:#141E33;--elev:#1A2640;
+  --b0:rgba(148,163,210,.08);--b1:rgba(148,163,210,.18);--ba:rgba(99,130,255,.3);
+  --t1:#F0F4FF;--t2:#8FA4C8;--t3:#4D6080;
+  --ind:#6382FF;--cyn:#22D3EE;--grn:#10E8A0;--red:#FF4D6A;
+  --gg:rgba(16,232,160,.1);--gr:rgba(255,77,106,.1);--gi:rgba(99,130,255,.12);
+  --hl:linear-gradient(90deg,var(--ind),var(--cyn),var(--grn));
 }
-html{background:var(--bg);color:var(--t1);font-family:'Sora',system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px}
+html{background:var(--bg);color:var(--t1);font-family:'Sora',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 body{min-height:100vh}
-::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--elevated);border-radius:2px}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--elev);border-radius:2px}
 button{font-family:inherit;cursor:pointer}
 
-.header{padding:0 28px;height:58px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:16px;position:sticky;top:0;z-index:100;background:rgba(7,12,24,.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
-.header::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--header-line)}
-.header-left{display:flex;align-items:center;gap:14px}
-.header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.logo{width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#3B5BFF 0%,#22D3EE 100%);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;box-shadow:0 0 20px rgba(59,91,255,.35);flex-shrink:0}
+.hdr{padding:0 28px;height:58px;border-bottom:1px solid var(--b0);display:flex;align-items:center;justify-content:space-between;gap:16px;position:sticky;top:0;z-index:100;background:rgba(7,12,24,.92);backdrop-filter:blur(24px)}
+.hdr::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--hl)}
+.hl{display:flex;align-items:center;gap:14px}
+.hr{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.logo{width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#3B5BFF,#22D3EE);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;box-shadow:0 0 20px rgba(59,91,255,.35);flex-shrink:0}
 .brand{display:flex;flex-direction:column;gap:1px}
-.brand-name{font-size:14px;font-weight:700;color:var(--t1);letter-spacing:-0.3px}
-.brand-sub{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--t2);letter-spacing:0.3px}
-.header-divider{width:1px;height:20px;background:var(--border)}
-.source-tags{display:flex;gap:6px;align-items:center}
-.source-tag{font-family:'IBM Plex Mono',monospace;font-size:9px;padding:2px 7px;border-radius:3px;font-weight:600;letter-spacing:0.4px}
-.source-tag.bls{background:rgba(16,232,160,.1);border:1px solid rgba(16,232,160,.25);color:#10E8A0}
-.source-tag.fred{background:rgba(99,130,255,.1);border:1px solid rgba(99,130,255,.25);color:#809BFF}
+.bn{font-size:14px;font-weight:700;color:var(--t1);letter-spacing:-.3px}
+.bs{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--t2);letter-spacing:.3px}
+.hdiv{width:1px;height:20px;background:var(--b0)}
+.stags{display:flex;gap:6px}
+.stag{font-family:'IBM Plex Mono',monospace;font-size:9px;padding:2px 7px;border-radius:3px;font-weight:600;letter-spacing:.4px}
+.stag.bls{background:rgba(16,232,160,.1);border:1px solid rgba(16,232,160,.25);color:#10E8A0}
+.stag.fred{background:rgba(99,130,255,.1);border:1px solid rgba(99,130,255,.25);color:#809BFF}
 
-.tf-bar{display:flex;gap:1px;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:3px}
-.tf-btn{padding:4px 11px;border:none;border-radius:5px;font-size:10px;font-weight:600;font-family:'IBM Plex Mono',monospace;background:transparent;color:var(--t3);transition:all .18s ease;letter-spacing:0.3px}
-.tf-btn.active{background:var(--indigo);color:#fff;box-shadow:0 0 12px rgba(99,130,255,.4)}
-.tf-btn:hover:not(.active){color:var(--t2);background:var(--elevated)}
-.refresh-btn{padding:6px 16px;border:1px solid var(--border);border-radius:7px;background:transparent;color:var(--t2);font-size:11px;font-weight:600;letter-spacing:0.2px;transition:all .18s ease}
-.refresh-btn:hover{border-color:var(--indigo);color:var(--t1);background:var(--glow-indigo)}
-.refresh-btn:disabled{opacity:.4;cursor:default}
+.tfbar{display:flex;gap:1px;background:var(--surf);border:1px solid var(--b0);border-radius:7px;padding:3px}
+.tfb{padding:4px 11px;border:none;border-radius:5px;font-size:10px;font-weight:600;font-family:'IBM Plex Mono',monospace;background:transparent;color:var(--t3);transition:all .18s;letter-spacing:.3px}
+.tfb.act{background:var(--ind);color:#fff;box-shadow:0 0 12px rgba(99,130,255,.4)}
+.tfb:hover:not(.act){color:var(--t2);background:var(--elev)}
+.rbtn{padding:6px 16px;border:1px solid var(--b0);border-radius:7px;background:transparent;color:var(--t2);font-size:11px;font-weight:600;transition:all .18s}
+.rbtn:hover{border-color:var(--ind);color:var(--t1);background:var(--gi)}
+.rbtn:disabled{opacity:.4;cursor:default}
 
-.tabs{padding:0 28px;height:44px;display:flex;align-items:center;gap:2px;overflow-x:auto;border-bottom:1px solid var(--border);background:var(--bg-secondary);-ms-overflow-style:none;scrollbar-width:none}
+.tabs{padding:0 28px;height:44px;display:flex;align-items:center;gap:2px;overflow-x:auto;border-bottom:1px solid var(--b0);background:var(--bg2);-ms-overflow-style:none;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
-.tab{padding:5px 13px;border:none;border-radius:5px;font-size:11px;font-weight:500;white-space:nowrap;background:transparent;color:var(--t3);transition:all .18s ease}
-.tab.active{background:var(--elevated);color:var(--t1);font-weight:600}
-.tab:hover:not(.active){color:var(--t2);background:var(--surface)}
+.tab{padding:5px 13px;border:none;border-radius:5px;font-size:11px;font-weight:500;white-space:nowrap;background:transparent;color:var(--t3);transition:all .18s}
+.tab.act{background:var(--elev);color:var(--t1);font-weight:600}
+.tab:hover:not(.act){color:var(--t2);background:var(--surf)}
 
-.progress-wrap{padding:0 28px;margin-top:6px}
-.progress-track{height:2px;background:var(--surface);border-radius:2px;overflow:hidden}
-.progress-fill{height:100%;border-radius:2px;background:var(--header-line);transition:width .3s ease}
+.pw{padding:0 28px;margin-top:6px}
+.pt{height:2px;background:var(--surf);border-radius:2px;overflow:hidden}
+.pf{height:100%;border-radius:2px;background:var(--hl);transition:width .3s}
 
-.status-box{margin:14px 28px;padding:10px 16px;border-radius:8px;font-size:12px;line-height:1.5;font-weight:500;display:none}
-.status-box.error{display:block;background:rgba(255,77,106,.06);border:1px solid rgba(255,77,106,.2);color:#FF6B84}
-.status-box.success{display:block;background:rgba(16,232,160,.06);border:1px solid rgba(16,232,160,.2);color:#10E8A0}
-.status-box.info{display:block;background:rgba(99,130,255,.06);border:1px solid rgba(99,130,255,.2);color:#809BFF}
+.sb{margin:14px 28px;padding:10px 16px;border-radius:8px;font-size:12px;line-height:1.5;font-weight:500;display:none}
+.sb.err{display:block;background:rgba(255,77,106,.06);border:1px solid rgba(255,77,106,.2);color:#FF6B84}
+.sb.ok{display:block;background:rgba(16,232,160,.06);border:1px solid rgba(16,232,160,.2);color:#10E8A0}
+.sb.inf{display:block;background:rgba(99,130,255,.06);border:1px solid rgba(99,130,255,.2);color:#809BFF}
 
 .grid{padding:20px 28px 60px;display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px}
 @media(max-width:480px){.grid{grid-template-columns:1fr;padding:14px 14px 60px}}
 @media(min-width:1600px){.grid{grid-template-columns:repeat(auto-fill,minmax(370px,1fr))}}
 
-.card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:border-color .2s,background .2s,transform .2s,box-shadow .2s;animation:fadeUp .4s ease both;position:relative}
-.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--border-accent),transparent);opacity:0;transition:opacity .2s}
-.card:hover{background:var(--card-hover);border-color:var(--border-hover);transform:translateY(-1px);box-shadow:0 8px 32px rgba(0,0,0,.4),0 0 0 1px var(--border-hover)}
+.card{background:var(--card);border:1px solid var(--b0);border-radius:12px;overflow:hidden;transition:border-color .2s,background .2s,transform .2s,box-shadow .2s;animation:fadeUp .4s ease both;position:relative}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--ba),transparent);opacity:0;transition:opacity .2s}
+.card:hover{background:var(--card-h);border-color:var(--b1);transform:translateY(-1px);box-shadow:0 8px 32px rgba(0,0,0,.4)}
 .card:hover::before{opacity:1}
 
-.card-source-pill{position:absolute;top:14px;right:14px;font-family:'IBM Plex Mono',monospace;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:0.5px;pointer-events:none}
-.card-source-pill.bls{background:rgba(16,232,160,.1);border:1px solid rgba(16,232,160,.2);color:#10E8A0}
-.card-source-pill.fred{background:rgba(99,130,255,.08);border:1px solid rgba(99,130,255,.15);color:#6B80A8}
+.spl{position:absolute;top:14px;right:14px;font-family:'IBM Plex Mono',monospace;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.5px;pointer-events:none}
+.spl.bls{background:rgba(16,232,160,.1);border:1px solid rgba(16,232,160,.2);color:#10E8A0}
+.spl.fred{background:rgba(99,130,255,.08);border:1px solid rgba(99,130,255,.15);color:#6B80A8}
 
-.card-top{padding:16px 18px 0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
-.card-meta{flex:1;min-width:0}
-.card-value-area{text-align:right;flex-shrink:0;padding-right:2px}
-.label-row{display:flex;align-items:center;gap:7px;margin-bottom:8px}
+.ct{padding:16px 18px 0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.cm{flex:1;min-width:0}
+.cv{text-align:right;flex-shrink:0}
+.lr{display:flex;align-items:center;gap:7px;margin-bottom:8px}
 .dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
-.label-text{font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:0.8px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.big-val{font-size:26px;font-weight:700;font-family:'IBM Plex Mono',monospace;letter-spacing:-0.5px;line-height:1;color:var(--t1)}
-.delta-row{display:flex;align-items:center;gap:7px;margin-top:7px}
-.delta-badge{font-size:10.5px;font-weight:600;font-family:'IBM Plex Mono',monospace;display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:4px}
-.delta-arrow{font-size:8px}
-.delta-pct{font-size:10px;color:var(--t2);font-family:'IBM Plex Mono',monospace}
-.date-text{font-size:10px;color:var(--t1);font-family:'IBM Plex Mono',monospace;font-weight:500}
-.freq-badge{display:inline-block;margin-top:5px;font-size:9px;color:var(--t2);font-family:'IBM Plex Mono',monospace;background:var(--surface);padding:2px 7px;border-radius:3px;border:1px solid var(--border-hover);letter-spacing:0.3px}
-.chart-desc{font-size:9.5px;color:var(--t2);padding:10px 18px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.chart-section{padding:8px 10px 12px}
-.chart-wrap{position:relative;height:100px;width:100%}
-.chart-wrap canvas{position:absolute;top:0;left:0;width:100%!important;height:100%!important}
-.card-divider{height:1px;background:var(--border);margin:12px 18px 0;opacity:.7}
-.skeleton-val{height:26px;width:90px;border-radius:5px;background:linear-gradient(90deg,var(--surface) 25%,var(--elevated) 50%,var(--surface) 75%);background-size:200% 100%;animation:shimmer 1.6s infinite}
-.skeleton-chart{height:90px;margin:8px 10px 12px;border-radius:8px;background:linear-gradient(90deg,var(--surface) 25%,var(--elevated) 50%,var(--surface) 75%);background-size:200% 100%;animation:shimmer 1.6s infinite}
+.lt{font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.8px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bv{font-size:26px;font-weight:700;font-family:'IBM Plex Mono',monospace;letter-spacing:-.5px;line-height:1;color:var(--t1)}
+.dr{display:flex;align-items:center;gap:7px;margin-top:7px}
+.db{font-size:10.5px;font-weight:600;font-family:'IBM Plex Mono',monospace;display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:4px}
+.da{font-size:8px}
+.dp{font-size:10px;color:var(--t2);font-family:'IBM Plex Mono',monospace}
+.dt{font-size:10px;color:var(--t1);font-family:'IBM Plex Mono',monospace;font-weight:500}
+.fb{display:inline-block;margin-top:5px;font-size:9px;color:var(--t2);font-family:'IBM Plex Mono',monospace;background:var(--surf);padding:2px 7px;border-radius:3px;border:1px solid var(--b1);letter-spacing:.3px}
+.cd{font-size:9.5px;color:var(--t2);padding:10px 18px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cs{padding:8px 10px 12px}
+.cw{position:relative;height:100px;width:100%}
+.cw canvas{position:absolute;top:0;left:0;width:100%!important;height:100%!important}
+.cdiv{height:1px;background:var(--b0);margin:12px 18px 0;opacity:.7}
+.sv{height:26px;width:90px;border-radius:5px;background:linear-gradient(90deg,var(--surf) 25%,var(--elev) 50%,var(--surf) 75%);background-size:200% 100%;animation:shimmer 1.6s infinite}
+.sc{height:90px;margin:8px 10px 12px;border-radius:8px;background:linear-gradient(90deg,var(--surf) 25%,var(--elev) 50%,var(--surf) 75%);background-size:200% 100%;animation:shimmer 1.6s infinite}
 
-.footer{padding:20px 28px;border-top:1px solid var(--border);background:var(--bg-secondary);color:var(--t2);font-size:10.5px;line-height:1.8;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
-.footer-brand{color:var(--t1);font-weight:600}
-.footer-right{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--t3)}
+.ftr{padding:20px 28px;border-top:1px solid var(--b0);background:var(--bg2);color:var(--t2);font-size:10.5px;line-height:1.8;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.fb2{color:var(--t1);font-weight:600}
+.fr{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--t3)}
 
 @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
@@ -122,334 +120,318 @@ button{font-family:inherit;cursor:pointer}
 </head>
 <body>
 
-<header class="header">
-  <div class="header-left">
+<header class="hdr">
+  <div class="hl">
     <div class="logo">M</div>
     <div class="brand">
-      <div class="brand-name">US Macro Dashboard</div>
-      <div class="brand-sub" id="subtitle">CONNECTING TO DATA SOURCES...</div>
+      <div class="bn">US Macro Dashboard</div>
+      <div class="bs" id="sub">CONNECTING...</div>
     </div>
-    <div class="header-divider"></div>
-    <div class="source-tags">
-      <span class="source-tag bls">BLS</span>
-      <span class="source-tag fred">FRED</span>
+    <div class="hdiv"></div>
+    <div class="stags">
+      <span class="stag bls">BLS</span>
+      <span class="stag fred">FRED</span>
     </div>
   </div>
-  <div class="header-right">
-    <div class="tf-bar" id="tf-bar"></div>
-    <button class="refresh-btn" id="refresh-btn" onclick="loadAll()">↻ Refresh</button>
+  <div class="hr">
+    <div class="tfbar" id="tfbar"></div>
+    <button class="rbtn" id="rbtn" onclick="loadAll()">↻ Refresh</button>
   </div>
 </header>
 
 <nav class="tabs" id="tabs"></nav>
-<div class="progress-wrap" id="progress-wrap" style="display:none">
-  <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
-</div>
-<div class="status-box" id="status-box"></div>
+<div class="pw" id="pw" style="display:none"><div class="pt"><div class="pf" id="pf"></div></div></div>
+<div class="sb" id="sb"></div>
 <div class="grid" id="grid"></div>
 
-<footer class="footer">
-  <div>Labor data from <span class="footer-brand">Bureau of Labor Statistics (BLS)</span> · Macro data from <span class="footer-brand">Federal Reserve Economic Data (FRED)</span></div>
-  <div class="footer-right">AUTO-REFRESHES ON PAGE LOAD</div>
+<footer class="ftr">
+  <div>Labor data: <span class="fb2">Bureau of Labor Statistics (BLS)</span> · Macro data: <span class="fb2">Federal Reserve Economic Data (FRED)</span></div>
+  <div class="fr">AUTO-REFRESHES ON PAGE LOAD</div>
 </footer>
 
 <script>
-// ═══════════════════════════════════════════════════════════
-// KEYS
-// ═══════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────────────────────
 var FRED_KEY = "bc1f32b397114934e95d879ec2646074";
-var BLS_KEY  = ""; // optional — register free at bls.gov/developers
+var BLS_KEY  = ""; // optional free key from bls.gov/developers
 
-// ═══════════════════════════════════════════════════════════
-// PROXY LAYER
+// ─────────────────────────────────────────────────────────────
+// PROXY ARCHITECTURE
 //
-// Problem: All external APIs block direct browser requests from
-// github.io via CORS. We must route via a CORS proxy.
+// ROOT CAUSE of previous failures:
+// - corsproxy.io & allorigins.win both BLOCK syst3mic.github.io at the origin level
+//   OR they rate-limit and stop sending Access-Control-Allow-Origin headers.
+// - "Proxy locking" made it worse: once a failing proxy was locked, ALL requests failed.
 //
-// Proxy behaviors (tested against github.io origins):
-//   allorigins.win/get  → wraps response: {contents:"<json str>"}
-//   allorigins.win/raw  → returns body directly (supports POST)
-//   corsproxy.io        → passes through directly (supports POST)
+// FIX: Race ALL proxies simultaneously (Promise.race).
+// Every fetch fires all proxies at once — whichever responds first with valid JSON wins.
+// No locking. No sequential waiting. No single point of failure.
 //
-// Strategy for GET (FRED):
-//   Try allorigins /get first → unwrap contents
-//   Fallback: corsproxy.io
-//
-// Strategy for POST (BLS):
-//   Try allorigins /raw → corsproxy.io
-// ═══════════════════════════════════════════════════════════
+// PROXY LIST — all unconditionally add Access-Control-Allow-Origin: *
+// We use 5+ proxies so at least one is always available.
+// ─────────────────────────────────────────────────────────────
 
-var _getProxyLocked = null; // once a working GET proxy is found, lock to it
+// Build a proxied GET URL from each proxy service
+function makeProxyGetURL(targetURL, proxyIndex) {
+  var enc = encodeURIComponent(targetURL);
+  switch(proxyIndex) {
+    case 0: return "https://api.allorigins.win/get?url=" + enc;
+    case 1: return "https://corsproxy.io/?" + enc;
+    case 2: return "https://api.codetabs.com/v1/proxy?quest=" + enc;
+    case 3: return "https://thingproxy.freeboard.io/fetch/" + targetURL;
+    case 4: return "https://api.cors.lol/?url=" + enc;
+    default: return null;
+  }
+}
+var PROXY_COUNT = 5;
 
-// Returns a promise that resolves to parsed JSON, unwrapping allorigins envelope if needed
-function proxyGet(url) {
-  function doFetch(proxyFn) {
-    return fetch(proxyFn(url))
-      .then(function(r) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
-      })
-      .then(function(j) {
-        // allorigins /get wraps in {contents: "<json string>"}
-        if (j && typeof j.contents === "string") {
-          return JSON.parse(j.contents);
-        }
-        return j;
+// Race ALL proxies — return first valid JSON response
+// Each proxy may wrap the response differently — we unwrap all known formats
+function raceFetch(targetURL) {
+  var attempts = [];
+  for (var i = 0; i < PROXY_COUNT; i++) {
+    (function(idx) {
+      var proxyURL = makeProxyGetURL(targetURL, idx);
+      if (!proxyURL) return;
+      var p = fetch(proxyURL, { signal: AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined })
+        .then(function(r) {
+          if (!r.ok) throw new Error("proxy " + idx + " HTTP " + r.status);
+          return r.json();
+        })
+        .then(function(j) {
+          // allorigins wraps in {contents: "<json string>"}
+          if (j && typeof j.contents === "string") {
+            j = JSON.parse(j.contents);
+          }
+          // codetabs/thingproxy return raw JSON — no unwrap needed
+          if (!j) throw new Error("proxy " + idx + " empty response");
+          return j;
+        });
+      attempts.push(p);
+    })(i);
+  }
+  // Promise.any = first SUCCESS wins (ignores rejections until all fail)
+  if (typeof Promise.any === "function") {
+    return Promise.any(attempts);
+  }
+  // Polyfill Promise.any for older browsers
+  return new Promise(function(resolve, reject) {
+    var errors = [];
+    var remaining = attempts.length;
+    if (remaining === 0) { reject(new Error("No proxies available")); return; }
+    attempts.forEach(function(p) {
+      p.then(resolve).catch(function(e) {
+        errors.push(e);
+        remaining--;
+        if (remaining === 0) reject(new AggregateError ? new AggregateError(errors, "All proxies failed") : new Error("All proxies failed: " + errors.map(function(x){return x.message;}).join(", ")));
       });
-  }
-
-  if (_getProxyLocked) {
-    return doFetch(_getProxyLocked);
-  }
-
-  // Probe proxies in order, lock to first success
-  var proxies = [
-    function(u){ return "https://api.allorigins.win/get?url=" + encodeURIComponent(u); },
-    function(u){ return "https://corsproxy.io/?" + encodeURIComponent(u); }
-  ];
-
-  function tryNext(i) {
-    if (i >= proxies.length) {
-      return Promise.reject(new Error("All GET proxies failed for: " + url));
-    }
-    var p = proxies[i];
-    return doFetch(p).then(function(j) {
-      _getProxyLocked = p;
-      console.log("GET proxy locked to: " + p("TEST").split("?")[0].split("/get")[0].split("/raw")[0]);
-      return j;
-    }).catch(function(e) {
-      console.warn("GET proxy " + i + " failed:", e.message, "→ trying next");
-      return tryNext(i + 1);
     });
-  }
-
-  return tryNext(0);
+  });
 }
 
-// POST proxy for BLS — tries allorigins /raw then corsproxy.io
-function proxyPost(url, bodyObj) {
-  var bodyStr = JSON.stringify(bodyObj);
+// BLS POST — race proxies that support POST
+function raceBLSPost(payload) {
+  var BLS_URL = "https://api.bls.gov/publicAPI/v2/timeseries/data/";
+  var bodyStr = JSON.stringify(payload);
   var postProxies = [
-    "https://api.allorigins.win/raw?url=" + encodeURIComponent(url),
-    "https://corsproxy.io/?" + encodeURIComponent(url)
+    "https://api.allorigins.win/raw?url=" + encodeURIComponent(BLS_URL),
+    "https://corsproxy.io/?" + encodeURIComponent(BLS_URL),
+    "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(BLS_URL)
   ];
 
-  function tryPost(i) {
-    if (i >= postProxies.length) return Promise.reject(new Error("All POST proxies failed"));
-    return fetch(postProxies[i], {
+  var attempts = postProxies.map(function(url) {
+    return fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: bodyStr
     })
-    .then(function(r) {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.json();
-    })
+    .then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
     .then(function(j) {
-      // Unwrap if allorigins wrapped it anyway
-      if (j && typeof j.contents === "string") return JSON.parse(j.contents);
+      if (j && typeof j.contents === "string") j = JSON.parse(j.contents);
+      if (!j || j.status !== "REQUEST_SUCCEEDED") throw new Error("BLS: " + ((j && j.message && j.message[0]) || "failed"));
       return j;
-    })
-    .catch(function(e) {
-      console.warn("POST proxy " + i + " failed:", e.message);
-      return tryPost(i + 1);
     });
-  }
+  });
 
-  return tryPost(0);
+  if (typeof Promise.any === "function") return Promise.any(attempts);
+  return new Promise(function(resolve, reject) {
+    var remaining = attempts.length, errors = [];
+    attempts.forEach(function(p) {
+      p.then(resolve).catch(function(e) { errors.push(e); if (--remaining === 0) reject(new Error("All BLS proxies failed")); });
+    });
+  });
 }
 
-// ── FRED (GET) ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// FRED fetch
+// ─────────────────────────────────────────────────────────────
 function fetchFRED(seriesId, limit, units) {
   var url = "https://api.stlouisfed.org/fred/series/observations"
     + "?series_id=" + seriesId
     + "&api_key=" + FRED_KEY
     + "&file_type=json&sort_order=desc&limit=" + limit
     + "&units=" + (units || "lin");
-  return proxyGet(url).then(function(j) {
+
+  return raceFetch(url).then(function(j) {
     if (j.error_code) throw new Error("FRED " + seriesId + ": " + j.error_message);
     return j.observations
       .filter(function(o) { return o.value !== "."; })
       .map(function(o) { return { date: o.date, value: parseFloat(o.value) }; })
-      .reverse(); // oldest→newest
+      .reverse();
   });
 }
 
-// ── BLS (POST) ─────────────────────────────────────────────────────────────
-function fetchBLS(seriesId, yearsBack) {
-  var endYear   = new Date().getFullYear();
-  var startYear = Math.max(endYear - (yearsBack || 6), 2010);
-  var payload   = { seriesid: [seriesId], startyear: String(startYear), endyear: String(endYear) };
-  if (BLS_KEY) payload.registrationkey = BLS_KEY;
-
-  return proxyPost("https://api.bls.gov/publicAPI/v2/timeseries/data/", payload)
-    .then(function(j) {
-      if (!j || j.status !== "REQUEST_SUCCEEDED") {
-        throw new Error("BLS " + seriesId + ": " + ((j && j.message && j.message[0]) || j.status));
-      }
-      var series = j.Results && j.Results.series && j.Results.series[0];
-      if (!series || !series.data || !series.data.length) throw new Error("BLS " + seriesId + ": no data");
-      var out = [];
-      series.data.slice().reverse().forEach(function(d) {
-        if (d.period === "M13") return;
-        var month = parseInt(d.period.replace(/\D/g, ""), 10);
-        if (!month || month < 1 || month > 12) return;
-        out.push({ date: d.year + "-" + (month < 10 ? "0" : "") + month + "-01", value: parseFloat(d.value) });
-      });
-      return out;
-    });
-}
-
-// ── FRED fallbacks for BLS series ──────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// BLS fetch (with FRED fallback)
+// ─────────────────────────────────────────────────────────────
 var BLS_FALLBACK = {
-  "CES0000000001": { series: "PAYEMS",  units: "ch1" }, // NFP MoM (thousands)
-  "LNS14000000":   { series: "UNRATE",  units: "lin" }, // Unemployment %
-  "LNS11300000":   { series: "CIVPART", units: "lin" }  // Participation %
+  "CES0000000001": { s: "PAYEMS",  u: "ch1" },
+  "LNS14000000":   { s: "UNRATE",  u: "lin" },
+  "LNS11300000":   { s: "CIVPART", u: "lin" }
 };
 
-// ── Transform ──────────────────────────────────────────────────────────────
+function fetchBLS(seriesId, yearsBack) {
+  var now = new Date();
+  var endYear = now.getFullYear();
+  var startYear = Math.max(endYear - Math.max(yearsBack, 5), 2010);
+  var payload = { seriesid: [seriesId], startyear: String(startYear), endyear: String(endYear) };
+  if (BLS_KEY) payload.registrationkey = BLS_KEY;
+
+  return raceBLSPost(payload).then(function(j) {
+    var series = j.Results && j.Results.series && j.Results.series[0];
+    if (!series || !series.data || !series.data.length) throw new Error("BLS: no data for " + seriesId);
+    var out = [];
+    series.data.slice().reverse().forEach(function(d) {
+      if (d.period === "M13") return;
+      var m = parseInt(d.period.replace(/\D/g,""), 10);
+      if (!m || m < 1 || m > 12) return;
+      out.push({ date: d.year + "-" + (m < 10 ? "0" : "") + m + "-01", value: parseFloat(d.value) });
+    });
+    return out;
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// Transform
+// ─────────────────────────────────────────────────────────────
 function transform(raw, cfg) {
   var d = raw.slice();
   if (cfg.div) d = d.map(function(v) { return { date: v.date, value: v.value / cfg.div }; });
   if (cfg.blsMoM) {
-    // Level series → compute MoM change (already in thousands for PAYEMS)
     var out = [];
-    for (var i = 1; i < d.length; i++) {
+    for (var i = 1; i < d.length; i++)
       out.push({ date: d[i].date, value: Math.round(d[i].value - d[i-1].value) });
-    }
     return out;
   }
   return d;
 }
 
-// ── Format ─────────────────────────────────────────────────────────────────
 function fmtVal(v, cfg) {
   if (cfg.unit === "$B") return "$" + v.toFixed(1) + "B";
   if (cfg.unit === "K")  return (v >= 0 ? "+" : "") + Math.round(v) + "K";
   if (cfg.unit === "%")  return v.toFixed(2) + "%";
   return v.toFixed(2);
 }
-function fmtDisplay(v, cfg) {
+function fmtDisp(v, cfg) {
   if (cfg.unit === "$B") return "$" + v.toFixed(1) + "B";
   if (cfg.unit === "K")  return (v < 0 ? "-" : "") + Math.abs(Math.round(v)) + "K";
   if (cfg.unit === "%")  return v.toFixed(2) + "%";
   return v.toFixed(2);
 }
 
-// ═══════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
 // INDICATORS
-//
-// Sourcing rationale (as of Apr 2026):
-//   BLS labor series:  direct from BLS API, same day as 8:30am press release
-//   FRED PAYEMS ch1:   fallback — lags ~1 day due to FRED ingest, but post-revision is correct
-//   FRED daily rates:  DGS10, DGS2, T10Y2Y, SOFR — updated daily, no meaningful lag
-//   FRED FEDFUNDS:     monthly average — may show prior month until month closes
-//   FRED inflation:    FRED ingests CPI/PCE/PPI same day BLS/BEA releases
-//   FRED RSAFS:        advance retail sales — same day as Census release
-//   FRED ICSA:         weekly jobless claims — same day as DOL release (Thursdays)
-// ═══════════════════════════════════════════════════════════
-var INDICATORS = [
-  // ── INFLATION ────────────────────────────────────────────────────────────
-  { id:"cpi",          label:"CPI (YoY%)",              series:"CPIAUCSL",        cat:"inflation", desc:"CPI All Urban Consumers, SA · FRED/BLS",               units:"pc1", unit:"%",  type:"area",      color:"#FF4D6A", freq:"Monthly",   source:"fred" },
-  { id:"coreCpi",      label:"Core CPI (YoY%)",          series:"CPILFESL",        cat:"inflation", desc:"CPI Less Food & Energy, SA · FRED/BLS",                units:"pc1", unit:"%",  type:"area",      color:"#FF7B8A", freq:"Monthly",   source:"fred" },
-  { id:"pce",          label:"PCE Inflation (YoY%)",     series:"PCEPI",           cat:"inflation", desc:"PCE Price Index · FRED/BEA",                           units:"pc1", unit:"%",  type:"area",      color:"#E11D48", freq:"Monthly",   source:"fred" },
-  { id:"ppi",          label:"PPI (YoY%)",               series:"PPIACO",          cat:"inflation", desc:"Producer Price Index, All Commodities · FRED/BLS",     units:"pc1", unit:"%",  type:"bar",       color:"#F97316", freq:"Monthly",   source:"fred" },
-
-  // ── RATES & YIELDS (daily FRED — minimal lag) ─────────────────────────────
-  { id:"fedFunds",     label:"Fed Funds Rate",           series:"FEDFUNDS",        cat:"rates",     desc:"Effective Fed Funds Rate (monthly avg) · FRED",        units:"lin", unit:"%",  type:"step",      color:"#A78BFA", freq:"Monthly",   source:"fred" },
-  { id:"sofr",         label:"SOFR (Daily)",             series:"SOFR",            cat:"rates",     desc:"Secured Overnight Financing Rate · FRED/NY Fed",       units:"lin", unit:"%",  type:"line",      color:"#C4B5FD", freq:"Daily",     source:"fred" },
-  { id:"t10y2y",       label:"10Y–2Y Spread",            series:"T10Y2Y",          cat:"rates",     desc:"10Y minus 2Y Treasury Spread (daily) · FRED",         units:"lin", unit:"%",  type:"area_zero", color:"#6382FF", freq:"Daily",     source:"fred" },
-  { id:"t10y",         label:"10Y Treasury Yield",       series:"DGS10",           cat:"rates",     desc:"10-Year Treasury Constant Maturity (daily) · FRED",   units:"lin", unit:"%",  type:"line",      color:"#818CF8", freq:"Daily",     source:"fred" },
-  { id:"t2y",          label:"2Y Treasury Yield",        series:"DGS2",            cat:"rates",     desc:"2-Year Treasury Constant Maturity (daily) · FRED",    units:"lin", unit:"%",  type:"line",      color:"#A5B4FC", freq:"Daily",     source:"fred" },
-
-  // ── LABOR MARKET (BLS primary, FRED fallback) ─────────────────────────────
-  { id:"nfp",          label:"Nonfarm Payrolls (MoM)",   series:"CES0000000001",   cat:"labor",     desc:"Total Nonfarm Payrolls MoM Change (000s) · BLS",       unit:"K",  type:"bar_pn",    color:"#38BDF8", freq:"Monthly",   source:"bls", blsMoM:true },
-  { id:"unemployment", label:"Unemployment Rate",        series:"LNS14000000",     cat:"labor",     desc:"Civilian Unemployment Rate, SA · BLS",                 unit:"%",  type:"area",      color:"#22D3EE", freq:"Monthly",   source:"bls" },
-  { id:"participRate", label:"Labor Force Participation",series:"LNS11300000",     cat:"labor",     desc:"Civilian Labor Force Participation Rate, SA · BLS",    unit:"%",  type:"line",      color:"#93C5FD", freq:"Monthly",   source:"bls" },
-  { id:"claims",       label:"Initial Jobless Claims",   series:"ICSA",            cat:"labor",     desc:"Initial Unemployment Insurance Claims (K) · FRED/DOL", units:"lin", unit:"K", type:"line",      color:"#7DD3FC", freq:"Weekly",    source:"fred", div:1000 },
-
-  // ── GROWTH & OUTPUT ───────────────────────────────────────────────────────
-  { id:"gdp",          label:"Real GDP (QoQ ann.%)",     series:"A191RL1Q225SBEA", cat:"growth",    desc:"Real GDP Growth, Quarterly Annualized · FRED/BEA",    units:"lin", unit:"%",  type:"bar_pn",    color:"#10E8A0", freq:"Quarterly", source:"fred" },
-  { id:"retailSales",  label:"Retail Sales (MoM%)",      series:"RSAFS",           cat:"growth",    desc:"Advance Retail Sales, SA · FRED/Census",              units:"pch", unit:"%",  type:"bar_pn",    color:"#34D399", freq:"Monthly",   source:"fred" },
-  { id:"indProd",      label:"Industrial Prod. (YoY%)",  series:"INDPRO",          cat:"growth",    desc:"Industrial Production Index · FRED/Fed",              units:"pc1", unit:"%",  type:"area",      color:"#6EE7B7", freq:"Monthly",   source:"fred" },
-  { id:"capUtil",      label:"Capacity Utilization",     series:"TCU",             cat:"growth",    desc:"Total Industry Capacity Utilization · FRED/Fed",      units:"lin", unit:"%",  type:"line",      color:"#A7F3D0", freq:"Monthly",   source:"fred" },
-
-  // ── SENTIMENT ─────────────────────────────────────────────────────────────
-  { id:"umich",        label:"Consumer Sentiment",       series:"UMCSENT",         cat:"sentiment", desc:"U. of Michigan Consumer Sentiment Index · FRED",       units:"lin", unit:"",   type:"area",      color:"#F59E0B", freq:"Monthly",   source:"fred" },
-  { id:"confBoard",    label:"Consumer Confidence",      series:"CSCICP03USM665S", cat:"sentiment", desc:"OECD Consumer Confidence Indicator · FRED",            units:"lin", unit:"",   type:"line",      color:"#FCD34D", freq:"Monthly",   source:"fred" },
-
-  // ── HOUSING ───────────────────────────────────────────────────────────────
-  { id:"houst",        label:"Housing Starts (K)",       series:"HOUST",           cat:"housing",   desc:"New Residential Construction, SA (K) · FRED/Census",  units:"lin", unit:"K",  type:"bar",       color:"#22D3EE", freq:"Monthly",   source:"fred" },
-  { id:"permits",      label:"Building Permits (K)",     series:"PERMIT",          cat:"housing",   desc:"New Private Housing Units Authorized (K) · FRED",     units:"lin", unit:"K",  type:"line",      color:"#06B6D4", freq:"Monthly",   source:"fred" },
-  { id:"caseShiller",  label:"Case-Shiller (YoY%)",      series:"CSUSHPINSA",      cat:"housing",   desc:"S&P/Case-Shiller National Home Price Index · FRED",   units:"pc1", unit:"%",  type:"area",      color:"#67E8F9", freq:"Monthly",   source:"fred" },
-
-  // ── TRADE ─────────────────────────────────────────────────────────────────
-  { id:"tradeBal",     label:"Trade Balance ($B)",       series:"BOPGSTB",         cat:"trade",     desc:"Trade Balance: Goods & Services ($B) · FRED/BEA",     units:"lin", unit:"$B", type:"area_zero", color:"#EC4899", freq:"Monthly",   source:"fred" },
-
-  // ── MONETARY ──────────────────────────────────────────────────────────────
-  { id:"m2",           label:"M2 Money Supply (YoY%)",   series:"M2SL",            cat:"monetary",  desc:"M2 Money Stock · FRED/Fed",                           units:"pc1", unit:"%",  type:"area",      color:"#C084FC", freq:"Monthly",   source:"fred" }
+// ─────────────────────────────────────────────────────────────
+var INDS = [
+  // INFLATION
+  {id:"cpi",         lbl:"CPI (YoY%)",              s:"CPIAUCSL",        cat:"inflation", desc:"CPI All Urban Consumers SA · FRED/BLS",          u:"pc1", unit:"%",  type:"area",      col:"#FF4D6A", freq:"Monthly",   src:"fred"},
+  {id:"coreCpi",     lbl:"Core CPI (YoY%)",          s:"CPILFESL",        cat:"inflation", desc:"CPI Less Food & Energy SA · FRED/BLS",            u:"pc1", unit:"%",  type:"area",      col:"#FF7B8A", freq:"Monthly",   src:"fred"},
+  {id:"pce",         lbl:"PCE Inflation (YoY%)",     s:"PCEPI",           cat:"inflation", desc:"PCE Price Index · FRED/BEA",                      u:"pc1", unit:"%",  type:"area",      col:"#E11D48", freq:"Monthly",   src:"fred"},
+  {id:"ppi",         lbl:"PPI (YoY%)",               s:"PPIACO",          cat:"inflation", desc:"Producer Price Index All Commodities · FRED/BLS", u:"pc1", unit:"%",  type:"bar",       col:"#F97316", freq:"Monthly",   src:"fred"},
+  // RATES (daily = zero lag)
+  {id:"fedFunds",    lbl:"Fed Funds Rate",           s:"FEDFUNDS",        cat:"rates",     desc:"Effective Fed Funds Rate (monthly avg) · FRED",   u:"lin", unit:"%",  type:"step",      col:"#A78BFA", freq:"Monthly",   src:"fred"},
+  {id:"sofr",        lbl:"SOFR (Daily)",             s:"SOFR",            cat:"rates",     desc:"Secured Overnight Financing Rate · FRED/NY Fed",  u:"lin", unit:"%",  type:"line",      col:"#C4B5FD", freq:"Daily",     src:"fred"},
+  {id:"t10y2y",      lbl:"10Y–2Y Spread",            s:"T10Y2Y",          cat:"rates",     desc:"10Y minus 2Y Treasury Spread (daily) · FRED",    u:"lin", unit:"%",  type:"area_zero", col:"#6382FF", freq:"Daily",     src:"fred"},
+  {id:"t10y",        lbl:"10Y Treasury Yield",       s:"DGS10",           cat:"rates",     desc:"10-Year Treasury Constant Maturity (daily) · FRED", u:"lin", unit:"%", type:"line",    col:"#818CF8", freq:"Daily",     src:"fred"},
+  {id:"t2y",         lbl:"2Y Treasury Yield",        s:"DGS2",            cat:"rates",     desc:"2-Year Treasury Constant Maturity (daily) · FRED", u:"lin", unit:"%", type:"line",     col:"#A5B4FC", freq:"Daily",     src:"fred"},
+  // LABOR (BLS primary — same day as 8:30am press release)
+  {id:"nfp",         lbl:"Nonfarm Payrolls (MoM)",   s:"CES0000000001",   cat:"labor",     desc:"Total Nonfarm Payrolls MoM Change · BLS",        unit:"K",  type:"bar_pn", col:"#38BDF8", freq:"Monthly", src:"bls", blsMoM:true},
+  {id:"unemp",       lbl:"Unemployment Rate",        s:"LNS14000000",     cat:"labor",     desc:"Civilian Unemployment Rate SA · BLS",             unit:"%",  type:"area",   col:"#22D3EE", freq:"Monthly", src:"bls"},
+  {id:"part",        lbl:"Labor Force Participation",s:"LNS11300000",     cat:"labor",     desc:"Civilian Labor Force Participation Rate SA · BLS",unit:"%",  type:"line",   col:"#93C5FD", freq:"Monthly", src:"bls"},
+  {id:"claims",      lbl:"Initial Jobless Claims",   s:"ICSA",            cat:"labor",     desc:"Initial Unemployment Insurance Claims (K) · FRED/DOL", u:"lin", unit:"K", type:"line", col:"#7DD3FC", freq:"Weekly", src:"fred", div:1000},
+  // GROWTH
+  {id:"gdp",         lbl:"Real GDP (QoQ ann.%)",     s:"A191RL1Q225SBEA", cat:"growth",    desc:"Real GDP Growth Quarterly Annualized · FRED/BEA", u:"lin", unit:"%",  type:"bar_pn",    col:"#10E8A0", freq:"Quarterly", src:"fred"},
+  {id:"retail",      lbl:"Retail Sales (MoM%)",      s:"RSAFS",           cat:"growth",    desc:"Advance Retail Sales SA · FRED/Census",           u:"pch", unit:"%",  type:"bar_pn",    col:"#34D399", freq:"Monthly",   src:"fred"},
+  {id:"indprod",     lbl:"Industrial Prod. (YoY%)",  s:"INDPRO",          cat:"growth",    desc:"Industrial Production Index · FRED/Fed",          u:"pc1", unit:"%",  type:"area",      col:"#6EE7B7", freq:"Monthly",   src:"fred"},
+  {id:"caputil",     lbl:"Capacity Utilization",     s:"TCU",             cat:"growth",    desc:"Total Industry Capacity Utilization · FRED/Fed",  u:"lin", unit:"%",  type:"line",      col:"#A7F3D0", freq:"Monthly",   src:"fred"},
+  // SENTIMENT
+  {id:"umich",       lbl:"Consumer Sentiment",       s:"UMCSENT",         cat:"sentiment", desc:"U. of Michigan Consumer Sentiment · FRED",        u:"lin", unit:"",   type:"area",      col:"#F59E0B", freq:"Monthly",   src:"fred"},
+  {id:"conf",        lbl:"Consumer Confidence",      s:"CSCICP03USM665S", cat:"sentiment", desc:"OECD Consumer Confidence Indicator · FRED",       u:"lin", unit:"",   type:"line",      col:"#FCD34D", freq:"Monthly",   src:"fred"},
+  // HOUSING
+  {id:"houst",       lbl:"Housing Starts (K)",       s:"HOUST",           cat:"housing",   desc:"New Residential Construction SA (K) · FRED",     u:"lin", unit:"K",  type:"bar",       col:"#22D3EE", freq:"Monthly",   src:"fred"},
+  {id:"permits",     lbl:"Building Permits (K)",     s:"PERMIT",          cat:"housing",   desc:"New Private Housing Units Authorized (K) · FRED", u:"lin", unit:"K",  type:"line",      col:"#06B6D4", freq:"Monthly",   src:"fred"},
+  {id:"cs",          lbl:"Case-Shiller (YoY%)",      s:"CSUSHPINSA",      cat:"housing",   desc:"S&P/Case-Shiller National Home Price · FRED",     u:"pc1", unit:"%",  type:"area",      col:"#67E8F9", freq:"Monthly",   src:"fred"},
+  // TRADE
+  {id:"trade",       lbl:"Trade Balance ($B)",       s:"BOPGSTB",         cat:"trade",     desc:"Trade Balance Goods & Services ($B) · FRED/BEA",  u:"lin", unit:"$B", type:"area_zero", col:"#EC4899", freq:"Monthly",   src:"fred"},
+  // MONETARY
+  {id:"m2",          lbl:"M2 Money Supply (YoY%)",   s:"M2SL",            cat:"monetary",  desc:"M2 Money Stock · FRED/Fed",                       u:"pc1", unit:"%",  type:"area",      col:"#C084FC", freq:"Monthly",   src:"fred"}
 ];
 
-var CATEGORIES = [
-  {key:"all",       label:"All Indicators",  icon:"◈"},
-  {key:"inflation", label:"Inflation",        icon:"▲"},
-  {key:"rates",     label:"Rates & Yields",   icon:"◆"},
-  {key:"labor",     label:"Labor Market",     icon:"●"},
-  {key:"growth",    label:"Growth & Output",  icon:"■"},
-  {key:"sentiment", label:"Sentiment",        icon:"◐"},
-  {key:"housing",   label:"Housing",          icon:"▣"},
-  {key:"trade",     label:"Trade",            icon:"◇"},
-  {key:"monetary",  label:"Monetary",         icon:"○"}
+var CATS = [
+  {k:"all",       l:"All Indicators",  i:"◈"},
+  {k:"inflation", l:"Inflation",        i:"▲"},
+  {k:"rates",     l:"Rates & Yields",   i:"◆"},
+  {k:"labor",     l:"Labor Market",     i:"●"},
+  {k:"growth",    l:"Growth & Output",  i:"■"},
+  {k:"sentiment", l:"Sentiment",        i:"◐"},
+  {k:"housing",   l:"Housing",          i:"▣"},
+  {k:"trade",     l:"Trade",            i:"◇"},
+  {k:"monetary",  l:"Monetary",         i:"○"}
 ];
 
-var TF_OPTIONS = ["1Y","2Y","5Y","10Y","MAX"];
-var TF_MAP = {"1Y":12,"2Y":24,"5Y":60,"10Y":120,"MAX":9999};
-var CHART_POINTS = 18;
-var allData = {}, charts = {}, currentTF = "5Y", currentCat = "all";
+var TFS = ["1Y","2Y","5Y","10Y","MAX"];
+var TFM = {"1Y":12,"2Y":24,"5Y":60,"10Y":120,"MAX":9999};
+var CPTS = 18;
+var allData={}, charts={}, curTF="5Y", curCat="all";
 
-function showStatus(m,t){var e=document.getElementById("status-box");e.className="status-box "+t;e.innerHTML=m;e.style.display="block";}
-function hideStatus(){document.getElementById("status-box").style.display="none";}
+function setSB(m,t){var e=document.getElementById("sb");e.className="sb "+t;e.innerHTML=m;e.style.display="block";}
+function hideSB(){document.getElementById("sb").style.display="none";}
 
-// ── UI ─────────────────────────────────────────────────────────────────────
 function buildTFBar(){
-  var bar=document.getElementById("tf-bar");bar.innerHTML="";
-  TF_OPTIONS.forEach(function(tf){
-    var b=document.createElement("button");
-    b.className="tf-btn"+(currentTF===tf?" active":"");
-    b.textContent=tf;
-    b.onclick=function(){currentTF=tf;buildTFBar();loadAll();};
-    bar.appendChild(b);
+  var b=document.getElementById("tfbar");b.innerHTML="";
+  TFS.forEach(function(tf){
+    var btn=document.createElement("button");
+    btn.className="tfb"+(curTF===tf?" act":"");
+    btn.textContent=tf;
+    btn.onclick=function(){curTF=tf;buildTFBar();loadAll();};
+    b.appendChild(btn);
   });
 }
 
 function buildTabs(){
   var nav=document.getElementById("tabs");nav.innerHTML="";
-  CATEGORIES.forEach(function(cat){
-    var b=document.createElement("button");
-    b.className="tab"+(currentCat===cat.key?" active":"");
-    b.textContent=cat.icon+"  "+cat.label;
-    b.onclick=function(){currentCat=cat.key;buildTabs();renderGrid();};
-    nav.appendChild(b);
+  CATS.forEach(function(cat){
+    var btn=document.createElement("button");
+    btn.className="tab"+(curCat===cat.k?" act":"");
+    btn.textContent=cat.i+"  "+cat.l;
+    btn.onclick=function(){curCat=cat.k;buildTabs();renderGrid();};
+    nav.appendChild(btn);
   });
 }
 
 function renderGrid(){
-  var grid=document.getElementById("grid");
+  var g=document.getElementById("grid");
   Object.keys(charts).forEach(function(k){if(charts[k]){charts[k].destroy();delete charts[k];}});
-  grid.innerHTML="";
+  g.innerHTML="";
   var cards=[];
-  INDICATORS
-    .filter(function(ind){return currentCat==="all"||ind.cat===currentCat;})
-    .forEach(function(ind,i){
-      var card=buildCard(ind,i);
-      grid.appendChild(card);
-      cards.push(card);
-    });
+  INDS.filter(function(ind){return curCat==="all"||ind.cat===curCat;})
+    .forEach(function(ind,i){var c=buildCard(ind,i);g.appendChild(c);cards.push(c);});
   setTimeout(function(){
-    cards.forEach(function(card){
-      if(card._chartData&&card._ind){
-        var canvas=document.getElementById("chart-"+card._ind.id);
-        if(canvas) renderChart(canvas,card._ind,card._chartData);
+    cards.forEach(function(c){
+      if(c._cd&&c._ind){
+        var cv=document.getElementById("chart-"+c._ind.id);
+        if(cv) renderChart(cv,c._ind,c._cd);
       }
     });
   },50);
@@ -460,73 +442,63 @@ function buildCard(ind,idx){
   var card=document.createElement("div");
   card.className="card";
   card.style.animationDelay=(idx*25)+"ms";
-  var srcLabel=ind._usedFallback?"FRED*":ind.source==="bls"?"BLS":"FRED";
-  var srcClass=ind.source==="bls"&&!ind._usedFallback?"bls":"fred";
-  var pill='<div class="card-source-pill '+srcClass+'">'+srcLabel+'</div>';
+  var sl=ind._fb?"FRED*":ind.src==="bls"?"BLS":"FRED";
+  var sc=ind.src==="bls"&&!ind._fb?"bls":"fred";
+  var pill='<div class="spl '+sc+'">'+sl+'</div>';
 
   if(!data.length){
     card.innerHTML=pill+
-      '<div class="card-top"><div class="card-meta">'+
-        '<div class="label-row"><span class="dot" style="background:'+ind.color+';opacity:.3"></span>'+
-        '<span class="label-text">'+ind.label+'</span></div>'+
-        '<div class="skeleton-val"></div></div></div>'+
-      '<div class="skeleton-chart"></div>';
+      '<div class="ct"><div class="cm">'+
+        '<div class="lr"><span class="dot" style="background:'+ind.col+';opacity:.3"></span>'+
+        '<span class="lt">'+ind.lbl+'</span></div>'+
+        '<div class="sv"></div></div></div>'+
+      '<div class="sc"></div>';
     return card;
   }
 
-  var tf=TF_MAP[currentTF]||60;
-  var sliced=data.slice(-tf);
-  var latest=sliced[sliced.length-1];
-  var prev=sliced.length>1?sliced[sliced.length-2]:null;
-  var change=prev?latest.value-prev.value:0;
-  var pct=prev&&prev.value!==0?((latest.value-prev.value)/Math.abs(prev.value))*100:0;
-  var up=change>=0;
-  var chartData=sliced.slice(-CHART_POINTS);
-
-  var displayVal=fmtDisplay(latest.value,ind);
+  var tf=TFM[curTF]||60;
+  var sl2=data.slice(-tf);
+  var lat=sl2[sl2.length-1];
+  var prv=sl2.length>1?sl2[sl2.length-2]:null;
+  var chg=prv?lat.value-prv.value:0;
+  var pct=prv&&prv.value!==0?((lat.value-prv.value)/Math.abs(prv.value))*100:0;
+  var up=chg>=0;
+  var cd=sl2.slice(-CPTS);
+  var dv=fmtDisp(lat.value,ind);
   var isMoM=!!ind.blsMoM;
-  var deltaStr,ctxStr;
-
+  var ds,ctx;
   if(isMoM){
-    up=latest.value>=0;
-    var vsChange=prev?Math.round(latest.value-prev.value):0;
-    deltaStr=(vsChange>=0?"+":"")+vsChange+"K vs prior";
-    ctxStr="Prior: "+(prev?(prev.value>=0?"+":"")+Math.round(prev.value)+"K":"—");
+    up=lat.value>=0;
+    var vs=prv?Math.round(lat.value-prv.value):0;
+    ds=(vs>=0?"+":"")+vs+"K vs prior";
+    ctx="Prior: "+(prv?(prv.value>=0?"+":"")+Math.round(prv.value)+"K":"—");
   } else {
-    deltaStr=Math.abs(change).toFixed(ind.unit==="K"?0:2)+(ind.unit==="K"?"K":"");
-    ctxStr=(pct>=0?"+":"")+pct.toFixed(2)+"%";
+    ds=Math.abs(chg).toFixed(ind.unit==="K"?0:2)+(ind.unit==="K"?"K":"");
+    ctx=(pct>=0?"+":"")+pct.toFixed(2)+"%";
   }
-
-  var gc=up?"var(--green)":"var(--red)";
-  var gb=up?"var(--glow-green)":"var(--glow-red)";
+  var gc=up?"var(--grn)":"var(--red)";
+  var gb=up?"var(--gg)":"var(--gr)";
   var gbd=up?"rgba(16,232,160,.2)":"rgba(255,77,106,.2)";
 
   card.innerHTML=pill+
-    '<div class="card-top">'+
-      '<div class="card-meta">'+
-        '<div class="label-row">'+
-          '<span class="dot" style="background:'+ind.color+';box-shadow:0 0 6px '+ind.color+'60"></span>'+
-          '<span class="label-text">'+ind.label+'</span>'+
-        '</div>'+
-        '<div class="big-val" style="'+(isMoM?'color:'+(up?'var(--green)':'var(--red)'):'')+'">'+displayVal+'</div>'+
-        '<div class="delta-row">'+
-          '<span class="delta-badge" style="color:'+gc+';background:'+gb+';border:1px solid '+gbd+'">'+
-            '<span class="delta-arrow">'+(up?"▲":"▼")+'</span>'+deltaStr+
-          '</span>'+
-          '<span class="delta-pct">'+ctxStr+'</span>'+
+    '<div class="ct">'+
+      '<div class="cm">'+
+        '<div class="lr"><span class="dot" style="background:'+ind.col+';box-shadow:0 0 6px '+ind.col+'60"></span>'+
+        '<span class="lt">'+ind.lbl+'</span></div>'+
+        '<div class="bv" style="'+(isMoM?'color:'+(up?'var(--grn)':'var(--red)'):'')+'">'+dv+'</div>'+
+        '<div class="dr">'+
+          '<span class="db" style="color:'+gc+';background:'+gb+';border:1px solid '+gbd+'">'+
+            '<span class="da">'+(up?"▲":"▼")+'</span>'+ds+'</span>'+
+          '<span class="dp">'+ctx+'</span>'+
         '</div>'+
       '</div>'+
-      '<div class="card-value-area">'+
-        '<div class="date-text">'+latest.date+'</div>'+
-        '<div class="freq-badge">'+ind.freq.toUpperCase()+'</div>'+
-      '</div>'+
+      '<div class="cv"><div class="dt">'+lat.date+'</div><div class="fb">'+ind.freq.toUpperCase()+'</div></div>'+
     '</div>'+
-    '<div class="chart-desc">'+ind.desc+'</div>'+
-    '<div class="card-divider"></div>'+
-    '<div class="chart-section"><div class="chart-wrap"><canvas id="chart-'+ind.id+'"></canvas></div></div>';
+    '<div class="cd">'+ind.desc+'</div>'+
+    '<div class="cdiv"></div>'+
+    '<div class="cs"><div class="cw"><canvas id="chart-'+ind.id+'"></canvas></div></div>';
 
-  card._chartData=chartData;
-  card._ind=ind;
+  card._cd=cd; card._ind=ind;
   return card;
 }
 
@@ -536,15 +508,15 @@ function renderChart(canvas,ind,data){
   var values=data.map(function(d){return d.value;});
   var ctx=canvas.getContext("2d");
   if(charts[ind.id]) charts[ind.id].destroy();
-  var type,datasets;
-  var baseOpts={
+  var type,ds;
+  var opts={
     responsive:true,maintainAspectRatio:false,
-    animation:{duration:350,easing:'easeOutQuart'},
+    animation:{duration:300,easing:'easeOutQuart'},
     interaction:{mode:'index',intersect:false},
     plugins:{
       legend:{display:false},
       tooltip:{
-        backgroundColor:"#0D1526",borderColor:"rgba(99,130,255,0.25)",borderWidth:1,
+        backgroundColor:"#0D1526",borderColor:"rgba(99,130,255,.25)",borderWidth:1,
         titleColor:"#8FA4C8",bodyColor:"#F0F4FF",
         titleFont:{family:"'Sora'",size:9.5,weight:'500'},
         bodyFont:{family:"'IBM Plex Mono'",size:11,weight:'600'},
@@ -561,143 +533,98 @@ function renderChart(canvas,ind,data){
   };
   if(ind.type==="bar"||ind.type==="bar_pn"){
     type="bar";
-    var bg=ind.type==="bar_pn"
-      ?values.map(function(v){return v>=0?"rgba(16,232,160,.55)":"rgba(255,77,106,.55)";})
-      :ind.color+"99";
-    var bc=ind.type==="bar_pn"
-      ?values.map(function(v){return v>=0?"rgba(16,232,160,.85)":"rgba(255,77,106,.85)";})
-      :ind.color;
-    datasets=[{data:values,backgroundColor:bg,borderColor:bc,borderWidth:1,borderRadius:2,maxBarThickness:14}];
+    var bg=ind.type==="bar_pn"?values.map(function(v){return v>=0?"rgba(16,232,160,.55)":"rgba(255,77,106,.55)";}):ind.col+"99";
+    var bc=ind.type==="bar_pn"?values.map(function(v){return v>=0?"rgba(16,232,160,.85)":"rgba(255,77,106,.85)";}):ind.col;
+    ds=[{data:values,backgroundColor:bg,borderColor:bc,borderWidth:1,borderRadius:2,maxBarThickness:14}];
   } else if(ind.type==="area"||ind.type==="area_zero"){
     type="line";
-    var g=ctx.createLinearGradient(0,0,0,100);
-    g.addColorStop(0,ind.color+"2A");g.addColorStop(1,ind.color+"03");
-    datasets=[{data:values,borderColor:ind.color,borderWidth:1.5,backgroundColor:g,fill:true,
-               pointRadius:0,pointHoverRadius:3,pointHoverBackgroundColor:ind.color,tension:.35}];
-    if(ind.type==="area_zero"){
-      baseOpts.scales.y.grid={
-        color:function(c){return c.tick.value===0?"rgba(99,130,255,0.3)":"rgba(148,163,210,.04)";},
-        drawTicks:false
-      };
-    }
+    var g=ctx.createLinearGradient(0,0,0,100);g.addColorStop(0,ind.col+"2A");g.addColorStop(1,ind.col+"03");
+    ds=[{data:values,borderColor:ind.col,borderWidth:1.5,backgroundColor:g,fill:true,pointRadius:0,pointHoverRadius:3,pointHoverBackgroundColor:ind.col,tension:.35}];
+    if(ind.type==="area_zero") opts.scales.y.grid={color:function(c){return c.tick.value===0?"rgba(99,130,255,.3)":"rgba(148,163,210,.04)";},drawTicks:false};
   } else if(ind.type==="step"){
     type="line";
-    datasets=[{data:values,borderColor:ind.color,borderWidth:2,pointRadius:0,
-               pointHoverRadius:3,pointHoverBackgroundColor:ind.color,stepped:"after",fill:false}];
+    ds=[{data:values,borderColor:ind.col,borderWidth:2,pointRadius:0,pointHoverRadius:3,pointHoverBackgroundColor:ind.col,stepped:"after",fill:false}];
   } else {
     type="line";
-    datasets=[{data:values,borderColor:ind.color,borderWidth:1.5,pointRadius:0,
-               pointHoverRadius:3,pointHoverBackgroundColor:ind.color,tension:.35,fill:false}];
+    ds=[{data:values,borderColor:ind.col,borderWidth:1.5,pointRadius:0,pointHoverRadius:3,pointHoverBackgroundColor:ind.col,tension:.35,fill:false}];
   }
-  charts[ind.id]=new Chart(ctx,{type:type,data:{labels:labels,datasets:datasets},options:baseOpts});
+  charts[ind.id]=new Chart(ctx,{type:type,data:{labels:labels,datasets:ds},options:opts});
 }
 
-// ── Load all indicators ─────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// LOAD ALL
+// ─────────────────────────────────────────────────────────────
 function loadAll(){
-  hideStatus();
-  _getProxyLocked = null; // re-probe proxy on each manual refresh
-  document.getElementById("progress-wrap").style.display="block";
-  document.getElementById("refresh-btn").disabled=true;
-
-  var done=0, total=INDICATORS.length, ok=0, fbCount=0, failCount=0;
-  document.getElementById("refresh-btn").textContent="0/"+total;
+  hideSB();
+  document.getElementById("pw").style.display="block";
+  document.getElementById("rbtn").disabled=true;
+  var done=0,total=INDS.length,ok=0,fb=0,fail=0;
+  document.getElementById("rbtn").textContent="0/"+total;
 
   function tick(){
     done++;
-    document.getElementById("progress-fill").style.width=(done/total*100)+"%";
-    document.getElementById("refresh-btn").textContent=done+"/"+total;
+    document.getElementById("pf").style.width=(done/total*100)+"%";
+    document.getElementById("rbtn").textContent=done+"/"+total;
     if(done>=total) finish();
   }
-
   function finish(){
-    document.getElementById("progress-wrap").style.display="none";
-    document.getElementById("refresh-btn").disabled=false;
-    document.getElementById("refresh-btn").textContent="↻ Refresh";
-    document.getElementById("subtitle").textContent=
+    document.getElementById("pw").style.display="none";
+    document.getElementById("rbtn").disabled=false;
+    document.getElementById("rbtn").textContent="↻ Refresh";
+    document.getElementById("sub").textContent=
       "UPDATED "+new Date().toLocaleTimeString().toUpperCase()+" · "+ok+"/"+total+" LOADED";
     renderGrid();
     if(ok===0){
-      showStatus("❌ All "+total+" indicators failed. Open F12 console for details. Try disabling ad blockers.","error");
-    } else if(fbCount>0){
-      showStatus("✅ "+ok+" loaded · "+fbCount+" labor indicator(s) used FRED fallback (BLS proxy unavailable). Data is still current.","info");
-      setTimeout(hideStatus,7000);
+      setSB("❌ All indicators failed. Open F12 → Console for details. Try disabling ad blockers or VPN.","err");
+    } else if(fb>0){
+      setSB("✅ "+ok+" loaded · "+fb+" labor series via FRED fallback (BLS proxy unavailable). Data is still current.","inf");
+      setTimeout(hideSB,7000);
     } else {
-      showStatus("✅ All "+ok+" indicators loaded — BLS & FRED data current.","success");
-      setTimeout(hideStatus,4000);
+      setSB("✅ All "+ok+" indicators loaded — BLS & FRED data current.","ok");
+      setTimeout(hideSB,4000);
     }
   }
 
-  var yearsBack = currentTF==="MAX"?20:currentTF==="10Y"?11:currentTF==="5Y"?6:currentTF==="2Y"?3:2;
-  var fredLimit = currentTF==="MAX"?600:200;
+  var yrsBack=curTF==="MAX"?20:curTF==="10Y"?11:curTF==="5Y"?6:curTF==="2Y"?3:2;
+  var fredLim=curTF==="MAX"?600:200;
 
-  var queue = INDICATORS.slice();
-
-  function fetchOne(ind) {
-    if (ind.source === "bls") {
-      return fetchBLS(ind.series, yearsBack)
-        .then(function(raw) {
-          allData[ind.id] = transform(raw, ind);
-          ind._usedFallback = false;
-          ok++;
-          if (ok % 3 === 0) renderGrid();
-        })
-        .catch(function(e) {
-          console.warn("BLS failed (" + ind.id + "):", e.message, "→ FRED fallback");
-          var fb = BLS_FALLBACK[ind.series];
-          if (!fb) { failCount++; allData[ind.id] = []; return; }
-          return fetchFRED(fb.series, fredLimit, fb.units)
-            .then(function(raw) {
-              // Clone config: FRED ch1 already is MoM change, don't re-diff
-              var cfg = {}; for (var k in ind) cfg[k] = ind[k];
-              cfg.blsMoM = false;
-              allData[ind.id] = transform(raw, cfg);
-              ind._usedFallback = true;
-              ok++; fbCount++;
-              if (ok % 3 === 0) renderGrid();
-            })
-            .catch(function(e2) {
-              console.error("FRED fallback also failed (" + ind.id + "):", e2.message);
-              failCount++; allData[ind.id] = [];
-            });
+  function fetchOne(ind){
+    if(ind.src==="bls"){
+      return fetchBLS(ind.s, yrsBack)
+        .then(function(raw){ allData[ind.id]=transform(raw,ind); ind._fb=false; ok++; if(ok%4===0)renderGrid(); })
+        .catch(function(e){
+          console.warn("BLS failed ("+ind.id+"):", e.message, "→ FRED fallback");
+          var fallback=BLS_FALLBACK[ind.s];
+          if(!fallback){ fail++; allData[ind.id]=[]; return; }
+          var cfg={}; for(var k in ind) cfg[k]=ind[k]; cfg.blsMoM=false;
+          return fetchFRED(fallback.s, fredLim, fallback.u)
+            .then(function(raw){ allData[ind.id]=transform(raw,cfg); ind._fb=true; ok++; fb++; if(ok%4===0)renderGrid(); })
+            .catch(function(e2){ console.error("FRED fallback failed ("+ind.id+"):",e2.message); fail++; allData[ind.id]=[]; });
         });
     } else {
-      return fetchFRED(ind.series, fredLimit, ind.units)
-        .then(function(raw) {
-          allData[ind.id] = transform(raw, ind);
-          ind._usedFallback = false;
-          ok++;
-          if (ok % 3 === 0) renderGrid();
-        })
-        .catch(function(e) {
-          console.error("FRED failed (" + ind.id + "):", e.message);
-          failCount++; allData[ind.id] = [];
-        });
+      return fetchFRED(ind.s, fredLim, ind.u)
+        .then(function(raw){ allData[ind.id]=transform(raw,ind); ind._fb=false; ok++; if(ok%4===0)renderGrid(); })
+        .catch(function(e){ console.error("FRED failed ("+ind.id+"):",e.message); fail++; allData[ind.id]=[]; });
     }
   }
 
-  function next() {
-    if (!queue.length) return;
-    var ind = queue.shift();
-    fetchOne(ind)
-      .catch(function(){})
-      .then(function(){ tick(); if (queue.length) setTimeout(next, 100); });
+  var queue=INDS.slice();
+  function next(){
+    if(!queue.length) return;
+    var ind=queue.shift();
+    fetchOne(ind).catch(function(){}).then(function(){ tick(); if(queue.length) setTimeout(next,80); });
   }
-
-  // 3 parallel streams
-  next(); next(); next();
+  // 4 parallel streams
+  next(); next(); next(); next();
 }
 
-// ── Init ───────────────────────────────────────────────────────────────────
-buildTFBar();
-buildTabs();
-renderGrid();
-
-var _cjsCheck = setInterval(function(){
-  if(typeof Chart !== "undefined"){ clearInterval(_cjsCheck); renderGrid(); }
-}, 200);
-setTimeout(function(){ clearInterval(_cjsCheck); }, 15000);
-
-showStatus("🔄 Probing proxies and fetching live data from BLS & FRED...","info");
+// ─────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────
+buildTFBar(); buildTabs(); renderGrid();
+var _cjs=setInterval(function(){if(typeof Chart!=="undefined"){clearInterval(_cjs);renderGrid();}},200);
+setTimeout(function(){clearInterval(_cjs);},15000);
+setSB("🔄 Racing proxies — fetching live BLS & FRED data...","inf");
 loadAll();
 </script>
 </body>
