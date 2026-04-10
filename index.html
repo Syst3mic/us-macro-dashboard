@@ -116,6 +116,16 @@ button{font-family:inherit;cursor:pointer}
 .skelv{height:26px;width:80px;border-radius:5px;background:linear-gradient(90deg,var(--surf) 25%,var(--elev) 50%,var(--surf) 75%);background-size:200% 100%;animation:shimmer 1.6s infinite}
 .skelc{height:90px;margin:8px 10px 12px;border-radius:8px;background:linear-gradient(90deg,var(--surf) 25%,var(--elev) 50%,var(--surf) 75%);background-size:200% 100%;animation:shimmer 1.6s infinite}
 
+/* NFP release history table */
+.nfp-table{margin:12px 18px 0;border-radius:6px;overflow:hidden;border:1px solid var(--b0)}
+.nfp-row{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;font-family:'IBM Plex Mono',monospace}
+.nfp-hdr{background:var(--surf);font-size:8px;font-weight:700;color:var(--t3);letter-spacing:.6px;text-transform:uppercase}
+.nfp-data{border-top:1px solid var(--b0);font-size:9.5px;font-weight:600;color:var(--t2)}
+.nfp-data:first-of-type .nfp-cell{color:var(--t1)}
+.nfp-cell{padding:5px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nfp-g{color:#10E8A0!important}
+.nfp-r{color:#FF4D6A!important}
+
 /* FOOTER */
 .ftr{padding:20px 28px;border-top:1px solid var(--b0);background:var(--bg2);color:var(--t2);font-size:10.5px;line-height:1.8;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
 .ftr b{color:var(--t1);font-weight:600}
@@ -234,11 +244,16 @@ function proxyFetch(url) {
 // FRED FETCH
 // ─────────────────────────────────────────────────────────────────────────────
 function fetchFRED(seriesId, limit, units) {
+  // Cache-buster: forces proxy to fetch fresh data, not serve cached response.
+  // This is critical for indicators like PAYEMS where proxies cache old data.
+  var bust = "&_cb="+Math.floor(Date.now()/60000); // changes every 60 seconds
   var url = "https://api.stlouisfed.org/fred/series/observations"
     +"?series_id="+seriesId
     +"&api_key="+FRED_KEY
     +"&file_type=json&sort_order=desc&limit="+limit
-    +"&units="+(units||"lin");
+    +"&units="+(units||"lin")
+    +"&realtime_start="+new Date().toISOString().slice(0,10) // force current vintage
+    +bust;
   return proxyFetch(url).then(function(j){
     if (j.error_code) throw new Error("FRED error: "+j.error_message);
     return j.observations
@@ -384,7 +399,6 @@ function buildCard(ind, idx){
   card.className="card";
   card.style.animationDelay=(idx*25)+"ms";
 
-  // SKELETON state
   if(!data.length){
     card.innerHTML=
       '<div class="ct">'+
@@ -403,29 +417,96 @@ function buildCard(ind, idx){
   var sl  = data.slice(-tf);
   var lat = sl[sl.length-1];
   var prv = sl.length>1 ? sl[sl.length-2] : null;
+  var pp  = sl.length>2 ? sl[sl.length-3] : null; // two periods back
   var chg = prv ? lat.value-prv.value : 0;
   var pct = prv&&prv.value!==0 ? ((lat.value-prv.value)/Math.abs(prv.value))*100 : 0;
   var isMoM = !!ind.momDiff;
-  var up  = isMoM ? lat.value>=0 : chg>=0;
+  var up  = chg>=0; // always based on change, not raw value
   var cd  = sl.slice(-CPTS);
   var dv  = fmtDisp(lat.value, ind);
 
+  var gc  = up?"var(--grn)":"var(--red)";
+  var gb  = up?"var(--gg)":"var(--gr)";
+  var gbd = up?"rgba(16,232,160,.2)":"rgba(255,77,106,.2)";
+
   var dstr, cstr;
   if (isMoM) {
-    // For MoM series: delta = this month vs prior month print
-    var vsChange = prv ? Math.round(lat.value - prv.value) : 0;
-    dstr = (vsChange>=0?"+":"")+vsChange+"K vs prior";
+    dstr = (chg>=0?"+":"")+Math.round(chg)+"K vs prior";
     cstr = "Prior: "+(prv ? (prv.value>=0?"+":"")+Math.round(prv.value)+"K" : "—");
   } else {
     dstr = Math.abs(chg).toFixed(ind.unit==="K"?0:2)+(ind.unit==="K"?"K":"");
     cstr = (pct>=0?"+":"")+pct.toFixed(2)+"%";
   }
 
-  var gc  = up?"var(--grn)":"var(--red)";
-  var gb  = up?"var(--gg)":"var(--gr)";
-  var gbd = up?"rgba(16,232,160,.2)":"rgba(255,77,106,.2)";
+  // NFP special layout: release history table instead of chart
+  if (isMoM) {
+    // Build last 4 releases as rows: Release date | Actual | Previous | Forecast (N/A via FRED)
+    var rows = [];
+    for (var ri = sl.length-1; ri >= 0 && rows.length < 4; ri--) {
+      var cur = sl[ri];
+      var prevVal = ri > 0 ? sl[ri-1] : null;
+      rows.push({ date: cur.date, actual: cur.value, prev: prevVal ? prevVal.value : null });
+    }
 
-  // Right meta column: date → FRED badge → freq badge (stacked, no overlap)
+    function fmtK(v) {
+      if (v === null || v === undefined) return "—";
+      return (v>=0?"+":"")+Math.round(v)+"K";
+    }
+    function colorK(v) {
+      if (v === null || v === undefined) return "";
+      return v >= 0 ? " nfp-g" : " nfp-r";
+    }
+
+    var tableRows = rows.map(function(r, i) {
+      var d = r.date.slice(0,7); // "YYYY-MM"
+      return '<div class="nfp-row nfp-data">'+
+        '<div class="nfp-cell">'+d+'</div>'+
+        '<div class="nfp-cell'+colorK(r.actual)+'">'+fmtK(r.actual)+'</div>'+
+        '<div class="nfp-cell'+colorK(r.prev)+'">'+fmtK(r.prev)+'</div>'+
+        '<div class="nfp-cell" style="color:var(--t3)">N/A</div>'+
+      '</div>';
+    }).join("");
+
+    card.innerHTML=
+      '<div class="ct">'+
+        '<div class="cm">'+
+          '<div class="lr">'+
+            '<span class="dot" style="background:'+ind.col+';box-shadow:0 0 6px '+ind.col+'55"></span>'+
+            '<span class="lt">'+ind.lbl+'</span>'+
+          '</div>'+
+          // Headline: white (neutral) — NFP positive ≠ inherently good
+          '<div class="bv">'+dv+'</div>'+
+          '<div class="dr">'+
+            '<span class="db" style="color:'+gc+';background:'+gb+';border:1px solid '+gbd+'">'+
+              (up?'▲':'▼')+' '+dstr+
+            '</span>'+
+            '<span class="dp">'+cstr+'</span>'+
+          '</div>'+
+        '</div>'+
+        '<div class="cmeta">'+
+          '<span class="cdate">'+lat.date+'</span>'+
+          '<span class="csrc">FRED</span>'+
+          '<span class="cfreq">'+ind.freq.toUpperCase()+'</span>'+
+        '</div>'+
+      '</div>'+
+      // Release history table
+      '<div class="nfp-table">'+
+        '<div class="nfp-row nfp-hdr">'+
+          '<div class="nfp-cell">Release</div>'+
+          '<div class="nfp-cell">Actual</div>'+
+          '<div class="nfp-cell">Previous</div>'+
+          '<div class="nfp-cell">Forecast</div>'+
+        '</div>'+
+        tableRows+
+      '</div>'+
+      '<div class="cdiv"></div>'+
+      '<div class="cs"><div class="cw"><canvas id="ch-'+ind.id+'"></canvas></div></div>';
+
+    card._cd=cd; card._ind=ind;
+    return card;
+  }
+
+  // Standard card layout for all other indicators
   card.innerHTML=
     '<div class="ct">'+
       '<div class="cm">'+
@@ -433,7 +514,7 @@ function buildCard(ind, idx){
           '<span class="dot" style="background:'+ind.col+';box-shadow:0 0 6px '+ind.col+'55"></span>'+
           '<span class="lt">'+ind.lbl+'</span>'+
         '</div>'+
-        '<div class="bv" style="'+(isMoM?'color:'+(up?'var(--grn)':'var(--red)'):'')+'">'+dv+'</div>'+
+        '<div class="bv">'+dv+'</div>'+
         '<div class="dr">'+
           '<span class="db" style="color:'+gc+';background:'+gb+';border:1px solid '+gbd+'">'+
             (up?'▲':'▼')+' '+dstr+
@@ -568,6 +649,11 @@ function loadAll(){
       fetchFRED(ind.s, fredLim, ind.u)
         .then(function(raw){
           allData[ind.id]=transform(raw, ind);
+          // Debug: log last 3 values for NFP so you can verify in F12 console
+          if(ind.id==="nfp"){
+            var d=allData[ind.id]; var n=d.length;
+            console.log("NFP last 3:", d.slice(-3).map(function(x){return x.date+": "+(x.value>=0?"+":"")+x.value+"K";}));
+          }
           ok++;
           if(ok%4===0) renderGrid();
         })
