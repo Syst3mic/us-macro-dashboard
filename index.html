@@ -8,488 +8,114 @@
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script>
 (function(){
-  var cdns = [
+  var cdns=[
     "https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js",
     "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js",
-    "https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js",
-    "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js",
     "https://cdn.jsdelivr.net/npm/chart.js/dist/chart.umd.min.js"
   ];
-  var i = 0;
+  var i=0;
   function tryNext(){
-    if(i >= cdns.length){ console.error("ALL Chart.js CDNs failed!"); return; }
-    var url = cdns[i++];
-    var s = document.createElement("script");
-    s.src = url;
-    s.onload = function(){ if(typeof Chart === "undefined"){ tryNext(); } };
-    s.onerror = function(){ tryNext(); };
-    document.head.appendChild(s);
+    if(i>=cdns.length){console.error("ALL Chart.js CDNs failed!");return;}
+    var url=cdns[i++],s=document.createElement("script");
+    s.src=url;s.onload=function(){if(typeof Chart==="undefined")tryNext();};
+    s.onerror=tryNext;document.head.appendChild(s);
   }
   tryNext();
 })();
 </script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-
 :root{
-  /* Core Palette */
-  --bg: #070C18;
-  --bg-secondary: #0A1020;
-  --card: #0D1526;
-  --card-hover: #111C30;
-  --surface: #141E33;
-  --elevated: #1A2640;
-  --panel: #0F1929;
-
-  /* Borders */
-  --border: rgba(148,163,210,0.08);
-  --border-hover: rgba(148,163,210,0.18);
-  --border-accent: rgba(99,130,255,0.3);
-
-  /* Typography */
-  --t1: #F0F4FF;
-  --t2: #8FA4C8;
-  --t3: #4D6080;
-  --t4: #2D3D55;
-
-  /* Accent Colors */
-  --indigo: #6382FF;
-  --cyan: #22D3EE;
-  --green: #10E8A0;
-  --red: #FF4D6A;
-  --amber: #F59E0B;
-  --violet: #A78BFA;
-
-  /* Glows */
-  --glow-green: rgba(16,232,160,.1);
-  --glow-red: rgba(255,77,106,.1);
-  --glow-indigo: rgba(99,130,255,.12);
-
-  /* Header accent line */
-  --header-line: linear-gradient(90deg, var(--indigo), var(--cyan), var(--green));
+  --bg:#070C18;--bg-secondary:#0A1020;--card:#0D1526;--card-hover:#111C30;
+  --surface:#141E33;--elevated:#1A2640;
+  --border:rgba(148,163,210,0.08);--border-hover:rgba(148,163,210,0.18);--border-accent:rgba(99,130,255,0.3);
+  --t1:#F0F4FF;--t2:#8FA4C8;--t3:#4D6080;--t4:#2D3D55;
+  --indigo:#6382FF;--cyan:#22D3EE;--green:#10E8A0;--red:#FF4D6A;--amber:#F59E0B;--violet:#A78BFA;
+  --glow-green:rgba(16,232,160,.1);--glow-red:rgba(255,77,106,.1);--glow-indigo:rgba(99,130,255,.12);
+  --header-line:linear-gradient(90deg,var(--indigo),var(--cyan),var(--green));
 }
+html{background:var(--bg);color:var(--t1);font-family:'Sora',system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px}
+body{min-height:100vh}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--elevated);border-radius:2px}
+button{font-family:inherit;cursor:pointer}
 
-html {
-  background: var(--bg);
-  color: var(--t1);
-  font-family: 'Sora', system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  font-size: 14px;
-}
+.header{padding:0 28px;height:58px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:16px;position:sticky;top:0;z-index:100;background:rgba(7,12,24,.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);}
+.header::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--header-line)}
+.header-left{display:flex;align-items:center;gap:14px}
+.header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.logo{width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#3B5BFF 0%,#22D3EE 100%);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;letter-spacing:-0.5px;box-shadow:0 0 20px rgba(59,91,255,.35);flex-shrink:0}
+.brand{display:flex;flex-direction:column;gap:1px}
+.brand-name{font-size:14px;font-weight:700;color:var(--t1);letter-spacing:-0.3px}
+.brand-sub{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--t2);letter-spacing:0.3px}
+.header-divider{width:1px;height:20px;background:var(--border)}
+.source-tags{display:flex;gap:6px;align-items:center}
+.source-tag{font-family:'IBM Plex Mono',monospace;font-size:9px;padding:2px 7px;border-radius:3px;font-weight:600;letter-spacing:0.4px}
+.source-tag.bls{background:rgba(16,232,160,.1);border:1px solid rgba(16,232,160,.25);color:#10E8A0}
+.source-tag.fred{background:rgba(99,130,255,.1);border:1px solid rgba(99,130,255,.25);color:#809BFF}
 
-body { min-height: 100vh; }
+.tf-bar{display:flex;gap:1px;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:3px}
+.tf-btn{padding:4px 11px;border:none;border-radius:5px;font-size:10px;font-weight:600;font-family:'IBM Plex Mono',monospace;background:transparent;color:var(--t3);transition:all .18s ease;letter-spacing:0.3px}
+.tf-btn.active{background:var(--indigo);color:#fff;box-shadow:0 0 12px rgba(99,130,255,.4)}
+.tf-btn:hover:not(.active){color:var(--t2);background:var(--elevated)}
+.refresh-btn{padding:6px 16px;border:1px solid var(--border);border-radius:7px;background:transparent;color:var(--t2);font-size:11px;font-weight:600;letter-spacing:0.2px;transition:all .18s ease}
+.refresh-btn:hover{border-color:var(--indigo);color:var(--t1);background:var(--glow-indigo)}
+.refresh-btn:disabled{opacity:.4;cursor:default}
 
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--elevated); border-radius: 2px; }
+.tabs{padding:0 28px;height:44px;display:flex;align-items:center;gap:2px;overflow-x:auto;border-bottom:1px solid var(--border);background:var(--bg-secondary);-ms-overflow-style:none;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:5px 13px;border:none;border-radius:5px;font-size:11px;font-weight:500;white-space:nowrap;background:transparent;color:var(--t3);transition:all .18s ease;letter-spacing:0.1px}
+.tab.active{background:var(--elevated);color:var(--t1);font-weight:600}
+.tab:hover:not(.active){color:var(--t2);background:var(--surface)}
 
-button { font-family: inherit; cursor: pointer; }
-a { color: inherit; text-decoration: none; }
+.progress-wrap{padding:0 28px;margin-top:6px}
+.progress-track{height:2px;background:var(--surface);border-radius:2px;overflow:hidden}
+.progress-fill{height:100%;border-radius:2px;background:var(--header-line);transition:width .3s ease}
 
-/* ═══ HEADER ═══ */
-.header {
-  padding: 0 28px;
-  height: 58px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: rgba(7, 12, 24, 0.92);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-}
+.status-box{margin:14px 28px;padding:10px 16px;border-radius:8px;font-size:12px;line-height:1.5;font-weight:500;display:none}
+.status-box.error{display:block;background:rgba(255,77,106,.06);border:1px solid rgba(255,77,106,.2);color:#FF6B84}
+.status-box.success{display:block;background:rgba(16,232,160,.06);border:1px solid rgba(16,232,160,.2);color:#10E8A0}
+.status-box.info{display:block;background:rgba(99,130,255,.06);border:1px solid rgba(99,130,255,.2);color:#809BFF}
 
-/* Accent line at very top */
-.header::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 2px;
-  background: var(--header-line);
-}
+.grid{padding:20px 28px 60px;display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px}
+@media(max-width:480px){.grid{grid-template-columns:1fr;padding:14px 14px 60px}}
+@media(min-width:1600px){.grid{grid-template-columns:repeat(auto-fill,minmax(370px,1fr))}}
 
-.header-left { display: flex; align-items: center; gap: 14px; }
-.header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:border-color .2s,background .2s,transform .2s,box-shadow .2s;animation:fadeUp .4s ease both;position:relative}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--border-accent),transparent);opacity:0;transition:opacity .2s}
+.card:hover{background:var(--card-hover);border-color:var(--border-hover);transform:translateY(-1px);box-shadow:0 8px 32px rgba(0,0,0,.4),0 0 0 1px var(--border-hover)}
+.card:hover::before{opacity:1}
 
-.logo {
-  width: 34px; height: 34px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #3B5BFF 0%, #22D3EE 100%);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 15px; font-weight: 800; color: #fff;
-  letter-spacing: -0.5px;
-  box-shadow: 0 0 20px rgba(59,91,255,0.35);
-  flex-shrink: 0;
-}
+.card-source-pill{position:absolute;top:14px;right:14px;font-family:'IBM Plex Mono',monospace;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:0.5px;pointer-events:none}
+.card-source-pill.bls{background:rgba(16,232,160,.1);border:1px solid rgba(16,232,160,.2);color:#10E8A0}
+.card-source-pill.fred{background:rgba(99,130,255,.08);border:1px solid rgba(99,130,255,.15);color:#6B80A8}
 
-.brand { display: flex; flex-direction: column; gap: 1px; }
-.brand-name {
-  font-size: 14px; font-weight: 700;
-  color: var(--t1);
-  letter-spacing: -0.3px;
-}
-.brand-sub {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 9.5px;
-  color: var(--t2);
-  letter-spacing: 0.3px;
-}
+.card-top{padding:16px 18px 0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.card-meta{flex:1;min-width:0}
+.card-value-area{text-align:right;flex-shrink:0;padding-right:2px}
+.label-row{display:flex;align-items:center;gap:7px;margin-bottom:8px}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
+.label-text{font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:0.8px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.big-val{font-size:26px;font-weight:700;font-family:'IBM Plex Mono',monospace;letter-spacing:-0.5px;line-height:1;color:var(--t1)}
+.delta-row{display:flex;align-items:center;gap:7px;margin-top:7px}
+.delta-badge{font-size:10.5px;font-weight:600;font-family:'IBM Plex Mono',monospace;display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:4px}
+.delta-arrow{font-size:8px}
+.delta-pct{font-size:10px;color:var(--t2);font-family:'IBM Plex Mono',monospace}
+.date-text{font-size:10px;color:var(--t1);font-family:'IBM Plex Mono',monospace;font-weight:500}
+.freq-badge{display:inline-block;margin-top:5px;font-size:9px;color:var(--t2);font-family:'IBM Plex Mono',monospace;background:var(--surface);padding:2px 7px;border-radius:3px;border:1px solid var(--border-hover);letter-spacing:0.3px}
+.chart-desc{font-size:9.5px;color:var(--t2);padding:10px 18px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:0.1px}
+.chart-section{padding:8px 10px 12px}
+.chart-wrap{position:relative;height:100px;width:100%}
+.chart-wrap canvas{position:absolute;top:0;left:0;width:100%!important;height:100%!important}
+.card-divider{height:1px;background:var(--border);margin:0 18px;opacity:.7}
+.skeleton-val{height:26px;width:90px;border-radius:5px;background:linear-gradient(90deg,var(--surface) 25%,var(--elevated) 50%,var(--surface) 75%);background-size:200% 100%;animation:shimmer 1.6s infinite}
+.skeleton-chart{height:90px;margin:8px 10px 12px;border-radius:8px;background:linear-gradient(90deg,var(--surface) 25%,var(--elevated) 50%,var(--surface) 75%);background-size:200% 100%;animation:shimmer 1.6s infinite}
 
-/* Divider */
-.header-divider {
-  width: 1px; height: 20px;
-  background: var(--border);
-}
+.footer{padding:20px 28px;border-top:1px solid var(--border);background:var(--bg-secondary);color:var(--t2);font-size:10.5px;line-height:1.8;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.footer-brand{color:var(--t1);font-weight:600}
+.footer-right{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--t3)}
 
-/* ═══ TIMEFRAME BAR ═══ */
-.tf-bar {
-  display: flex;
-  gap: 1px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 3px;
-}
-
-.tf-btn {
-  padding: 4px 11px;
-  border: none;
-  border-radius: 5px;
-  font-size: 10px;
-  font-weight: 600;
-  font-family: 'IBM Plex Mono', monospace;
-  background: transparent;
-  color: var(--t3);
-  transition: all .18s ease;
-  letter-spacing: 0.3px;
-}
-
-.tf-btn.active {
-  background: var(--indigo);
-  color: #fff;
-  box-shadow: 0 0 12px rgba(99,130,255,.4);
-}
-
-.tf-btn:hover:not(.active) {
-  color: var(--t2);
-  background: var(--elevated);
-}
-
-/* ═══ REFRESH BUTTON ═══ */
-.refresh-btn {
-  padding: 6px 16px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: transparent;
-  color: var(--t2);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  transition: all .18s ease;
-}
-
-.refresh-btn:hover {
-  border-color: var(--indigo);
-  color: var(--t1);
-  background: var(--glow-indigo);
-}
-
-.refresh-btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-/* ═══ TABS ═══ */
-.tabs {
-  padding: 0 28px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  overflow-x: auto;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.tabs::-webkit-scrollbar { display: none; }
-
-.tab {
-  padding: 5px 13px;
-  border: none;
-  border-radius: 5px;
-  font-size: 11px;
-  font-weight: 500;
-  white-space: nowrap;
-  background: transparent;
-  color: var(--t3);
-  transition: all .18s ease;
-  letter-spacing: 0.1px;
-}
-
-.tab.active {
-  background: var(--elevated);
-  color: var(--t1);
-  font-weight: 600;
-}
-
-.tab:hover:not(.active) {
-  color: var(--t2);
-  background: var(--surface);
-}
-
-/* ═══ PROGRESS BAR ═══ */
-.progress-wrap { padding: 0 28px; margin-top: 6px; }
-.progress-track {
-  height: 2px;
-  background: var(--surface);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.progress-fill {
-  height: 100%;
-  border-radius: 2px;
-  background: var(--header-line);
-  transition: width .3s ease;
-}
-
-/* ═══ STATUS BOX ═══ */
-.status-box {
-  margin: 14px 28px;
-  padding: 10px 16px;
-  border-radius: 8px;
-  font-size: 12px;
-  line-height: 1.5;
-  font-weight: 500;
-  display: none;
-}
-.status-box.error   { display:block; background:rgba(255,77,106,.06); border:1px solid rgba(255,77,106,.2); color:#FF6B84; }
-.status-box.success { display:block; background:rgba(16,232,160,.06); border:1px solid rgba(16,232,160,.2); color:#10E8A0; }
-.status-box.info    { display:block; background:rgba(99,130,255,.06); border:1px solid rgba(99,130,255,.2); color:#809BFF; }
-
-/* ═══ GRID ═══ */
-.grid {
-  padding: 20px 28px 60px;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 10px;
-}
-
-@media(max-width: 480px) { .grid { grid-template-columns: 1fr; padding: 14px 14px 60px; } }
-@media(min-width: 1600px) { .grid { grid-template-columns: repeat(auto-fill, minmax(370px, 1fr)); } }
-
-/* ═══ CARD ═══ */
-.card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  transition: border-color .2s ease, background .2s ease, transform .2s ease, box-shadow .2s ease;
-  animation: fadeUp .4s ease both;
-  position: relative;
-}
-
-.card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--border-accent), transparent);
-  opacity: 0;
-  transition: opacity .2s ease;
-}
-
-.card:hover {
-  background: var(--card-hover);
-  border-color: var(--border-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 8px 32px rgba(0,0,0,.4), 0 0 0 1px var(--border-hover);
-}
-
-.card:hover::before { opacity: 1; }
-
-/* Card Layout */
-.card-top {
-  padding: 16px 18px 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.card-meta { flex: 1; min-width: 0; }
-.card-value-area { text-align: right; flex-shrink: 0; }
-
-/* Label row */
-.label-row {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-bottom: 8px;
-}
-
-.dot {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  display: inline-block;
-  flex-shrink: 0;
-}
-
-.label-text {
-  font-size: 10px;
-  color: var(--t2);
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Value */
-.big-val {
-  font-size: 26px;
-  font-weight: 700;
-  font-family: 'IBM Plex Mono', monospace;
-  letter-spacing: -0.5px;
-  line-height: 1;
-  color: var(--t1);
-}
-
-/* Delta */
-.delta-row {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-top: 7px;
-}
-
-.delta-badge {
-  font-size: 10.5px;
-  font-weight: 600;
-  font-family: 'IBM Plex Mono', monospace;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px 7px;
-  border-radius: 4px;
-}
-
-.delta-arrow { font-size: 8px; }
-
-.delta-pct {
-  font-size: 10px;
-  color: var(--t2);
-  font-family: 'IBM Plex Mono', monospace;
-}
-
-/* Meta: date & freq */
-.date-text {
-  font-size: 10px;
-  color: var(--t1);
-  font-family: 'IBM Plex Mono', monospace;
-  font-weight: 500;
-}
-
-.freq-badge {
-  display: inline-block;
-  margin-top: 5px;
-  font-size: 9px;
-  color: var(--t2);
-  font-family: 'IBM Plex Mono', monospace;
-  background: var(--surface);
-  padding: 2px 7px;
-  border-radius: 3px;
-  border: 1px solid var(--border-hover);
-  letter-spacing: 0.3px;
-}
-
-/* Chart */
-.chart-desc {
-  font-size: 9.5px;
-  color: var(--t2);
-  padding: 10px 18px 0;
-  font-weight: 400;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  letter-spacing: 0.1px;
-}
-
-.chart-section { padding: 8px 10px 12px; }
-.chart-wrap { position: relative; height: 100px; width: 100%; }
-.chart-wrap canvas {
-  position: absolute; top: 0; left: 0;
-  width: 100% !important;
-  height: 100% !important;
-}
-
-/* Skeleton */
-.skeleton-val {
-  height: 26px; width: 90px;
-  border-radius: 5px;
-  background: linear-gradient(90deg, var(--surface) 25%, var(--elevated) 50%, var(--surface) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.6s infinite;
-}
-
-.skeleton-chart {
-  height: 90px; margin: 8px 10px 12px;
-  border-radius: 8px;
-  background: linear-gradient(90deg, var(--surface) 25%, var(--elevated) 50%, var(--surface) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.6s infinite;
-}
-
-/* Separator line inside card */
-.card-divider {
-  height: 1px;
-  background: var(--border);
-  margin: 0 18px;
-  opacity: 0.7;
-}
-
-/* ═══ FOOTER ═══ */
-.footer {
-  padding: 20px 28px;
-  border-top: 1px solid var(--border);
-  background: var(--bg-secondary);
-  color: var(--t2);
-  font-size: 10.5px;
-  line-height: 1.8;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.footer-brand {
-  color: var(--t1);
-  font-weight: 600;
-}
-
-.footer-right {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 9.5px;
-  color: var(--t3);
-}
-
-/* ═══ KEYFRAMES ═══ */
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes shimmer {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 </style>
 </head>
 <body>
@@ -499,9 +125,13 @@ a { color: inherit; text-decoration: none; }
     <div class="logo">M</div>
     <div class="brand">
       <div class="brand-name">US Macro Dashboard</div>
-      <div class="brand-sub" id="subtitle">CONNECTING TO FRED API...</div>
+      <div class="brand-sub" id="subtitle">CONNECTING TO DATA SOURCES...</div>
     </div>
     <div class="header-divider"></div>
+    <div class="source-tags">
+      <span class="source-tag bls">BLS</span>
+      <span class="source-tag fred">FRED</span>
+    </div>
   </div>
   <div class="header-right">
     <div class="tf-bar" id="tf-bar"></div>
@@ -510,71 +140,91 @@ a { color: inherit; text-decoration: none; }
 </header>
 
 <nav class="tabs" id="tabs"></nav>
-
-<div class="progress-wrap" id="progress-wrap" style="display:none">
-  <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
-</div>
-
+<div class="progress-wrap" id="progress-wrap" style="display:none"><div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div></div>
 <div class="status-box" id="status-box"></div>
-
 <div class="grid" id="grid"></div>
 
 <footer class="footer">
-  <div>
-    Data sourced from <span class="footer-brand">Federal Reserve Economic Data (FRED)</span> · Federal Reserve Bank of St. Louis
-  </div>
+  <div>Labor data from <span class="footer-brand">Bureau of Labor Statistics (BLS)</span> · All other data from <span class="footer-brand">Federal Reserve Economic Data (FRED)</span></div>
   <div class="footer-right">AUTO-REFRESHES ON PAGE LOAD</div>
 </footer>
 
 <script>
-// ═══════════════════════════════════════════════
-// FRED API KEY
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// API KEYS
+// ═══════════════════════════════════════════════════════════
 var FRED_API_KEY = "bc1f32b397114934e95d879ec2646074";
-// ═══════════════════════════════════════════════
+// BLS v2 public API — no key needed (500 req/day, no CORS issues)
+// Optional free key at https://www.bls.gov/developers/ gives 500→3000 req/day
+var BLS_API_KEY = "";
+// ═══════════════════════════════════════════════════════════
 
 var PROXY_LIST = [
-  function(u){ return "https://corsproxy.io/?" + encodeURIComponent(u); },
-  function(u){ return "https://api.cors.lol/?url=" + encodeURIComponent(u); },
-  function(u){ return "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(u); }
+  function(u){ return "https://corsproxy.io/?"+encodeURIComponent(u); },
+  function(u){ return "https://api.cors.lol/?url="+encodeURIComponent(u); },
+  function(u){ return "https://api.codetabs.com/v1/proxy?quest="+encodeURIComponent(u); }
 ];
 var workingProxy = null;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// INDICATORS
+// source:"bls"  → Bureau of Labor Statistics API (official, no lag)
+// source:"fred" → FRED (Federal Reserve Bank of St. Louis)
+// blsMoM:true   → BLS series is a level; compute MoM change in-dashboard
+// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// INDICATORS
+// source:"bls"  → Bureau of Labor Statistics API (official, zero publication lag)
+//   BLS series IDs: https://www.bls.gov/help/hlpforma.htm
+//   blsMoM:true → series is a level (000s); compute MoM change in dashboard
+// source:"fred" → FRED API (Federal Reserve Bank of St. Louis)
+// ─────────────────────────────────────────────────────────────────────────────
 var INDICATORS = [
-  { id:"cpi",           label:"CPI (YoY%)",               series:"CPIAUCNS",        cat:"inflation", desc:"Consumer Price Index, All Urban (NSA)", fredUnits:"pc1", unit:"%",  type:"area",      color:"#FF4D6A", freq:"Monthly" },
-  { id:"coreCpi",       label:"Core CPI (YoY%)",           series:"CPILFESL",        cat:"inflation", desc:"CPI Less Food & Energy",                fredUnits:"pc1", unit:"%",  type:"area",      color:"#FF7B8A", freq:"Monthly" },
-  { id:"pce",           label:"PCE Inflation (YoY%)",      series:"PCEPI",           cat:"inflation", desc:"PCE Price Index",                       fredUnits:"pc1", unit:"%",  type:"area",      color:"#E11D48", freq:"Monthly" },
-  { id:"ppi",           label:"PPI (YoY%)",               series:"PPIACO",          cat:"inflation", desc:"Producer Price Index, All Commodities",  fredUnits:"pc1", unit:"%",  type:"bar",       color:"#F97316", freq:"Monthly" },
-  { id:"fedFunds",      label:"Fed Funds Rate",            series:"FEDFUNDS",        cat:"rates",     desc:"Effective Federal Funds Rate",           fredUnits:"lin", unit:"%",  type:"step",      color:"#A78BFA", freq:"Monthly" },
-  { id:"treasury10y2y", label:"10Y–2Y Spread",             series:"T10Y2Y",          cat:"rates",     desc:"10Y minus 2Y Treasury Spread",          fredUnits:"lin", unit:"%",  type:"area_zero", color:"#6382FF", freq:"Daily" },
-  { id:"treasury10y",   label:"10Y Treasury Yield",        series:"DGS10",           cat:"rates",     desc:"10-Year Treasury Constant Maturity",    fredUnits:"lin", unit:"%",  type:"line",      color:"#818CF8", freq:"Daily" },
-  { id:"unemployment",  label:"Unemployment Rate",         series:"UNRATE",          cat:"labor",     desc:"Civilian Unemployment Rate",             fredUnits:"lin", unit:"%",  type:"area",      color:"#22D3EE", freq:"Monthly" },
-  { id:"nfp",           label:"Nonfarm Payrolls (MoM)",    series:"PAYEMS",          cat:"labor",     desc:"Total Nonfarm, MoM Change",             fredUnits:"ch1", unit:"K",  type:"bar_pn",    color:"#38BDF8", freq:"Monthly", note:"chg" },
-  { id:"initialClaims", label:"Initial Jobless Claims",    series:"ICSA",            cat:"labor",     desc:"Initial Claims, Unemployment Insurance", fredUnits:"lin", unit:"K",  type:"line",      color:"#7DD3FC", freq:"Weekly", div:1000 },
-  { id:"participRate",  label:"Labor Force Participation", series:"CIVPART",         cat:"labor",     desc:"Civilian Labor Force Participation Rate",fredUnits:"lin", unit:"%",  type:"line",      color:"#93C5FD", freq:"Monthly" },
-  { id:"gdp",           label:"Real GDP Growth (QoQ%)",    series:"A191RL1Q225SBEA", cat:"growth",    desc:"Real GDP, Quarterly Annualized",        fredUnits:"lin", unit:"%",  type:"bar_pn",    color:"#10E8A0", freq:"Quarterly" },
-  { id:"retailSales",   label:"Retail Sales (MoM%)",       series:"RSAFS",           cat:"growth",    desc:"Advance Retail Sales: Total",            fredUnits:"pch", unit:"%",  type:"bar_pn",    color:"#34D399", freq:"Monthly" },
-  { id:"indProd",       label:"Industrial Prod. (YoY%)",   series:"INDPRO",          cat:"growth",    desc:"Industrial Production: Total Index",     fredUnits:"pc1", unit:"%",  type:"area",      color:"#6EE7B7", freq:"Monthly" },
-  { id:"capUtil",       label:"Capacity Utilization",      series:"TCU",             cat:"growth",    desc:"Total Industry Capacity Utilization",    fredUnits:"lin", unit:"%",  type:"line",      color:"#A7F3D0", freq:"Monthly" },
-  { id:"umich",         label:"Consumer Sentiment",        series:"UMCSENT",         cat:"sentiment", desc:"U. of Michigan Consumer Sentiment",     fredUnits:"lin", unit:"",   type:"area",      color:"#F59E0B", freq:"Monthly" },
-  { id:"confBoard",     label:"Consumer Confidence",       series:"CSCICP03USM665S", cat:"sentiment", desc:"OECD Consumer Confidence Indicator",    fredUnits:"lin", unit:"",   type:"line",      color:"#FCD34D", freq:"Monthly" },
-  { id:"housingStarts", label:"Housing Starts",            series:"HOUST",           cat:"housing",   desc:"New Housing Units Started (K)",          fredUnits:"lin", unit:"K",  type:"bar",       color:"#22D3EE", freq:"Monthly" },
-  { id:"buildPermits",  label:"Building Permits",          series:"PERMIT",          cat:"housing",   desc:"New Private Housing Units Authorized",   fredUnits:"lin", unit:"K",  type:"line",      color:"#06B6D4", freq:"Monthly" },
-  { id:"caseShiller",   label:"Case-Shiller (YoY%)",       series:"CSUSHPINSA",      cat:"housing",   desc:"S&P/Case-Shiller National Home Price",  fredUnits:"pc1", unit:"%",  type:"area",      color:"#67E8F9", freq:"Monthly" },
-  { id:"tradeBal",      label:"Trade Balance",             series:"BOPGSTB",         cat:"trade",     desc:"Trade Balance: Goods & Services ($B)",   fredUnits:"lin", unit:"$B", type:"area_zero", color:"#EC4899", freq:"Monthly" },
-  { id:"m2",            label:"M2 Money Supply (YoY%)",    series:"M2SL",            cat:"monetary",  desc:"M2 Money Stock",                        fredUnits:"pc1", unit:"%",  type:"area",      color:"#C084FC", freq:"Monthly" }
+  // ── Inflation ── FRED
+  { id:"cpi",           label:"CPI (YoY%)",               series:"CPIAUCNS",        cat:"inflation", desc:"Consumer Price Index, All Urban (NSA) · FRED",  fredUnits:"pc1", unit:"%",  type:"area",      color:"#FF4D6A", freq:"Monthly",   source:"fred" },
+  { id:"coreCpi",       label:"Core CPI (YoY%)",           series:"CPILFESL",        cat:"inflation", desc:"CPI Less Food & Energy · FRED",                  fredUnits:"pc1", unit:"%",  type:"area",      color:"#FF7B8A", freq:"Monthly",   source:"fred" },
+  { id:"pce",           label:"PCE Inflation (YoY%)",      series:"PCEPI",           cat:"inflation", desc:"PCE Price Index · FRED",                          fredUnits:"pc1", unit:"%",  type:"area",      color:"#E11D48", freq:"Monthly",   source:"fred" },
+  { id:"ppi",           label:"PPI (YoY%)",                series:"PPIACO",          cat:"inflation", desc:"Producer Price Index, All Commodities · FRED",    fredUnits:"pc1", unit:"%",  type:"bar",       color:"#F97316", freq:"Monthly",   source:"fred" },
+  // ── Rates ── FRED
+  { id:"fedFunds",      label:"Fed Funds Rate",            series:"FEDFUNDS",        cat:"rates",     desc:"Effective Federal Funds Rate · FRED",             fredUnits:"lin", unit:"%",  type:"step",      color:"#A78BFA", freq:"Monthly",   source:"fred" },
+  { id:"treasury10y2y", label:"10Y–2Y Spread",             series:"T10Y2Y",          cat:"rates",     desc:"10Y minus 2Y Treasury Spread · FRED",             fredUnits:"lin", unit:"%",  type:"area_zero", color:"#6382FF", freq:"Daily",     source:"fred" },
+  { id:"treasury10y",   label:"10Y Treasury Yield",        series:"DGS10",           cat:"rates",     desc:"10-Year Treasury Constant Maturity · FRED",       fredUnits:"lin", unit:"%",  type:"line",      color:"#818CF8", freq:"Daily",     source:"fred" },
+  // ── Labor ── BLS OFFICIAL (matches BLS.gov exactly, no lag)
+  // CES0000000001 = Total Nonfarm Payrolls, seasonally adjusted, thousands
+  // LNS14000000   = Civilian Unemployment Rate, seasonally adjusted
+  // LNS11300000   = Civilian Labor Force Participation Rate, seasonally adjusted
+  // LNS12000000   = Civilian Employment Level, seasonally adjusted, thousands
+  { id:"nfp",           label:"Nonfarm Payrolls (MoM)",    series:"CES0000000001",   cat:"labor",     desc:"Total Nonfarm Payrolls, MoM Change (000s) · BLS", unit:"K",  type:"bar_pn",    color:"#38BDF8", freq:"Monthly",   source:"bls", blsMoM:true },
+  { id:"unemployment",  label:"Unemployment Rate",         series:"LNS14000000",     cat:"labor",     desc:"Civilian Unemployment Rate, SA · BLS",            unit:"%",  type:"area",      color:"#22D3EE", freq:"Monthly",   source:"bls" },
+  { id:"participRate",  label:"Labor Force Participation", series:"LNS11300000",     cat:"labor",     desc:"Civilian Labor Force Participation Rate, SA · BLS", unit:"%", type:"line",      color:"#93C5FD", freq:"Monthly",   source:"bls" },
+  { id:"initialClaims", label:"Initial Jobless Claims",    series:"ICSA",            cat:"labor",     desc:"Initial Unemployment Insurance Claims · FRED",    fredUnits:"lin", unit:"K",  type:"line",      color:"#7DD3FC", freq:"Weekly",    source:"fred", div:1000 },
+  // ── Growth ── FRED
+  { id:"gdp",           label:"Real GDP Growth (QoQ%)",    series:"A191RL1Q225SBEA", cat:"growth",    desc:"Real GDP, Quarterly Annualized · FRED",           fredUnits:"lin", unit:"%",  type:"bar_pn",    color:"#10E8A0", freq:"Quarterly", source:"fred" },
+  { id:"retailSales",   label:"Retail Sales (MoM%)",       series:"RSAFS",           cat:"growth",    desc:"Advance Retail Sales: Total · FRED",              fredUnits:"pch", unit:"%",  type:"bar_pn",    color:"#34D399", freq:"Monthly",   source:"fred" },
+  { id:"indProd",       label:"Industrial Prod. (YoY%)",   series:"INDPRO",          cat:"growth",    desc:"Industrial Production: Total Index · FRED",       fredUnits:"pc1", unit:"%",  type:"area",      color:"#6EE7B7", freq:"Monthly",   source:"fred" },
+  { id:"capUtil",       label:"Capacity Utilization",      series:"TCU",             cat:"growth",    desc:"Total Industry Capacity Utilization · FRED",      fredUnits:"lin", unit:"%",  type:"line",      color:"#A7F3D0", freq:"Monthly",   source:"fred" },
+  // ── Sentiment ── FRED
+  { id:"umich",         label:"Consumer Sentiment",        series:"UMCSENT",         cat:"sentiment", desc:"U. of Michigan Consumer Sentiment · FRED",        fredUnits:"lin", unit:"",   type:"area",      color:"#F59E0B", freq:"Monthly",   source:"fred" },
+  { id:"confBoard",     label:"Consumer Confidence",       series:"CSCICP03USM665S", cat:"sentiment", desc:"OECD Consumer Confidence Indicator · FRED",       fredUnits:"lin", unit:"",   type:"line",      color:"#FCD34D", freq:"Monthly",   source:"fred" },
+  // ── Housing ── FRED
+  { id:"housingStarts", label:"Housing Starts",            series:"HOUST",           cat:"housing",   desc:"New Housing Units Started (000s) · FRED",         fredUnits:"lin", unit:"K",  type:"bar",       color:"#22D3EE", freq:"Monthly",   source:"fred" },
+  { id:"buildPermits",  label:"Building Permits",          series:"PERMIT",          cat:"housing",   desc:"New Private Housing Units Authorized · FRED",     fredUnits:"lin", unit:"K",  type:"line",      color:"#06B6D4", freq:"Monthly",   source:"fred" },
+  { id:"caseShiller",   label:"Case-Shiller (YoY%)",       series:"CSUSHPINSA",      cat:"housing",   desc:"S&P/Case-Shiller National Home Price Index · FRED", fredUnits:"pc1", unit:"%", type:"area",     color:"#67E8F9", freq:"Monthly",   source:"fred" },
+  // ── Trade / Monetary ── FRED
+  { id:"tradeBal",      label:"Trade Balance",             series:"BOPGSTB",         cat:"trade",     desc:"Trade Balance: Goods & Services ($B) · FRED",     fredUnits:"lin", unit:"$B", type:"area_zero", color:"#EC4899", freq:"Monthly",   source:"fred" },
+  { id:"m2",            label:"M2 Money Supply (YoY%)",    series:"M2SL",            cat:"monetary",  desc:"M2 Money Stock · FRED",                           fredUnits:"pc1", unit:"%",  type:"area",      color:"#C084FC", freq:"Monthly",   source:"fred" }
 ];
 
 var CATEGORIES = [
-  {key:"all",label:"All Indicators",icon:"◈"},
-  {key:"inflation",label:"Inflation",icon:"▲"},
-  {key:"rates",label:"Rates & Yields",icon:"◆"},
-  {key:"labor",label:"Labor Market",icon:"●"},
-  {key:"growth",label:"Growth & Output",icon:"■"},
-  {key:"sentiment",label:"Sentiment",icon:"◐"},
-  {key:"housing",label:"Housing",icon:"▣"},
-  {key:"trade",label:"Trade",icon:"◇"},
-  {key:"monetary",label:"Monetary",icon:"○"}
+  {key:"all",       label:"All Indicators",  icon:"◈"},
+  {key:"inflation", label:"Inflation",        icon:"▲"},
+  {key:"rates",     label:"Rates & Yields",   icon:"◆"},
+  {key:"labor",     label:"Labor Market",     icon:"●"},
+  {key:"growth",    label:"Growth & Output",  icon:"■"},
+  {key:"sentiment", label:"Sentiment",        icon:"◐"},
+  {key:"housing",   label:"Housing",          icon:"▣"},
+  {key:"trade",     label:"Trade",            icon:"◇"},
+  {key:"monetary",  label:"Monetary",         icon:"○"}
 ];
 
 var TF_OPTIONS = ["1Y","2Y","5Y","10Y","MAX"];
@@ -582,335 +232,336 @@ var TF_MAP = {"1Y":12,"2Y":24,"5Y":60,"10Y":120,"MAX":9999};
 var CHART_POINTS = 18;
 var allData = {}, charts = {}, currentTF = "5Y", currentCat = "all";
 
-function showStatus(m, t) {
-  var e = document.getElementById("status-box");
-  e.className = "status-box " + t;
-  e.innerHTML = m;
-  e.style.display = "block";
-}
-function hideStatus() { document.getElementById("status-box").style.display = "none"; }
+function showStatus(m,t){var e=document.getElementById("status-box");e.className="status-box "+t;e.innerHTML=m;e.style.display="block";}
+function hideStatus(){document.getElementById("status-box").style.display="none";}
 
-function fetchWithProxy(url) {
-  if (workingProxy !== null) {
-    return fetch(workingProxy(url)).then(function(r) {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.json();
-    });
+// ── CORS Proxy (FRED) ─────────────────────────────────────────────────────
+function fetchWithProxy(url){
+  if(workingProxy!==null){
+    return fetch(workingProxy(url)).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();});
   }
-  var tries = PROXY_LIST.slice();
-  function tryNext() {
-    if (tries.length === 0) {
-      return fetch(url).then(function(r) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
-      });
-    }
-    var proxy = tries.shift();
-    return fetch(proxy(url)).then(function(r) {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      workingProxy = proxy;
-      return r.json();
-    }).catch(function() { return tryNext(); });
+  var tries=PROXY_LIST.slice();
+  function tryNext(){
+    if(tries.length===0) return fetch(url).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();});
+    var proxy=tries.shift();
+    return fetch(proxy(url))
+      .then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);workingProxy=proxy;return r.json();})
+      .catch(function(){return tryNext();});
   }
   return tryNext();
 }
 
-function fetchFRED(seriesId, limit, fredUnits) {
-  var url = "https://api.stlouisfed.org/fred/series/observations?series_id=" + seriesId
-    + "&api_key=" + FRED_API_KEY + "&file_type=json&sort_order=desc&limit=" + limit
-    + "&units=" + (fredUnits || "lin");
-  return fetchWithProxy(url).then(function(j) {
-    if (j.error_code) throw new Error(j.error_message || "FRED error");
+// ── FRED ──────────────────────────────────────────────────────────────────
+function fetchFRED(seriesId, limit, fredUnits){
+  var url="https://api.stlouisfed.org/fred/series/observations?series_id="+seriesId
+    +"&api_key="+FRED_API_KEY+"&file_type=json&sort_order=desc&limit="+limit
+    +"&units="+(fredUnits||"lin");
+  return fetchWithProxy(url).then(function(j){
+    if(j.error_code) throw new Error(j.error_message||"FRED error");
     return j.observations
-      .filter(function(o) { return o.value !== "."; })
-      .map(function(o) { return { date: o.date, value: parseFloat(o.value) }; })
+      .filter(function(o){return o.value!=="."})
+      .map(function(o){return{date:o.date,value:parseFloat(o.value)};})
       .reverse();
   });
 }
 
-function transform(raw, cfg) {
+// ── BLS API v2 ────────────────────────────────────────────────────────────
+// Direct fetch — BLS allows cross-origin requests from browsers
+function fetchBLS(seriesId, yearsBack){
+  var endYear   = new Date().getFullYear();
+  var startYear = Math.max(endYear - (yearsBack||10), 2000);
+  var body = { seriesid:[seriesId], startyear:String(startYear), endyear:String(endYear) };
+  if(BLS_API_KEY) body.registrationkey = BLS_API_KEY;
+
+  return fetch("https://api.bls.gov/publicAPI/v2/timeseries/data/",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(body)
+  }).then(function(r){
+    if(!r.ok) throw new Error("BLS HTTP "+r.status);
+    return r.json();
+  }).then(function(j){
+    if(j.status!=="REQUEST_SUCCEEDED"){
+      var msg = (j.message&&j.message[0])||"BLS error";
+      throw new Error(msg);
+    }
+    var series=j.Results.series[0];
+    if(!series||!series.data||!series.data.length) throw new Error("BLS: no data returned");
+
+    // BLS returns newest-first; reverse to chronological
+    var raw=series.data.slice().reverse();
+    var out=[];
+    raw.forEach(function(d){
+      var period=d.period; // "M01"–"M12" or "M13" (annual avg)
+      if(period==="M13") return;
+      var month=parseInt(period.replace(/\D/g,""),10);
+      if(isNaN(month)||month<1||month>12) return;
+      var dateStr=d.year+"-"+(month<10?"0":"")+month+"-01";
+      var val=parseFloat(d.value);
+      if(!isNaN(val)) out.push({date:dateStr,value:val});
+    });
+    return out;
+  });
+}
+
+// ── Transform ─────────────────────────────────────────────────────────────
+function transform(raw, cfg){
   var d = raw.slice();
-  if (cfg.div) d = d.map(function(v) { return { date: v.date, value: v.value / cfg.div }; });
+  // Apply divisor (e.g. initial claims: divide by 1000)
+  if(cfg.div) d = d.map(function(v){ return {date:v.date, value:v.value/cfg.div}; });
+  // NFP & other BLS level series: compute period-over-period change (in 000s)
+  // BLS CES0000000001 unit = thousands of persons → change = net new jobs in thousands
+  if(cfg.blsMoM){
+    var out = [];
+    for(var i = 1; i < d.length; i++){
+      var chg = Math.round(d[i].value - d[i-1].value); // already in thousands
+      out.push({date: d[i].date, value: chg});
+    }
+    return out;
+  }
   return d;
 }
 
-function fmtVal(v, cfg) {
-  if (cfg.unit === "$B") return "$" + v.toFixed(1) + "B";
-  if (cfg.unit === "K")  return v.toFixed(0) + "K";
-  if (cfg.unit === "%")  return v.toFixed(2) + "%";
+function fmtVal(v, cfg){
+  if(cfg.unit==="$B") return "$"+v.toFixed(1)+"B";
+  if(cfg.unit==="K")  return (v>=0?"+":"")+Math.round(v)+"K";
+  if(cfg.unit==="%")  return v.toFixed(2)+"%";
+  return v.toFixed(2);
+}
+// Display value on card (no + sign for big headline number)
+function fmtValDisplay(v, cfg){
+  if(cfg.unit==="$B") return "$"+v.toFixed(1)+"B";
+  if(cfg.unit==="K")  return (v<0?"-":"")+Math.abs(Math.round(v))+"K";
+  if(cfg.unit==="%")  return v.toFixed(2)+"%";
   return v.toFixed(2);
 }
 
-function buildTFBar() {
-  var bar = document.getElementById("tf-bar");
-  bar.innerHTML = "";
-  TF_OPTIONS.forEach(function(tf) {
-    var b = document.createElement("button");
-    b.className = "tf-btn" + (currentTF === tf ? " active" : "");
-    b.textContent = tf;
-    b.onclick = function() { currentTF = tf; buildTFBar(); loadAll(); };
+// ── UI ────────────────────────────────────────────────────────────────────
+function buildTFBar(){
+  var bar=document.getElementById("tf-bar");bar.innerHTML="";
+  TF_OPTIONS.forEach(function(tf){
+    var b=document.createElement("button");
+    b.className="tf-btn"+(currentTF===tf?" active":"");
+    b.textContent=tf;
+    b.onclick=function(){currentTF=tf;buildTFBar();loadAll();};
     bar.appendChild(b);
   });
 }
 
-function buildTabs() {
-  var nav = document.getElementById("tabs");
-  nav.innerHTML = "";
-  CATEGORIES.forEach(function(cat) {
-    var b = document.createElement("button");
-    b.className = "tab" + (currentCat === cat.key ? " active" : "");
-    b.textContent = cat.icon + "  " + cat.label;
-    b.onclick = function() { currentCat = cat.key; buildTabs(); renderGrid(); };
+function buildTabs(){
+  var nav=document.getElementById("tabs");nav.innerHTML="";
+  CATEGORIES.forEach(function(cat){
+    var b=document.createElement("button");
+    b.className="tab"+(currentCat===cat.key?" active":"");
+    b.textContent=cat.icon+"  "+cat.label;
+    b.onclick=function(){currentCat=cat.key;buildTabs();renderGrid();};
     nav.appendChild(b);
   });
 }
 
-function renderGrid() {
-  var grid = document.getElementById("grid");
-  Object.keys(charts).forEach(function(k) { if (charts[k]) { charts[k].destroy(); delete charts[k]; } });
-  grid.innerHTML = "";
-  var cards = [];
-  INDICATORS.filter(function(ind) { return currentCat === "all" || ind.cat === currentCat; })
-    .forEach(function(ind, i) {
-      var card = buildCard(ind, i);
-      grid.appendChild(card);
-      cards.push(card);
+function renderGrid(){
+  var grid=document.getElementById("grid");
+  Object.keys(charts).forEach(function(k){if(charts[k]){charts[k].destroy();delete charts[k];}});
+  grid.innerHTML="";
+  var cards=[];
+  INDICATORS.filter(function(ind){return currentCat==="all"||ind.cat===currentCat;})
+    .forEach(function(ind,i){
+      var card=buildCard(ind,i);grid.appendChild(card);cards.push(card);
     });
-  setTimeout(function() {
-    cards.forEach(function(card) {
-      if (card._chartData && card._ind) {
-        var canvas = document.getElementById("chart-" + card._ind.id);
-        if (canvas) renderChart(canvas, card._ind, card._chartData);
+  setTimeout(function(){
+    cards.forEach(function(card){
+      if(card._chartData&&card._ind){
+        var canvas=document.getElementById("chart-"+card._ind.id);
+        if(canvas) renderChart(canvas,card._ind,card._chartData);
       }
     });
-  }, 50);
+  },50);
 }
 
-function buildCard(ind, idx) {
-  var data = allData[ind.id] || [];
-  var card = document.createElement("div");
-  card.className = "card";
-  card.style.animationDelay = (idx * 25) + "ms";
+function buildCard(ind,idx){
+  var data=allData[ind.id]||[];
+  var card=document.createElement("div");
+  card.className="card";
+  card.style.animationDelay=(idx*25)+"ms";
+  var isBLS=ind.source==="bls";
+  var pillHtml='<div class="card-source-pill '+(isBLS?"bls":"fred")+'">'+(isBLS?"BLS":"FRED")+'</div>';
 
-  if (!data.length) {
-    card.innerHTML =
-      '<div class="card-top">' +
-        '<div class="card-meta">' +
-          '<div class="label-row">' +
-            '<span class="dot" style="background:' + ind.color + ';opacity:.3"></span>' +
-            '<span class="label-text">' + ind.label + '</span>' +
-          '</div>' +
-          '<div class="skeleton-val"></div>' +
-        '</div>' +
-      '</div>' +
+  if(!data.length){
+    card.innerHTML=pillHtml+
+      '<div class="card-top"><div class="card-meta">'+
+        '<div class="label-row"><span class="dot" style="background:'+ind.color+';opacity:.3"></span><span class="label-text">'+ind.label+'</span></div>'+
+        '<div class="skeleton-val"></div></div></div>'+
       '<div class="skeleton-chart"></div>';
     return card;
   }
 
-  var tf = TF_MAP[currentTF] || 60;
-  var fullSliced = data.slice(-tf);
-  var latest = fullSliced[fullSliced.length - 1];
-  var prev = fullSliced.length > 1 ? fullSliced[fullSliced.length - 2] : null;
-  var change = prev ? latest.value - prev.value : 0;
-  var pct = prev && prev.value !== 0 ? ((latest.value - prev.value) / Math.abs(prev.value)) * 100 : 0;
-  var up = change >= 0;
+  var tf=TF_MAP[currentTF]||60;
+  var fullSliced=data.slice(-tf);
+  var latest=fullSliced[fullSliced.length-1];
+  var prev=fullSliced.length>1?fullSliced[fullSliced.length-2]:null;
+  var change=prev?latest.value-prev.value:0;
+  var pct=prev&&prev.value!==0?((latest.value-prev.value)/Math.abs(prev.value))*100:0;
+  var up=change>=0;
+  var chartData=fullSliced.slice(-CHART_POINTS);
 
-  var chartData = fullSliced.slice(-CHART_POINTS);
+  var changeColor=up?"var(--green)":"var(--red)";
+  var changeBg=up?"var(--glow-green)":"var(--glow-red)";
+  var changeBorder=up?"rgba(16,232,160,.2)":"rgba(255,77,106,.2)";
 
-  var changeColor = up ? "var(--green)" : "var(--red)";
-  var changeBg    = up ? "var(--glow-green)" : "var(--glow-red)";
-  var changeBorder = up ? "rgba(16,232,160,.2)" : "rgba(255,77,106,.2)";
+  // For blsMoM (NFP): value IS the net change in thousands already
+  // Show: headline = latest MoM change; delta badge = direction vs prior month's print
+  var displayVal = fmtValDisplay(latest.value, ind);
+  var isMoM = ind.blsMoM;
+  var deltaAbsStr, deltaCtx;
+  if(isMoM){
+    // Compare this month's print to prior month's print
+    var priorPrint = prev ? prev.value : 0;
+    var vsChange = latest.value - priorPrint;
+    deltaAbsStr = (vsChange>=0?"+":"")+Math.round(vsChange)+"K vs prior";
+    deltaCtx = "Prior: "+(priorPrint>=0?"+":"")+Math.round(priorPrint)+"K";
+    up = latest.value >= 0;
+  } else {
+    deltaAbsStr = (up?"▲":"▼")+" "+Math.abs(change).toFixed(ind.unit==="K"?0:2)+(ind.unit==="K"?"K":"");
+    deltaCtx = (pct>=0?"+":"")+pct.toFixed(2)+"%";
+  }
 
-  card.innerHTML =
-    '<div class="card-top">' +
-      '<div class="card-meta">' +
-        '<div class="label-row">' +
-          '<span class="dot" style="background:' + ind.color + ';box-shadow:0 0 6px ' + ind.color + '60"></span>' +
-          '<span class="label-text">' + ind.label + '</span>' +
-        '</div>' +
-        '<div class="big-val">' + fmtVal(latest.value, ind) + '</div>' +
-        '<div class="delta-row">' +
-          '<span class="delta-badge" style="color:' + changeColor + ';background:' + changeBg + ';border:1px solid ' + changeBorder + '">' +
-            '<span class="delta-arrow">' + (up ? "▲" : "▼") + '</span>' +
-            Math.abs(change).toFixed(2) +
-          '</span>' +
-          '<span class="delta-pct">' + (pct >= 0 ? "+" : "") + pct.toFixed(2) + '%</span>' +
-        '</div>' +
-      '</div>' +
-      '<div class="card-value-area">' +
-        '<div class="date-text">' + latest.date + '</div>' +
-        '<div class="freq-badge">' + ind.freq.toUpperCase() + '</div>' +
-      '</div>' +
-    '</div>' +
-    '<div class="chart-desc">' + ind.desc + '</div>' +
-    '<div class="card-divider" style="margin-top:12px"></div>' +
-    '<div class="chart-section"><div class="chart-wrap"><canvas id="chart-' + ind.id + '"></canvas></div></div>';
+  changeColor = up?"var(--green)":"var(--red)";
+  changeBg    = up?"var(--glow-green)":"var(--glow-red)";
+  changeBorder= up?"rgba(16,232,160,.2)":"rgba(255,77,106,.2)";
 
-  card._chartData = chartData;
-  card._ind = ind;
+  card.innerHTML=pillHtml+
+    '<div class="card-top">'+
+      '<div class="card-meta">'+
+        '<div class="label-row"><span class="dot" style="background:'+ind.color+';box-shadow:0 0 6px '+ind.color+'60"></span><span class="label-text">'+ind.label+'</span></div>'+
+        '<div class="big-val" style="'+(isMoM?'color:'+(latest.value>=0?'var(--green)':'var(--red)'):'')+'">'+displayVal+'</div>'+
+        '<div class="delta-row">'+
+          '<span class="delta-badge" style="color:'+changeColor+';background:'+changeBg+';border:1px solid '+changeBorder+'">'+
+            (isMoM?deltaAbsStr:'<span class="delta-arrow">'+(up?"▲":"▼")+'</span>'+deltaAbsStr)+
+          '</span>'+
+          '<span class="delta-pct">'+deltaCtx+'</span>'+
+        '</div>'+
+      '</div>'+
+      '<div class="card-value-area"><div class="date-text">'+latest.date+'</div><div class="freq-badge">'+ind.freq.toUpperCase()+'</div></div>'+
+    '</div>'+
+    '<div class="chart-desc">'+ind.desc+'</div>'+
+    '<div class="card-divider" style="margin-top:12px"></div>'+
+    '<div class="chart-section"><div class="chart-wrap"><canvas id="chart-'+ind.id+'"></canvas></div></div>';
+
+  card._chartData=chartData;card._ind=ind;
   return card;
 }
 
-function renderChart(canvas, ind, data) {
-  if (typeof Chart === "undefined") return;
-
-  var labels = data.map(function(d) {
-    var p = d.date.split("-");
-    return p[1] + "/" + p[0].slice(2);
-  });
-  var values = data.map(function(d) { return d.value; });
-  var ctx = canvas.getContext("2d");
-
-  if (charts[ind.id]) charts[ind.id].destroy();
-
-  var type, datasets;
-
-  var baseOpts = {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: { duration: 350, easing: 'easeOutQuart' },
-    interaction: { mode: 'index', intersect: false },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: "#0D1526",
-        borderColor: "rgba(99,130,255,0.25)",
-        borderWidth: 1,
-        titleColor: "#4D6080",
-        bodyColor: "#F0F4FF",
-        titleFont: { family: "'Sora'", size: 9.5, weight: '500' },
-        bodyFont: { family: "'IBM Plex Mono'", size: 11, weight: '600' },
-        padding: 10,
-        cornerRadius: 6,
-        displayColors: false,
-        callbacks: {
-          label: function(c) { return fmtVal(c.parsed.y, ind); }
-        }
+function renderChart(canvas,ind,data){
+  if(typeof Chart==="undefined") return;
+  var labels=data.map(function(d){var p=d.date.split("-");return p[1]+"/"+p[0].slice(2);});
+  var values=data.map(function(d){return d.value;});
+  var ctx=canvas.getContext("2d");
+  if(charts[ind.id]) charts[ind.id].destroy();
+  var type,datasets;
+  var baseOpts={
+    responsive:true,maintainAspectRatio:false,
+    animation:{duration:350,easing:'easeOutQuart'},
+    interaction:{mode:'index',intersect:false},
+    plugins:{
+      legend:{display:false},
+      tooltip:{
+        backgroundColor:"#0D1526",borderColor:"rgba(99,130,255,0.25)",borderWidth:1,
+        titleColor:"#4D6080",bodyColor:"#F0F4FF",
+        titleFont:{family:"'Sora'",size:9.5,weight:'500'},
+        bodyFont:{family:"'IBM Plex Mono'",size:11,weight:'600'},
+        padding:10,cornerRadius:6,displayColors:false,
+        callbacks:{label:function(c){return fmtVal(c.parsed.y,ind);}}
       }
     },
-    scales: {
-      x: {
-        ticks: {
-          font: { family: "'IBM Plex Mono'", size: 8.5 },
-          color: "#6B80A8",
-          maxTicksLimit: 5
-        },
-        grid: { display: false },
-        border: { display: false }
-      },
-      y: {
-        ticks: {
-          font: { family: "'IBM Plex Mono'", size: 8.5 },
-          color: "#6B80A8",
-          maxTicksLimit: 4,
-          callback: function(v) {
-            return Math.abs(v) >= 1000 ? (v / 1000).toFixed(0) + "k" : Number.isInteger(v) ? v : v.toFixed(1);
-          }
-        },
-        grid: { color: "rgba(148,163,210,.04)", drawTicks: false },
-        border: { display: false }
-      }
+    scales:{
+      x:{ticks:{font:{family:"'IBM Plex Mono'",size:8.5},color:"#6B80A8",maxTicksLimit:5},grid:{display:false},border:{display:false}},
+      y:{ticks:{font:{family:"'IBM Plex Mono'",size:8.5},color:"#6B80A8",maxTicksLimit:4,
+          callback:function(v){return Math.abs(v)>=1000?(v/1000).toFixed(0)+"k":Number.isInteger(v)?v:v.toFixed(1);}
+        },grid:{color:"rgba(148,163,210,.04)",drawTicks:false},border:{display:false}}
     }
   };
-
-  if (ind.type === "bar" || ind.type === "bar_pn") {
-    type = "bar";
-    var bg = ind.type === "bar_pn"
-      ? values.map(function(v) { return v >= 0 ? "rgba(16,232,160,.55)" : "rgba(255,77,106,.55)"; })
-      : ind.color + "99";
-    var borderCol = ind.type === "bar_pn"
-      ? values.map(function(v) { return v >= 0 ? "rgba(16,232,160,.85)" : "rgba(255,77,106,.85)"; })
-      : ind.color;
-    datasets = [{ data: values, backgroundColor: bg, borderColor: borderCol, borderWidth: 1, borderRadius: 2, maxBarThickness: 14 }];
+  if(ind.type==="bar"||ind.type==="bar_pn"){
+    type="bar";
+    var bg=ind.type==="bar_pn"?values.map(function(v){return v>=0?"rgba(16,232,160,.55)":"rgba(255,77,106,.55)";}):ind.color+"99";
+    var bc=ind.type==="bar_pn"?values.map(function(v){return v>=0?"rgba(16,232,160,.85)":"rgba(255,77,106,.85)";}):ind.color;
+    datasets=[{data:values,backgroundColor:bg,borderColor:bc,borderWidth:1,borderRadius:2,maxBarThickness:14}];
+  } else if(ind.type==="area"||ind.type==="area_zero"){
+    type="line";
+    var g=ctx.createLinearGradient(0,0,0,100);g.addColorStop(0,ind.color+"2A");g.addColorStop(1,ind.color+"03");
+    datasets=[{data:values,borderColor:ind.color,borderWidth:1.5,backgroundColor:g,fill:true,pointRadius:0,pointHoverRadius:3,pointHoverBackgroundColor:ind.color,tension:.35}];
+    if(ind.type==="area_zero") baseOpts.scales.y.grid={color:function(c){return c.tick.value===0?"rgba(99,130,255,0.3)":"rgba(148,163,210,.04)";},drawTicks:false};
+  } else if(ind.type==="step"){
+    type="line";
+    datasets=[{data:values,borderColor:ind.color,borderWidth:2,pointRadius:0,pointHoverRadius:3,pointHoverBackgroundColor:ind.color,stepped:"after",fill:false}];
+  } else {
+    type="line";
+    datasets=[{data:values,borderColor:ind.color,borderWidth:1.5,pointRadius:0,pointHoverRadius:3,pointHoverBackgroundColor:ind.color,tension:.35,fill:false}];
   }
-  else if (ind.type === "area" || ind.type === "area_zero") {
-    type = "line";
-    var gradient = ctx.createLinearGradient(0, 0, 0, 100);
-    gradient.addColorStop(0, ind.color + "2A");
-    gradient.addColorStop(1, ind.color + "03");
-    datasets = [{ data: values, borderColor: ind.color, borderWidth: 1.5, backgroundColor: gradient, fill: true, pointRadius: 0, pointHoverRadius: 3, pointHoverBackgroundColor: ind.color, tension: .35 }];
-    if (ind.type === "area_zero") {
-      baseOpts.scales.y.grid = {
-        color: function(c) { return c.tick.value === 0 ? "rgba(99,130,255,0.3)" : "rgba(148,163,210,.04)"; },
-        drawTicks: false
-      };
-    }
-  }
-  else if (ind.type === "step") {
-    type = "line";
-    datasets = [{ data: values, borderColor: ind.color, borderWidth: 2, pointRadius: 0, pointHoverRadius: 3, pointHoverBackgroundColor: ind.color, stepped: "after", fill: false }];
-  }
-  else {
-    type = "line";
-    datasets = [{ data: values, borderColor: ind.color, borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 3, pointHoverBackgroundColor: ind.color, tension: .35, fill: false }];
-  }
-
-  charts[ind.id] = new Chart(ctx, { type: type, data: { labels: labels, datasets: datasets }, options: baseOpts });
+  charts[ind.id]=new Chart(ctx,{type:type,data:{labels:labels,datasets:datasets},options:baseOpts});
 }
 
-function loadAll() {
-  if (FRED_API_KEY === "YOUR_FRED_API_KEY_HERE") {
-    showStatus("⚠️ Replace YOUR_FRED_API_KEY_HERE with your FRED API key. Get one free at <a href='https://fred.stlouisfed.org/docs/api/api_key.html' style='color:inherit;text-decoration:underline' target='_blank'>fred.stlouisfed.org</a>", "error");
-    return;
-  }
+// ── Load All ──────────────────────────────────────────────────────────────
+function loadAll(){
   hideStatus();
-  document.getElementById("progress-wrap").style.display = "block";
-  document.getElementById("refresh-btn").disabled = true;
-  var done = 0, total = INDICATORS.length, successCount = 0, failedList = [];
-  document.getElementById("refresh-btn").textContent = "0/" + total;
+  document.getElementById("progress-wrap").style.display="block";
+  document.getElementById("refresh-btn").disabled=true;
+  var done=0,total=INDICATORS.length,successCount=0,failedList=[];
+  document.getElementById("refresh-btn").textContent="0/"+total;
 
-  function tick() {
+  function tick(){
     done++;
-    document.getElementById("progress-fill").style.width = (done / total * 100) + "%";
-    document.getElementById("refresh-btn").textContent = done + "/" + total;
-    if (done >= total) finish();
+    document.getElementById("progress-fill").style.width=(done/total*100)+"%";
+    document.getElementById("refresh-btn").textContent=done+"/"+total;
+    if(done>=total) finish();
   }
-
-  function finish() {
-    document.getElementById("progress-wrap").style.display = "none";
-    document.getElementById("refresh-btn").disabled = false;
-    document.getElementById("refresh-btn").textContent = "↻ Refresh";
-    document.getElementById("subtitle").textContent =
-      "UPDATED " + new Date().toLocaleTimeString().toUpperCase() + " · " + successCount + "/" + total + " LOADED";
+  function finish(){
+    document.getElementById("progress-wrap").style.display="none";
+    document.getElementById("refresh-btn").disabled=false;
+    document.getElementById("refresh-btn").textContent="↻ Refresh";
+    document.getElementById("subtitle").textContent=
+      "UPDATED "+new Date().toLocaleTimeString().toUpperCase()+" · "+successCount+"/"+total+" LOADED";
     renderGrid();
-    if (successCount === 0) showStatus("❌ All indicators failed. " + failedList[0] + ". Try disabling ad blockers or opening in incognito.", "error");
-    else if (failedList.length > 0) showStatus("⚠️ " + failedList.length + " indicator(s) failed to load", "info");
-    else showStatus("✅ All " + successCount + " indicators loaded successfully.", "success");
-    if (successCount > 0) setTimeout(hideStatus, 3000);
+    if(successCount===0) showStatus("❌ All indicators failed. Try disabling ad blockers or opening in incognito.","error");
+    else if(failedList.length>0) showStatus("⚠️ "+failedList.length+" indicator(s) failed: "+failedList.slice(0,4).join(", "),"info");
+    else showStatus("✅ All "+successCount+" indicators loaded — BLS labor data & FRED macro data current.","success");
+    if(successCount>0) setTimeout(hideStatus,4000);
   }
 
-  var queue = INDICATORS.slice();
-  function next() {
-    if (queue.length === 0) return;
-    var ind = queue.shift();
-    var lim = currentTF === "MAX" ? 600 : 200;
-    fetchFRED(ind.series, lim, ind.fredUnits)
-      .then(function(raw) { allData[ind.id] = transform(raw, ind); successCount++; if (successCount % 4 === 0) renderGrid(); })
-      .catch(function(e) { failedList.push(ind.id + ": " + e.message); allData[ind.id] = []; })
-      .then(function() { tick(); if (queue.length > 0) setTimeout(next, 200); });
+  var yearsBack=currentTF==="MAX"?20:currentTF==="10Y"?11:currentTF==="5Y"?6:currentTF==="2Y"?3:2;
+  var fredLimit=currentTF==="MAX"?600:200;
+
+  var queue=INDICATORS.slice();
+  function next(){
+    if(queue.length===0) return;
+    var ind=queue.shift();
+    var promise;
+    if(ind.source==="bls"){
+      promise=fetchBLS(ind.series,yearsBack)
+        .then(function(raw){allData[ind.id]=transform(raw,ind);successCount++;if(successCount%4===0)renderGrid();});
+    } else {
+      promise=fetchFRED(ind.series,fredLimit,ind.fredUnits)
+        .then(function(raw){allData[ind.id]=transform(raw,ind);successCount++;if(successCount%4===0)renderGrid();});
+    }
+    promise
+      .catch(function(e){console.warn("Failed:",ind.id,e.message);failedList.push(ind.id);allData[ind.id]=[];})
+      .then(function(){tick();if(queue.length>0) setTimeout(next,150);});
   }
-  next(); next();
+  // 3 parallel fetch streams
+  next();next();next();
 }
 
-// Init
+// ── Init ──────────────────────────────────────────────────────────────────
 buildTFBar();
 buildTabs();
 renderGrid();
 
-var chartCheckInterval = setInterval(function() {
-  if (typeof Chart !== "undefined") {
-    clearInterval(chartCheckInterval);
-    renderGrid();
-  }
-}, 200);
-setTimeout(function() { clearInterval(chartCheckInterval); }, 15000);
+var chartCheckInterval=setInterval(function(){
+  if(typeof Chart!=="undefined"){clearInterval(chartCheckInterval);renderGrid();}
+},200);
+setTimeout(function(){clearInterval(chartCheckInterval);},15000);
 
-if (FRED_API_KEY === "YOUR_FRED_API_KEY_HERE") {
-  showStatus("⚠️ Replace YOUR_FRED_API_KEY_HERE with your FRED API key. Get one free at <a href='https://fred.stlouisfed.org/docs/api/api_key.html' style='color:inherit;text-decoration:underline' target='_blank'>fred.stlouisfed.org</a>", "error");
-} else {
-  showStatus("🔄 Connecting to FRED API...", "info");
-  loadAll();
-}
+showStatus("🔄 Fetching live data from BLS & FRED...","info");
+loadAll();
 </script>
 </body>
 </html>
