@@ -254,6 +254,16 @@ function fetchFRED(seriesId, limit, units) {
 function transform(raw, ind) {
   var d = raw.slice();
   if (ind.div) d = d.map(function(v){ return {date:v.date, value:v.value/ind.div}; });
+  // momDiff: fetch as level, compute period-over-period change in JS
+  // PAYEMS unit = thousands of persons → diff = net new jobs in thousands
+  // e.g. 159,356 - 159,178 = 178 → displayed as "178K"
+  if (ind.momDiff) {
+    var out = [];
+    for (var i = 1; i < d.length; i++) {
+      out.push({ date: d[i].date, value: Math.round(d[i].value - d[i-1].value) });
+    }
+    return out;
+  }
   return d;
 }
 
@@ -291,7 +301,8 @@ var INDS = [
   {id:"t10y",    lbl:"10Y Treasury Yield",       s:"DGS10",           cat:"rates",     desc:"10-Year Treasury Constant Maturity Rate",         u:"lin", unit:"%",  type:"line",      col:"#818CF8", freq:"Daily"},
   {id:"t2y",     lbl:"2Y Treasury Yield",        s:"DGS2",            cat:"rates",     desc:"2-Year Treasury Constant Maturity Rate",          u:"lin", unit:"%",  type:"line",      col:"#A5B4FC", freq:"Daily"},
   // LABOR — sourced via FRED (FRED ingests BLS data same day as BLS release)
-  {id:"nfp",     lbl:"Nonfarm Payrolls (MoM)",   s:"PAYEMS",          cat:"labor",     desc:"Total Nonfarm Payrolls, MoM Change (000s)",       u:"ch1", unit:"K",  type:"bar_pn",    col:"#38BDF8", freq:"Monthly"},
+  // PAYEMS fetched as LEVEL (lin), MoM diff computed in JS = exact same figure as BLS press release
+  {id:"nfp",     lbl:"Nonfarm Payrolls (MoM)",   s:"PAYEMS",          cat:"labor",     desc:"Total Nonfarm Payrolls, MoM Change (000s)",       u:"lin", unit:"K",  type:"bar_pn",    col:"#38BDF8", freq:"Monthly", momDiff:true},
   {id:"unemp",   lbl:"Unemployment Rate",        s:"UNRATE",          cat:"labor",     desc:"Civilian Unemployment Rate, SA",                  u:"lin", unit:"%",  type:"area",      col:"#22D3EE", freq:"Monthly"},
   {id:"part",    lbl:"Labor Force Participation",s:"CIVPART",         cat:"labor",     desc:"Civilian Labor Force Participation Rate",         u:"lin", unit:"%",  type:"line",      col:"#93C5FD", freq:"Monthly"},
   {id:"claims",  lbl:"Initial Jobless Claims",   s:"ICSA",            cat:"labor",     desc:"Initial Unemployment Insurance Claims",           u:"lin", unit:"K",  type:"line",      col:"#7DD3FC", freq:"Weekly", div:1000},
@@ -394,12 +405,21 @@ function buildCard(ind, idx){
   var prv = sl.length>1 ? sl[sl.length-2] : null;
   var chg = prv ? lat.value-prv.value : 0;
   var pct = prv&&prv.value!==0 ? ((lat.value-prv.value)/Math.abs(prv.value))*100 : 0;
-  var up  = chg>=0;
+  var isMoM = !!ind.momDiff;
+  var up  = isMoM ? lat.value>=0 : chg>=0;
   var cd  = sl.slice(-CPTS);
   var dv  = fmtDisp(lat.value, ind);
 
-  var dstr = Math.abs(chg).toFixed(ind.unit==="K"?0:2)+(ind.unit==="K"?"K":"");
-  var cstr = (pct>=0?"+":"")+pct.toFixed(2)+"%";
+  var dstr, cstr;
+  if (isMoM) {
+    // For MoM series: delta = this month vs prior month print
+    var vsChange = prv ? Math.round(lat.value - prv.value) : 0;
+    dstr = (vsChange>=0?"+":"")+vsChange+"K vs prior";
+    cstr = "Prior: "+(prv ? (prv.value>=0?"+":"")+Math.round(prv.value)+"K" : "—");
+  } else {
+    dstr = Math.abs(chg).toFixed(ind.unit==="K"?0:2)+(ind.unit==="K"?"K":"");
+    cstr = (pct>=0?"+":"")+pct.toFixed(2)+"%";
+  }
 
   var gc  = up?"var(--grn)":"var(--red)";
   var gb  = up?"var(--gg)":"var(--gr)";
@@ -413,7 +433,7 @@ function buildCard(ind, idx){
           '<span class="dot" style="background:'+ind.col+';box-shadow:0 0 6px '+ind.col+'55"></span>'+
           '<span class="lt">'+ind.lbl+'</span>'+
         '</div>'+
-        '<div class="bv">'+dv+'</div>'+
+        '<div class="bv" style="'+(isMoM?'color:'+(up?'var(--grn)':'var(--red)'):'')+'">'+dv+'</div>'+
         '<div class="dr">'+
           '<span class="db" style="color:'+gc+';background:'+gb+';border:1px solid '+gbd+'">'+
             (up?'▲':'▼')+' '+dstr+
