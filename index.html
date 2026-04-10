@@ -15,10 +15,10 @@
   ];
   var i=0;
   function tryNext(){
-    if(i>=cdns.length){console.error("Chart.js failed to load");return;}
-    var url=cdns[i++],s=document.createElement("script");
-    s.src=url; s.onload=function(){if(typeof Chart==="undefined")tryNext();};
-    s.onerror=tryNext; document.head.appendChild(s);
+    if(i>=cdns.length){console.error("Chart.js failed");return;}
+    var s=document.createElement("script");s.src=cdns[i++];
+    s.onload=function(){if(typeof Chart==="undefined")tryNext();};
+    s.onerror=tryNext;document.head.appendChild(s);
   }
   tryNext();
 })();
@@ -39,17 +39,18 @@ body{min-height:100vh}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--elev);border-radius:2px}
 button{font-family:inherit;cursor:pointer}
 
-.hdr{padding:0 28px;height:58px;border-bottom:1px solid var(--b0);display:flex;align-items:center;justify-content:space-between;gap:16px;position:sticky;top:0;z-index:100;background:rgba(7,12,24,.92);backdrop-filter:blur(24px)}
+/* ── HEADER ── */
+.hdr{padding:0 28px;height:58px;border-bottom:1px solid var(--b0);display:flex;align-items:center;justify-content:space-between;gap:16px;position:sticky;top:0;z-index:100;background:rgba(7,12,24,.94);backdrop-filter:blur(24px)}
 .hdr::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--hl)}
 .hl{display:flex;align-items:center;gap:14px}
 .hr{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .logo{width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#3B5BFF,#22D3EE);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;box-shadow:0 0 20px rgba(59,91,255,.35);flex-shrink:0}
-.brand{display:flex;flex-direction:column;gap:1px}
+.brand{display:flex;flex-direction:column;gap:2px}
 .bn{font-size:14px;font-weight:700;color:var(--t1);letter-spacing:-.3px}
-.bs{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--t2);letter-spacing:.3px}
+.bs{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--t2);letter-spacing:.3px}
 .hdiv{width:1px;height:20px;background:var(--b0)}
-.stags{display:flex;gap:6px}
-.stag{font-family:'IBM Plex Mono',monospace;font-size:9px;padding:2px 7px;border-radius:3px;font-weight:600;letter-spacing:.4px}
+.stags{display:flex;gap:5px;align-items:center}
+.stag{font-family:'IBM Plex Mono',monospace;font-size:8.5px;padding:2px 6px;border-radius:3px;font-weight:700;letter-spacing:.5px}
 .stag.bls{background:rgba(16,232,160,.1);border:1px solid rgba(16,232,160,.25);color:#10E8A0}
 .stag.fred{background:rgba(99,130,255,.1);border:1px solid rgba(99,130,255,.25);color:#809BFF}
 
@@ -61,58 +62,70 @@ button{font-family:inherit;cursor:pointer}
 .rbtn:hover{border-color:var(--ind);color:var(--t1);background:var(--gi)}
 .rbtn:disabled{opacity:.4;cursor:default}
 
+/* ── TABS ── */
 .tabs{padding:0 28px;height:44px;display:flex;align-items:center;gap:2px;overflow-x:auto;border-bottom:1px solid var(--b0);background:var(--bg2);-ms-overflow-style:none;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
 .tab{padding:5px 13px;border:none;border-radius:5px;font-size:11px;font-weight:500;white-space:nowrap;background:transparent;color:var(--t3);transition:all .18s}
 .tab.act{background:var(--elev);color:var(--t1);font-weight:600}
 .tab:hover:not(.act){color:var(--t2);background:var(--surf)}
 
+/* ── PROGRESS ── */
 .pw{padding:0 28px;margin-top:6px}
 .pt{height:2px;background:var(--surf);border-radius:2px;overflow:hidden}
 .pf{height:100%;border-radius:2px;background:var(--hl);transition:width .3s}
 
+/* ── STATUS ── */
 .sb{margin:14px 28px;padding:10px 16px;border-radius:8px;font-size:12px;line-height:1.5;font-weight:500;display:none}
 .sb.err{display:block;background:rgba(255,77,106,.06);border:1px solid rgba(255,77,106,.2);color:#FF6B84}
 .sb.ok{display:block;background:rgba(16,232,160,.06);border:1px solid rgba(16,232,160,.2);color:#10E8A0}
 .sb.inf{display:block;background:rgba(99,130,255,.06);border:1px solid rgba(99,130,255,.2);color:#809BFF}
 
+/* ── GRID ── */
 .grid{padding:20px 28px 60px;display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px}
 @media(max-width:480px){.grid{grid-template-columns:1fr;padding:14px 14px 60px}}
 @media(min-width:1600px){.grid{grid-template-columns:repeat(auto-fill,minmax(370px,1fr))}}
 
+/* ── CARD ── */
 .card{background:var(--card);border:1px solid var(--b0);border-radius:12px;overflow:hidden;transition:border-color .2s,background .2s,transform .2s,box-shadow .2s;animation:fadeUp .4s ease both;position:relative}
 .card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--ba),transparent);opacity:0;transition:opacity .2s}
 .card:hover{background:var(--card-h);border-color:var(--b1);transform:translateY(-1px);box-shadow:0 8px 32px rgba(0,0,0,.4)}
 .card:hover::before{opacity:1}
 
-.spl{position:absolute;top:14px;right:14px;font-family:'IBM Plex Mono',monospace;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.5px;pointer-events:none}
+/* Card top layout */
+.ct{padding:16px 18px 0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.cm{flex:1;min-width:0}
+
+/* Right column: date + source badge stacked — NO overlap */
+.cv{text-align:right;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.dt{font-size:10px;color:var(--t1);font-family:'IBM Plex Mono',monospace;font-weight:600;white-space:nowrap}
+
+/* Source badge — inside card-value-area, not absolute positioned */
+.spl{font-family:'IBM Plex Mono',monospace;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.5px;white-space:nowrap}
 .spl.bls{background:rgba(16,232,160,.1);border:1px solid rgba(16,232,160,.2);color:#10E8A0}
 .spl.fred{background:rgba(99,130,255,.08);border:1px solid rgba(99,130,255,.15);color:#6B80A8}
+.spl.fb{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);color:#FBB324}
 
-.ct{padding:16px 18px 0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
-.cm{flex:1;min-width:0}
-.cv{text-align:right;flex-shrink:0}
 .lr{display:flex;align-items:center;gap:7px;margin-bottom:8px}
-.dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .lt{font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.8px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bv{font-size:26px;font-weight:700;font-family:'IBM Plex Mono',monospace;letter-spacing:-.5px;line-height:1;color:var(--t1)}
 .dr{display:flex;align-items:center;gap:7px;margin-top:7px}
 .db{font-size:10.5px;font-weight:600;font-family:'IBM Plex Mono',monospace;display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:4px}
 .da{font-size:8px}
 .dp{font-size:10px;color:var(--t2);font-family:'IBM Plex Mono',monospace}
-.dt{font-size:10px;color:var(--t1);font-family:'IBM Plex Mono',monospace;font-weight:500}
-.fb{display:inline-block;margin-top:5px;font-size:9px;color:var(--t2);font-family:'IBM Plex Mono',monospace;background:var(--surf);padding:2px 7px;border-radius:3px;border:1px solid var(--b1);letter-spacing:.3px}
-.cd{font-size:9.5px;color:var(--t2);padding:10px 18px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.freqb{display:inline-block;font-size:9px;color:var(--t2);font-family:'IBM Plex Mono',monospace;background:var(--surf);padding:2px 7px;border-radius:3px;border:1px solid var(--b1);letter-spacing:.3px}
+.cdesc{font-size:9.5px;color:var(--t2);padding:10px 18px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cs{padding:8px 10px 12px}
 .cw{position:relative;height:100px;width:100%}
 .cw canvas{position:absolute;top:0;left:0;width:100%!important;height:100%!important}
 .cdiv{height:1px;background:var(--b0);margin:12px 18px 0;opacity:.7}
-.sv{height:26px;width:90px;border-radius:5px;background:linear-gradient(90deg,var(--surf) 25%,var(--elev) 50%,var(--surf) 75%);background-size:200% 100%;animation:shimmer 1.6s infinite}
-.sc{height:90px;margin:8px 10px 12px;border-radius:8px;background:linear-gradient(90deg,var(--surf) 25%,var(--elev) 50%,var(--surf) 75%);background-size:200% 100%;animation:shimmer 1.6s infinite}
+.skel-v{height:26px;width:90px;border-radius:5px;background:linear-gradient(90deg,var(--surf) 25%,var(--elev) 50%,var(--surf) 75%);background-size:200% 100%;animation:shimmer 1.6s infinite}
+.skel-c{height:90px;margin:8px 10px 12px;border-radius:8px;background:linear-gradient(90deg,var(--surf) 25%,var(--elev) 50%,var(--surf) 75%);background-size:200% 100%;animation:shimmer 1.6s infinite}
 
+/* ── FOOTER ── */
 .ftr{padding:20px 28px;border-top:1px solid var(--b0);background:var(--bg2);color:var(--t2);font-size:10.5px;line-height:1.8;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
-.fb2{color:var(--t1);font-weight:600}
-.fr{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--t3)}
+.ftr b{color:var(--t1);font-weight:600}
+.ftr-r{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--t3)}
 
 @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
@@ -145,255 +158,285 @@ button{font-family:inherit;cursor:pointer}
 <div class="grid" id="grid"></div>
 
 <footer class="ftr">
-  <div>Labor data: <span class="fb2">Bureau of Labor Statistics (BLS)</span> · Macro data: <span class="fb2">Federal Reserve Economic Data (FRED)</span></div>
-  <div class="fr">AUTO-REFRESHES ON PAGE LOAD</div>
+  <div>Labor data: <b>Bureau of Labor Statistics (BLS)</b> · Macro data: <b>Federal Reserve Economic Data (FRED)</b></div>
+  <div class="ftr-r">AUTO-REFRESHES ON PAGE LOAD</div>
 </footer>
 
 <script>
-// ─────────────────────────────────────────────────────────────
-// CONFIG
-// ─────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+// API KEYS
+// ════════════════════════════════════════════════════════════
 var FRED_KEY = "bc1f32b397114934e95d879ec2646074";
-var BLS_KEY  = ""; // optional free key from bls.gov/developers
+var BLS_KEY  = ""; // optional free key: bls.gov/developers
 
-// ─────────────────────────────────────────────────────────────
-// PROXY ARCHITECTURE
+// ════════════════════════════════════════════════════════════
+// PROXY LAYER
+// ----------------------------------------------------------
+// Root cause of all previous failures:
+//   "Racing" all proxies simultaneously caused RATE LIMITING
+//   on every proxy at once → all fail together.
 //
-// ROOT CAUSE of previous failures:
-// - corsproxy.io & allorigins.win both BLOCK syst3mic.github.io at the origin level
-//   OR they rate-limit and stop sending Access-Control-Allow-Origin headers.
-// - "Proxy locking" made it worse: once a failing proxy was locked, ALL requests failed.
+// Fix: Return to the SEQUENTIAL approach from v1 that worked.
+//   Try proxies one-at-a-time. Lock to the first working one.
+//   If locked proxy fails later, reset and re-probe.
+//   This is exactly what the original working version did.
 //
-// FIX: Race ALL proxies simultaneously (Promise.race).
-// Every fetch fires all proxies at once — whichever responds first with valid JSON wins.
-// No locking. No sequential waiting. No single point of failure.
-//
-// PROXY LIST — all unconditionally add Access-Control-Allow-Origin: *
-// We use 5+ proxies so at least one is always available.
-// ─────────────────────────────────────────────────────────────
+// Proxy order (tested to work with github.io origins):
+//   1. corsproxy.io       — passes JSON directly, worked in v1
+//   2. api.cors.lol       — fallback, worked in v1
+//   3. api.codetabs.com   — fallback
+//   4. allorigins.win     — wraps in {contents:""}, unwrap needed
+//   5. Direct FRED call   — FRED supports CORS for some origins
+// ════════════════════════════════════════════════════════════
 
-// Build a proxied GET URL from each proxy service
-function makeProxyGetURL(targetURL, proxyIndex) {
-  var enc = encodeURIComponent(targetURL);
-  switch(proxyIndex) {
-    case 0: return "https://api.allorigins.win/get?url=" + enc;
-    case 1: return "https://corsproxy.io/?" + enc;
-    case 2: return "https://api.codetabs.com/v1/proxy?quest=" + enc;
-    case 3: return "https://thingproxy.freeboard.io/fetch/" + targetURL;
-    case 4: return "https://api.cors.lol/?url=" + enc;
-    default: return null;
+var PROXIES = [
+  {
+    get: function(u){ return "https://corsproxy.io/?"+encodeURIComponent(u); },
+    unwrap: function(j){ return j; }
+  },
+  {
+    get: function(u){ return "https://api.cors.lol/?url="+encodeURIComponent(u); },
+    unwrap: function(j){ return j; }
+  },
+  {
+    get: function(u){ return "https://api.codetabs.com/v1/proxy?quest="+encodeURIComponent(u); },
+    unwrap: function(j){ return j; }
+  },
+  {
+    get: function(u){ return "https://api.allorigins.win/get?url="+encodeURIComponent(u); },
+    unwrap: function(j){ return (j&&j.contents)?JSON.parse(j.contents):j; }
+  },
+  {
+    get: function(u){ return u; }, // direct — last resort
+    unwrap: function(j){ return j; }
   }
-}
-var PROXY_COUNT = 5;
+];
 
-// Race ALL proxies — return first valid JSON response
-// Each proxy may wrap the response differently — we unwrap all known formats
-function raceFetch(targetURL) {
-  var attempts = [];
-  for (var i = 0; i < PROXY_COUNT; i++) {
-    (function(idx) {
-      var proxyURL = makeProxyGetURL(targetURL, idx);
-      if (!proxyURL) return;
-      var p = fetch(proxyURL, { signal: AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined })
+var activeProxy = null;  // index of locked-in working proxy
+var probeInFlight = null; // in-flight probe promise (dedupes parallel probes)
+
+// Sequential probe: try each proxy until one works, lock to it
+function probeProxies(testURL) {
+  if (probeInFlight) return probeInFlight;
+  probeInFlight = new Promise(function(resolve, reject) {
+    var i = 0;
+    function tryOne() {
+      if (i >= PROXIES.length) { probeInFlight = null; reject(new Error("All proxies failed")); return; }
+      var p = PROXIES[i], idx = i; i++;
+      fetch(p.get(testURL))
         .then(function(r) {
-          if (!r.ok) throw new Error("proxy " + idx + " HTTP " + r.status);
+          if (!r.ok) throw new Error("HTTP "+r.status);
           return r.json();
         })
-        .then(function(j) {
-          // allorigins wraps in {contents: "<json string>"}
-          if (j && typeof j.contents === "string") {
-            j = JSON.parse(j.contents);
-          }
-          // codetabs/thingproxy return raw JSON — no unwrap needed
-          if (!j) throw new Error("proxy " + idx + " empty response");
-          return j;
+        .then(function(raw) {
+          var j = p.unwrap(raw);
+          if (!j) throw new Error("empty");
+          activeProxy = idx;
+          console.log("Proxy locked:", idx, p.get("TEST").split("?")[0]);
+          probeInFlight = null;
+          resolve(idx);
+        })
+        .catch(function(e) {
+          console.warn("Proxy", idx, "failed:", e.message);
+          tryOne();
         });
-      attempts.push(p);
-    })(i);
-  }
-  // Promise.any = first SUCCESS wins (ignores rejections until all fail)
-  if (typeof Promise.any === "function") {
-    return Promise.any(attempts);
-  }
-  // Polyfill Promise.any for older browsers
-  return new Promise(function(resolve, reject) {
-    var errors = [];
-    var remaining = attempts.length;
-    if (remaining === 0) { reject(new Error("No proxies available")); return; }
-    attempts.forEach(function(p) {
-      p.then(resolve).catch(function(e) {
-        errors.push(e);
-        remaining--;
-        if (remaining === 0) reject(new AggregateError ? new AggregateError(errors, "All proxies failed") : new Error("All proxies failed: " + errors.map(function(x){return x.message;}).join(", ")));
+    }
+    tryOne();
+  });
+  return probeInFlight;
+}
+
+// Fetch JSON via active proxy; if it fails, reset and re-probe
+function proxyFetch(url) {
+  function doFetch(idx) {
+    var p = PROXIES[idx];
+    return fetch(p.get(url))
+      .then(function(r) {
+        if (!r.ok) throw new Error("HTTP "+r.status);
+        return r.json();
+      })
+      .then(function(raw) {
+        return p.unwrap(raw);
       });
+  }
+
+  if (activeProxy !== null) {
+    return doFetch(activeProxy).catch(function(e) {
+      console.warn("Active proxy failed, re-probing:", e.message);
+      activeProxy = null; probeInFlight = null;
+      return probeProxies(url).then(function(idx) { return doFetch(idx); });
     });
-  });
+  }
+  return probeProxies(url).then(function(idx) { return doFetch(idx); });
 }
 
-// BLS POST — race proxies that support POST
-function raceBLSPost(payload) {
-  var BLS_URL = "https://api.bls.gov/publicAPI/v2/timeseries/data/";
+// BLS POST — try proxies sequentially for POST support
+var BLS_URL = "https://api.bls.gov/publicAPI/v2/timeseries/data/";
+var BLS_POST_PROXIES = [
+  function(body){ return fetch("https://corsproxy.io/?"+encodeURIComponent(BLS_URL),{method:"POST",headers:{"Content-Type":"application/json"},body:body}); },
+  function(body){ return fetch("https://api.allorigins.win/raw?url="+encodeURIComponent(BLS_URL),{method:"POST",headers:{"Content-Type":"application/json"},body:body}); },
+  function(body){ return fetch("https://api.codetabs.com/v1/proxy?quest="+encodeURIComponent(BLS_URL),{method:"POST",headers:{"Content-Type":"application/json"},body:body}); }
+];
+
+function fetchBLSPost(payload) {
   var bodyStr = JSON.stringify(payload);
-  var postProxies = [
-    "https://api.allorigins.win/raw?url=" + encodeURIComponent(BLS_URL),
-    "https://corsproxy.io/?" + encodeURIComponent(BLS_URL),
-    "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(BLS_URL)
-  ];
-
-  var attempts = postProxies.map(function(url) {
-    return fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: bodyStr
-    })
-    .then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-    .then(function(j) {
-      if (j && typeof j.contents === "string") j = JSON.parse(j.contents);
-      if (!j || j.status !== "REQUEST_SUCCEEDED") throw new Error("BLS: " + ((j && j.message && j.message[0]) || "failed"));
-      return j;
-    });
-  });
-
-  if (typeof Promise.any === "function") return Promise.any(attempts);
-  return new Promise(function(resolve, reject) {
-    var remaining = attempts.length, errors = [];
-    attempts.forEach(function(p) {
-      p.then(resolve).catch(function(e) { errors.push(e); if (--remaining === 0) reject(new Error("All BLS proxies failed")); });
-    });
-  });
+  var i = 0;
+  function tryOne() {
+    if (i >= BLS_POST_PROXIES.length) return Promise.reject(new Error("All BLS POST proxies failed"));
+    var fn = BLS_POST_PROXIES[i++];
+    return fn(bodyStr)
+      .then(function(r) {
+        if (!r.ok) throw new Error("HTTP "+r.status);
+        return r.json();
+      })
+      .then(function(j) {
+        if (j && j.contents) j = JSON.parse(j.contents);
+        if (!j || j.status !== "REQUEST_SUCCEEDED") throw new Error((j&&j.message&&j.message[0])||"BLS fail");
+        return j;
+      })
+      .catch(function(e) {
+        console.warn("BLS proxy", i-1, "failed:", e.message);
+        return tryOne();
+      });
+  }
+  return tryOne();
 }
 
-// ─────────────────────────────────────────────────────────────
-// FRED fetch
-// ─────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+// FRED DATA FETCH
+// ════════════════════════════════════════════════════════════
 function fetchFRED(seriesId, limit, units) {
   var url = "https://api.stlouisfed.org/fred/series/observations"
-    + "?series_id=" + seriesId
-    + "&api_key=" + FRED_KEY
-    + "&file_type=json&sort_order=desc&limit=" + limit
-    + "&units=" + (units || "lin");
-
-  return raceFetch(url).then(function(j) {
-    if (j.error_code) throw new Error("FRED " + seriesId + ": " + j.error_message);
+    +"?series_id="+seriesId
+    +"&api_key="+FRED_KEY
+    +"&file_type=json&sort_order=desc&limit="+limit
+    +"&units="+(units||"lin");
+  return proxyFetch(url).then(function(j) {
+    if (!j) throw new Error("No data");
+    if (j.error_code) throw new Error("FRED: "+j.error_message);
     return j.observations
-      .filter(function(o) { return o.value !== "."; })
-      .map(function(o) { return { date: o.date, value: parseFloat(o.value) }; })
+      .filter(function(o){return o.value!=="."})
+      .map(function(o){return{date:o.date,value:parseFloat(o.value)};})
       .reverse();
   });
 }
 
-// ─────────────────────────────────────────────────────────────
-// BLS fetch (with FRED fallback)
-// ─────────────────────────────────────────────────────────────
-var BLS_FALLBACK = {
-  "CES0000000001": { s: "PAYEMS",  u: "ch1" },
-  "LNS14000000":   { s: "UNRATE",  u: "lin" },
-  "LNS11300000":   { s: "CIVPART", u: "lin" }
+// ════════════════════════════════════════════════════════════
+// BLS DATA FETCH  (official, zero-lag labor data)
+// ════════════════════════════════════════════════════════════
+var BLS_FRED_FALLBACK = {
+  "CES0000000001": {s:"PAYEMS",  u:"ch1"},  // NFP MoM thousands
+  "LNS14000000":   {s:"UNRATE",  u:"lin"},  // Unemployment %
+  "LNS11300000":   {s:"CIVPART", u:"lin"}   // Participation %
 };
 
-function fetchBLS(seriesId, yearsBack) {
-  var now = new Date();
-  var endYear = now.getFullYear();
-  var startYear = Math.max(endYear - Math.max(yearsBack, 5), 2010);
-  var payload = { seriesid: [seriesId], startyear: String(startYear), endyear: String(endYear) };
+function fetchBLS(seriesId, yearsBack, fredLimit, cfg) {
+  var endYear = new Date().getFullYear();
+  var startYear = Math.max(endYear - Math.max(yearsBack,5), 2010);
+  var payload = {seriesid:[seriesId], startyear:String(startYear), endyear:String(endYear)};
   if (BLS_KEY) payload.registrationkey = BLS_KEY;
 
-  return raceBLSPost(payload).then(function(j) {
-    var series = j.Results && j.Results.series && j.Results.series[0];
-    if (!series || !series.data || !series.data.length) throw new Error("BLS: no data for " + seriesId);
-    var out = [];
-    series.data.slice().reverse().forEach(function(d) {
-      if (d.period === "M13") return;
-      var m = parseInt(d.period.replace(/\D/g,""), 10);
-      if (!m || m < 1 || m > 12) return;
-      out.push({ date: d.year + "-" + (m < 10 ? "0" : "") + m + "-01", value: parseFloat(d.value) });
+  return fetchBLSPost(payload)
+    .then(function(j) {
+      var series = j.Results&&j.Results.series&&j.Results.series[0];
+      if (!series||!series.data||!series.data.length) throw new Error("BLS: no data "+seriesId);
+      var out = [];
+      series.data.slice().reverse().forEach(function(d) {
+        if (d.period==="M13") return;
+        var m = parseInt(d.period.replace(/\D/g,""),10);
+        if (!m||m<1||m>12) return;
+        out.push({date:d.year+"-"+(m<10?"0":"")+m+"-01", value:parseFloat(d.value)});
+      });
+      return {data:out, usedFallback:false};
+    })
+    .catch(function(e) {
+      // BLS proxy failed → fall back to FRED equivalent
+      console.warn("BLS failed ("+seriesId+"), using FRED fallback:", e.message);
+      var fb = BLS_FRED_FALLBACK[seriesId];
+      if (!fb) return {data:[], usedFallback:false};
+      return fetchFRED(fb.s, fredLimit, fb.u)
+        .then(function(data){ return {data:data, usedFallback:true}; });
     });
-    return out;
-  });
 }
 
-// ─────────────────────────────────────────────────────────────
-// Transform
-// ─────────────────────────────────────────────────────────────
-function transform(raw, cfg) {
+// ════════════════════════════════════════════════════════════
+// TRANSFORM
+// ════════════════════════════════════════════════════════════
+function transform(raw, cfg, blsMoM) {
   var d = raw.slice();
-  if (cfg.div) d = d.map(function(v) { return { date: v.date, value: v.value / cfg.div }; });
-  if (cfg.blsMoM) {
+  if (cfg.div) d = d.map(function(v){return{date:v.date,value:v.value/cfg.div};});
+  if (blsMoM) {
+    // BLS level → MoM change (already in thousands for PAYEMS)
     var out = [];
-    for (var i = 1; i < d.length; i++)
-      out.push({ date: d[i].date, value: Math.round(d[i].value - d[i-1].value) });
+    for (var i=1;i<d.length;i++) out.push({date:d[i].date, value:Math.round(d[i].value-d[i-1].value)});
     return out;
   }
   return d;
 }
 
-function fmtVal(v, cfg) {
-  if (cfg.unit === "$B") return "$" + v.toFixed(1) + "B";
-  if (cfg.unit === "K")  return (v >= 0 ? "+" : "") + Math.round(v) + "K";
-  if (cfg.unit === "%")  return v.toFixed(2) + "%";
+// ════════════════════════════════════════════════════════════
+// FORMATTERS
+// ════════════════════════════════════════════════════════════
+function fmtVal(v, ind) {
+  if (ind.unit==="$B") return "$"+v.toFixed(1)+"B";
+  if (ind.unit==="K")  return (v>=0?"+":"")+Math.round(v)+"K";
+  if (ind.unit==="%")  return v.toFixed(2)+"%";
   return v.toFixed(2);
 }
-function fmtDisp(v, cfg) {
-  if (cfg.unit === "$B") return "$" + v.toFixed(1) + "B";
-  if (cfg.unit === "K")  return (v < 0 ? "-" : "") + Math.abs(Math.round(v)) + "K";
-  if (cfg.unit === "%")  return v.toFixed(2) + "%";
+function fmtDisp(v, ind) {
+  if (ind.unit==="$B") return "$"+v.toFixed(1)+"B";
+  if (ind.unit==="K")  return (v<0?"-":"")+Math.abs(Math.round(v))+"K";
+  if (ind.unit==="%")  return v.toFixed(2)+"%";
   return v.toFixed(2);
 }
 
-// ─────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
 // INDICATORS
-// ─────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
 var INDS = [
-  // INFLATION
-  {id:"cpi",         lbl:"CPI (YoY%)",              s:"CPIAUCSL",        cat:"inflation", desc:"CPI All Urban Consumers SA · FRED/BLS",          u:"pc1", unit:"%",  type:"area",      col:"#FF4D6A", freq:"Monthly",   src:"fred"},
-  {id:"coreCpi",     lbl:"Core CPI (YoY%)",          s:"CPILFESL",        cat:"inflation", desc:"CPI Less Food & Energy SA · FRED/BLS",            u:"pc1", unit:"%",  type:"area",      col:"#FF7B8A", freq:"Monthly",   src:"fred"},
-  {id:"pce",         lbl:"PCE Inflation (YoY%)",     s:"PCEPI",           cat:"inflation", desc:"PCE Price Index · FRED/BEA",                      u:"pc1", unit:"%",  type:"area",      col:"#E11D48", freq:"Monthly",   src:"fred"},
-  {id:"ppi",         lbl:"PPI (YoY%)",               s:"PPIACO",          cat:"inflation", desc:"Producer Price Index All Commodities · FRED/BLS", u:"pc1", unit:"%",  type:"bar",       col:"#F97316", freq:"Monthly",   src:"fred"},
-  // RATES (daily = zero lag)
-  {id:"fedFunds",    lbl:"Fed Funds Rate",           s:"FEDFUNDS",        cat:"rates",     desc:"Effective Fed Funds Rate (monthly avg) · FRED",   u:"lin", unit:"%",  type:"step",      col:"#A78BFA", freq:"Monthly",   src:"fred"},
-  {id:"sofr",        lbl:"SOFR (Daily)",             s:"SOFR",            cat:"rates",     desc:"Secured Overnight Financing Rate · FRED/NY Fed",  u:"lin", unit:"%",  type:"line",      col:"#C4B5FD", freq:"Daily",     src:"fred"},
-  {id:"t10y2y",      lbl:"10Y–2Y Spread",            s:"T10Y2Y",          cat:"rates",     desc:"10Y minus 2Y Treasury Spread (daily) · FRED",    u:"lin", unit:"%",  type:"area_zero", col:"#6382FF", freq:"Daily",     src:"fred"},
-  {id:"t10y",        lbl:"10Y Treasury Yield",       s:"DGS10",           cat:"rates",     desc:"10-Year Treasury Constant Maturity (daily) · FRED", u:"lin", unit:"%", type:"line",    col:"#818CF8", freq:"Daily",     src:"fred"},
-  {id:"t2y",         lbl:"2Y Treasury Yield",        s:"DGS2",            cat:"rates",     desc:"2-Year Treasury Constant Maturity (daily) · FRED", u:"lin", unit:"%", type:"line",     col:"#A5B4FC", freq:"Daily",     src:"fred"},
-  // LABOR (BLS primary — same day as 8:30am press release)
-  {id:"nfp",         lbl:"Nonfarm Payrolls (MoM)",   s:"CES0000000001",   cat:"labor",     desc:"Total Nonfarm Payrolls MoM Change · BLS",        unit:"K",  type:"bar_pn", col:"#38BDF8", freq:"Monthly", src:"bls", blsMoM:true},
-  {id:"unemp",       lbl:"Unemployment Rate",        s:"LNS14000000",     cat:"labor",     desc:"Civilian Unemployment Rate SA · BLS",             unit:"%",  type:"area",   col:"#22D3EE", freq:"Monthly", src:"bls"},
-  {id:"part",        lbl:"Labor Force Participation",s:"LNS11300000",     cat:"labor",     desc:"Civilian Labor Force Participation Rate SA · BLS",unit:"%",  type:"line",   col:"#93C5FD", freq:"Monthly", src:"bls"},
-  {id:"claims",      lbl:"Initial Jobless Claims",   s:"ICSA",            cat:"labor",     desc:"Initial Unemployment Insurance Claims (K) · FRED/DOL", u:"lin", unit:"K", type:"line", col:"#7DD3FC", freq:"Weekly", src:"fred", div:1000},
-  // GROWTH
-  {id:"gdp",         lbl:"Real GDP (QoQ ann.%)",     s:"A191RL1Q225SBEA", cat:"growth",    desc:"Real GDP Growth Quarterly Annualized · FRED/BEA", u:"lin", unit:"%",  type:"bar_pn",    col:"#10E8A0", freq:"Quarterly", src:"fred"},
-  {id:"retail",      lbl:"Retail Sales (MoM%)",      s:"RSAFS",           cat:"growth",    desc:"Advance Retail Sales SA · FRED/Census",           u:"pch", unit:"%",  type:"bar_pn",    col:"#34D399", freq:"Monthly",   src:"fred"},
-  {id:"indprod",     lbl:"Industrial Prod. (YoY%)",  s:"INDPRO",          cat:"growth",    desc:"Industrial Production Index · FRED/Fed",          u:"pc1", unit:"%",  type:"area",      col:"#6EE7B7", freq:"Monthly",   src:"fred"},
-  {id:"caputil",     lbl:"Capacity Utilization",     s:"TCU",             cat:"growth",    desc:"Total Industry Capacity Utilization · FRED/Fed",  u:"lin", unit:"%",  type:"line",      col:"#A7F3D0", freq:"Monthly",   src:"fred"},
-  // SENTIMENT
-  {id:"umich",       lbl:"Consumer Sentiment",       s:"UMCSENT",         cat:"sentiment", desc:"U. of Michigan Consumer Sentiment · FRED",        u:"lin", unit:"",   type:"area",      col:"#F59E0B", freq:"Monthly",   src:"fred"},
-  {id:"conf",        lbl:"Consumer Confidence",      s:"CSCICP03USM665S", cat:"sentiment", desc:"OECD Consumer Confidence Indicator · FRED",       u:"lin", unit:"",   type:"line",      col:"#FCD34D", freq:"Monthly",   src:"fred"},
-  // HOUSING
-  {id:"houst",       lbl:"Housing Starts (K)",       s:"HOUST",           cat:"housing",   desc:"New Residential Construction SA (K) · FRED",     u:"lin", unit:"K",  type:"bar",       col:"#22D3EE", freq:"Monthly",   src:"fred"},
-  {id:"permits",     lbl:"Building Permits (K)",     s:"PERMIT",          cat:"housing",   desc:"New Private Housing Units Authorized (K) · FRED", u:"lin", unit:"K",  type:"line",      col:"#06B6D4", freq:"Monthly",   src:"fred"},
-  {id:"cs",          lbl:"Case-Shiller (YoY%)",      s:"CSUSHPINSA",      cat:"housing",   desc:"S&P/Case-Shiller National Home Price · FRED",     u:"pc1", unit:"%",  type:"area",      col:"#67E8F9", freq:"Monthly",   src:"fred"},
-  // TRADE
-  {id:"trade",       lbl:"Trade Balance ($B)",       s:"BOPGSTB",         cat:"trade",     desc:"Trade Balance Goods & Services ($B) · FRED/BEA",  u:"lin", unit:"$B", type:"area_zero", col:"#EC4899", freq:"Monthly",   src:"fred"},
-  // MONETARY
-  {id:"m2",          lbl:"M2 Money Supply (YoY%)",   s:"M2SL",            cat:"monetary",  desc:"M2 Money Stock · FRED/Fed",                       u:"pc1", unit:"%",  type:"area",      col:"#C084FC", freq:"Monthly",   src:"fred"}
+  // ── INFLATION (FRED — updates same day as BLS/BEA release)
+  {id:"cpi",      lbl:"CPI (YoY%)",              src:"fred", s:"CPIAUCSL",        cat:"inflation", desc:"CPI All Urban Consumers SA",          u:"pc1", unit:"%",  type:"area",      col:"#FF4D6A", freq:"Monthly"},
+  {id:"coreCpi",  lbl:"Core CPI (YoY%)",          src:"fred", s:"CPILFESL",        cat:"inflation", desc:"CPI Less Food & Energy SA",            u:"pc1", unit:"%",  type:"area",      col:"#FF7B8A", freq:"Monthly"},
+  {id:"pce",      lbl:"PCE Inflation (YoY%)",     src:"fred", s:"PCEPI",           cat:"inflation", desc:"PCE Price Index",                      u:"pc1", unit:"%",  type:"area",      col:"#E11D48", freq:"Monthly"},
+  {id:"ppi",      lbl:"PPI (YoY%)",               src:"fred", s:"PPIACO",          cat:"inflation", desc:"Producer Price Index All Commodities", u:"pc1", unit:"%",  type:"bar",       col:"#F97316", freq:"Monthly"},
+  // ── RATES (daily FRED — zero lag)
+  {id:"fedFunds", lbl:"Fed Funds Rate",           src:"fred", s:"FEDFUNDS",        cat:"rates",     desc:"Effective Fed Funds Rate (monthly avg)",u:"lin", unit:"%",  type:"step",      col:"#A78BFA", freq:"Monthly"},
+  {id:"sofr",     lbl:"SOFR (Daily)",             src:"fred", s:"SOFR",            cat:"rates",     desc:"Secured Overnight Financing Rate",     u:"lin", unit:"%",  type:"line",      col:"#C4B5FD", freq:"Daily"},
+  {id:"t10y2y",   lbl:"10Y–2Y Spread",            src:"fred", s:"T10Y2Y",          cat:"rates",     desc:"10Y minus 2Y Treasury Spread",        u:"lin", unit:"%",  type:"area_zero", col:"#6382FF", freq:"Daily"},
+  {id:"t10y",     lbl:"10Y Treasury Yield",       src:"fred", s:"DGS10",           cat:"rates",     desc:"10-Year Treasury Constant Maturity",  u:"lin", unit:"%",  type:"line",      col:"#818CF8", freq:"Daily"},
+  {id:"t2y",      lbl:"2Y Treasury Yield",        src:"fred", s:"DGS2",            cat:"rates",     desc:"2-Year Treasury Constant Maturity",   u:"lin", unit:"%",  type:"line",      col:"#A5B4FC", freq:"Daily"},
+  // ── LABOR (BLS — same day as 8:30am press release; FRED fallback if BLS proxy down)
+  {id:"nfp",      lbl:"Nonfarm Payrolls (MoM)",   src:"bls",  s:"CES0000000001",   cat:"labor",     desc:"Total Nonfarm Payrolls MoM Change",   unit:"K",  type:"bar_pn", col:"#38BDF8", freq:"Monthly", blsMoM:true},
+  {id:"unemp",    lbl:"Unemployment Rate",        src:"bls",  s:"LNS14000000",     cat:"labor",     desc:"Civilian Unemployment Rate SA",        unit:"%",  type:"area",   col:"#22D3EE", freq:"Monthly"},
+  {id:"part",     lbl:"Labor Force Participation",src:"bls",  s:"LNS11300000",     cat:"labor",     desc:"Labor Force Participation Rate SA",    unit:"%",  type:"line",   col:"#93C5FD", freq:"Monthly"},
+  {id:"claims",   lbl:"Initial Jobless Claims",   src:"fred", s:"ICSA",            cat:"labor",     desc:"Initial Unemployment Insurance Claims",u:"lin",unit:"K",type:"line",col:"#7DD3FC", freq:"Weekly", div:1000},
+  // ── GROWTH
+  {id:"gdp",      lbl:"Real GDP (QoQ ann.%)",     src:"fred", s:"A191RL1Q225SBEA", cat:"growth",    desc:"Real GDP Growth Quarterly Annualized", u:"lin", unit:"%",  type:"bar_pn",    col:"#10E8A0", freq:"Quarterly"},
+  {id:"retail",   lbl:"Retail Sales (MoM%)",      src:"fred", s:"RSAFS",           cat:"growth",    desc:"Advance Retail Sales SA",              u:"pch", unit:"%",  type:"bar_pn",    col:"#34D399", freq:"Monthly"},
+  {id:"indprod",  lbl:"Industrial Prod. (YoY%)",  src:"fred", s:"INDPRO",          cat:"growth",    desc:"Industrial Production Index",          u:"pc1", unit:"%",  type:"area",      col:"#6EE7B7", freq:"Monthly"},
+  {id:"caputil",  lbl:"Capacity Utilization",     src:"fred", s:"TCU",             cat:"growth",    desc:"Total Industry Capacity Utilization",  u:"lin", unit:"%",  type:"line",      col:"#A7F3D0", freq:"Monthly"},
+  // ── SENTIMENT
+  {id:"umich",    lbl:"Consumer Sentiment",       src:"fred", s:"UMCSENT",         cat:"sentiment", desc:"U. of Michigan Consumer Sentiment",    u:"lin", unit:"",   type:"area",      col:"#F59E0B", freq:"Monthly"},
+  {id:"conf",     lbl:"Consumer Confidence",      src:"fred", s:"CSCICP03USM665S", cat:"sentiment", desc:"OECD Consumer Confidence Indicator",   u:"lin", unit:"",   type:"line",      col:"#FCD34D", freq:"Monthly"},
+  // ── HOUSING
+  {id:"houst",    lbl:"Housing Starts (K)",       src:"fred", s:"HOUST",           cat:"housing",   desc:"New Residential Construction SA",      u:"lin", unit:"K",  type:"bar",       col:"#22D3EE", freq:"Monthly"},
+  {id:"permits",  lbl:"Building Permits (K)",     src:"fred", s:"PERMIT",          cat:"housing",   desc:"New Private Housing Units Authorized", u:"lin", unit:"K",  type:"line",      col:"#06B6D4", freq:"Monthly"},
+  {id:"cs",       lbl:"Case-Shiller (YoY%)",      src:"fred", s:"CSUSHPINSA",      cat:"housing",   desc:"S&P/Case-Shiller National Home Price", u:"pc1", unit:"%",  type:"area",      col:"#67E8F9", freq:"Monthly"},
+  // ── TRADE
+  {id:"trade",    lbl:"Trade Balance ($B)",       src:"fred", s:"BOPGSTB",         cat:"trade",     desc:"Trade Balance: Goods & Services ($B)", u:"lin", unit:"$B", type:"area_zero", col:"#EC4899", freq:"Monthly"},
+  // ── MONETARY
+  {id:"m2",       lbl:"M2 Money Supply (YoY%)",   src:"fred", s:"M2SL",            cat:"monetary",  desc:"M2 Money Stock",                       u:"pc1", unit:"%",  type:"area",      col:"#C084FC", freq:"Monthly"}
 ];
 
 var CATS = [
-  {k:"all",       l:"All Indicators",  i:"◈"},
-  {k:"inflation", l:"Inflation",        i:"▲"},
-  {k:"rates",     l:"Rates & Yields",   i:"◆"},
-  {k:"labor",     l:"Labor Market",     i:"●"},
-  {k:"growth",    l:"Growth & Output",  i:"■"},
-  {k:"sentiment", l:"Sentiment",        i:"◐"},
-  {k:"housing",   l:"Housing",          i:"▣"},
-  {k:"trade",     l:"Trade",            i:"◇"},
-  {k:"monetary",  l:"Monetary",         i:"○"}
+  {k:"all",l:"All Indicators",i:"◈"},{k:"inflation",l:"Inflation",i:"▲"},
+  {k:"rates",l:"Rates & Yields",i:"◆"},{k:"labor",l:"Labor Market",i:"●"},
+  {k:"growth",l:"Growth & Output",i:"■"},{k:"sentiment",l:"Sentiment",i:"◐"},
+  {k:"housing",l:"Housing",i:"▣"},{k:"trade",l:"Trade",i:"◇"},{k:"monetary",l:"Monetary",i:"○"}
 ];
 
-var TFS = ["1Y","2Y","5Y","10Y","MAX"];
-var TFM = {"1Y":12,"2Y":24,"5Y":60,"10Y":120,"MAX":9999};
-var CPTS = 18;
-var allData={}, charts={}, curTF="5Y", curCat="all";
+var TFS=["1Y","2Y","5Y","10Y","MAX"], TFM={"1Y":12,"2Y":24,"5Y":60,"10Y":120,"MAX":9999};
+var CPTS=18, allData={}, charts={}, curTF="5Y", curCat="all";
 
 function setSB(m,t){var e=document.getElementById("sb");e.className="sb "+t;e.innerHTML=m;e.style.display="block";}
 function hideSB(){document.getElementById("sb").style.display="none";}
@@ -430,7 +473,7 @@ function renderGrid(){
   setTimeout(function(){
     cards.forEach(function(c){
       if(c._cd&&c._ind){
-        var cv=document.getElementById("chart-"+c._ind.id);
+        var cv=document.getElementById("c-"+c._ind.id);
         if(cv) renderChart(cv,c._ind,c._cd);
       }
     });
@@ -442,61 +485,76 @@ function buildCard(ind,idx){
   var card=document.createElement("div");
   card.className="card";
   card.style.animationDelay=(idx*25)+"ms";
-  var sl=ind._fb?"FRED*":ind.src==="bls"?"BLS":"FRED";
-  var sc=ind.src==="bls"&&!ind._fb?"bls":"fred";
-  var pill='<div class="spl '+sc+'">'+sl+'</div>';
+
+  // Source label: BLS, FRED, or FRED* (fallback)
+  var srcLabel = ind._fb ? "FRED*" : ind.src==="bls" ? "BLS" : "FRED";
+  var srcClass  = ind._fb ? "fb" : ind.src==="bls" ? "bls" : "fred";
 
   if(!data.length){
-    card.innerHTML=pill+
-      '<div class="ct"><div class="cm">'+
-        '<div class="lr"><span class="dot" style="background:'+ind.col+';opacity:.3"></span>'+
-        '<span class="lt">'+ind.lbl+'</span></div>'+
-        '<div class="sv"></div></div></div>'+
-      '<div class="sc"></div>';
+    card.innerHTML=
+      '<div class="ct">'+
+        '<div class="cm">'+
+          '<div class="lr"><span class="dot" style="background:'+ind.col+';opacity:.3"></span>'+
+          '<span class="lt">'+ind.lbl+'</span></div>'+
+          '<div class="skel-v"></div>'+
+        '</div>'+
+        '<div class="cv">'+
+          '<span class="spl '+srcClass+'">'+srcLabel+'</span>'+
+        '</div>'+
+      '</div>'+
+      '<div class="skel-c"></div>';
     return card;
   }
 
   var tf=TFM[curTF]||60;
-  var sl2=data.slice(-tf);
-  var lat=sl2[sl2.length-1];
-  var prv=sl2.length>1?sl2[sl2.length-2]:null;
+  var sl=data.slice(-tf);
+  var lat=sl[sl.length-1];
+  var prv=sl.length>1?sl[sl.length-2]:null;
   var chg=prv?lat.value-prv.value:0;
   var pct=prv&&prv.value!==0?((lat.value-prv.value)/Math.abs(prv.value))*100:0;
-  var up=chg>=0;
-  var cd=sl2.slice(-CPTS);
+  var isMoM=!!ind.blsMoM&&!ind._fb;
+  var up = isMoM ? lat.value>=0 : chg>=0;
+  var cd=sl.slice(-CPTS);
   var dv=fmtDisp(lat.value,ind);
-  var isMoM=!!ind.blsMoM;
-  var ds,ctx;
+
+  var deltaStr, ctxStr;
   if(isMoM){
-    up=lat.value>=0;
     var vs=prv?Math.round(lat.value-prv.value):0;
-    ds=(vs>=0?"+":"")+vs+"K vs prior";
-    ctx="Prior: "+(prv?(prv.value>=0?"+":"")+Math.round(prv.value)+"K":"—");
+    deltaStr=(vs>=0?"+":"")+vs+"K vs prior";
+    ctxStr="Prior: "+(prv?(prv.value>=0?"+":"")+Math.round(prv.value)+"K":"—");
   } else {
-    ds=Math.abs(chg).toFixed(ind.unit==="K"?0:2)+(ind.unit==="K"?"K":"");
-    ctx=(pct>=0?"+":"")+pct.toFixed(2)+"%";
+    deltaStr=Math.abs(chg).toFixed(ind.unit==="K"?0:2)+(ind.unit==="K"?"K":"");
+    ctxStr=(pct>=0?"+":"")+pct.toFixed(2)+"%";
   }
   var gc=up?"var(--grn)":"var(--red)";
   var gb=up?"var(--gg)":"var(--gr)";
   var gbd=up?"rgba(16,232,160,.2)":"rgba(255,77,106,.2)";
 
-  card.innerHTML=pill+
+  card.innerHTML=
     '<div class="ct">'+
       '<div class="cm">'+
-        '<div class="lr"><span class="dot" style="background:'+ind.col+';box-shadow:0 0 6px '+ind.col+'60"></span>'+
-        '<span class="lt">'+ind.lbl+'</span></div>'+
+        '<div class="lr">'+
+          '<span class="dot" style="background:'+ind.col+';box-shadow:0 0 6px '+ind.col+'55"></span>'+
+          '<span class="lt">'+ind.lbl+'</span>'+
+        '</div>'+
         '<div class="bv" style="'+(isMoM?'color:'+(up?'var(--grn)':'var(--red)'):'')+'">'+dv+'</div>'+
         '<div class="dr">'+
           '<span class="db" style="color:'+gc+';background:'+gb+';border:1px solid '+gbd+'">'+
-            '<span class="da">'+(up?"▲":"▼")+'</span>'+ds+'</span>'+
-          '<span class="dp">'+ctx+'</span>'+
+            '<span class="da">'+(up?"▲":"▼")+'</span>'+deltaStr+
+          '</span>'+
+          '<span class="dp">'+ctxStr+'</span>'+
         '</div>'+
       '</div>'+
-      '<div class="cv"><div class="dt">'+lat.date+'</div><div class="fb">'+ind.freq.toUpperCase()+'</div></div>'+
+      // Right column: date on top, then source badge, then freq — all stacked, no overlap
+      '<div class="cv">'+
+        '<div class="dt">'+lat.date+'</div>'+
+        '<span class="spl '+srcClass+'">'+srcLabel+'</span>'+
+        '<span class="freqb">'+ind.freq.toUpperCase()+'</span>'+
+      '</div>'+
     '</div>'+
-    '<div class="cd">'+ind.desc+'</div>'+
+    '<div class="cdesc">'+ind.desc+'</div>'+
     '<div class="cdiv"></div>'+
-    '<div class="cs"><div class="cw"><canvas id="chart-'+ind.id+'"></canvas></div></div>';
+    '<div class="cs"><div class="cw"><canvas id="c-'+ind.id+'"></canvas></div></div>';
 
   card._cd=cd; card._ind=ind;
   return card;
@@ -551,14 +609,16 @@ function renderChart(canvas,ind,data){
   charts[ind.id]=new Chart(ctx,{type:type,data:{labels:labels,datasets:ds},options:opts});
 }
 
-// ─────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
 // LOAD ALL
-// ─────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
 function loadAll(){
   hideSB();
+  // Reset proxy lock on manual refresh so we re-probe
+  activeProxy=null; probeInFlight=null;
   document.getElementById("pw").style.display="block";
   document.getElementById("rbtn").disabled=true;
-  var done=0,total=INDS.length,ok=0,fb=0,fail=0;
+  var done=0, total=INDS.length, ok=0, fbCount=0;
   document.getElementById("rbtn").textContent="0/"+total;
 
   function tick(){
@@ -567,6 +627,7 @@ function loadAll(){
     document.getElementById("rbtn").textContent=done+"/"+total;
     if(done>=total) finish();
   }
+
   function finish(){
     document.getElementById("pw").style.display="none";
     document.getElementById("rbtn").disabled=false;
@@ -575,12 +636,12 @@ function loadAll(){
       "UPDATED "+new Date().toLocaleTimeString().toUpperCase()+" · "+ok+"/"+total+" LOADED";
     renderGrid();
     if(ok===0){
-      setSB("❌ All indicators failed. Open F12 → Console for details. Try disabling ad blockers or VPN.","err");
-    } else if(fb>0){
-      setSB("✅ "+ok+" loaded · "+fb+" labor series via FRED fallback (BLS proxy unavailable). Data is still current.","inf");
-      setTimeout(hideSB,7000);
+      setSB("❌ All indicators failed. Open F12 → Console for details. Try disabling ad blockers.","err");
+    } else if(ok<total){
+      setSB("⚠️ "+ok+"/"+total+" loaded"+(fbCount?" · "+fbCount+" labor via FRED fallback":"")+" · Refresh to retry failed indicators.","inf");
+      setTimeout(hideSB,8000);
     } else {
-      setSB("✅ All "+ok+" indicators loaded — BLS & FRED data current.","ok");
+      setSB("✅ All "+ok+" indicators loaded"+(fbCount?" · "+fbCount+" labor via FRED fallback":"")+".","ok");
       setTimeout(hideSB,4000);
     }
   }
@@ -588,43 +649,59 @@ function loadAll(){
   var yrsBack=curTF==="MAX"?20:curTF==="10Y"?11:curTF==="5Y"?6:curTF==="2Y"?3:2;
   var fredLim=curTF==="MAX"?600:200;
 
-  function fetchOne(ind){
+  function fetchOne(ind, done_cb) {
+    var p;
     if(ind.src==="bls"){
-      return fetchBLS(ind.s, yrsBack)
-        .then(function(raw){ allData[ind.id]=transform(raw,ind); ind._fb=false; ok++; if(ok%4===0)renderGrid(); })
+      p = fetchBLS(ind.s, yrsBack, fredLim, ind)
+        .then(function(res){
+          ind._fb = res.usedFallback;
+          // If BLS fallback: FRED ch1 already gives MoM change — don't re-diff
+          var blsMoM = ind.blsMoM && !res.usedFallback;
+          allData[ind.id] = transform(res.data, ind, blsMoM);
+          ok++;
+          if(res.usedFallback) fbCount++;
+          if(ok%4===0) renderGrid();
+        })
         .catch(function(e){
-          console.warn("BLS failed ("+ind.id+"):", e.message, "→ FRED fallback");
-          var fallback=BLS_FALLBACK[ind.s];
-          if(!fallback){ fail++; allData[ind.id]=[]; return; }
-          var cfg={}; for(var k in ind) cfg[k]=ind[k]; cfg.blsMoM=false;
-          return fetchFRED(fallback.s, fredLim, fallback.u)
-            .then(function(raw){ allData[ind.id]=transform(raw,cfg); ind._fb=true; ok++; fb++; if(ok%4===0)renderGrid(); })
-            .catch(function(e2){ console.error("FRED fallback failed ("+ind.id+"):",e2.message); fail++; allData[ind.id]=[]; });
+          console.error("fetchBLS completely failed ("+ind.id+"):", e.message);
+          allData[ind.id]=[];
         });
     } else {
-      return fetchFRED(ind.s, fredLim, ind.u)
-        .then(function(raw){ allData[ind.id]=transform(raw,ind); ind._fb=false; ok++; if(ok%4===0)renderGrid(); })
-        .catch(function(e){ console.error("FRED failed ("+ind.id+"):",e.message); fail++; allData[ind.id]=[]; });
+      p = fetchFRED(ind.s, fredLim, ind.u)
+        .then(function(raw){
+          allData[ind.id]=transform(raw, ind, false);
+          ind._fb=false; ok++;
+          if(ok%4===0) renderGrid();
+        })
+        .catch(function(e){
+          console.error("fetchFRED failed ("+ind.id+"):", e.message);
+          allData[ind.id]=[];
+        });
     }
+    p.then(done_cb).catch(done_cb);
   }
 
-  var queue=INDS.slice();
-  function next(){
+  // Sequential queue with 2 parallel workers
+  // (same as original v1 — proven to work without rate-limiting proxies)
+  var queue = INDS.slice();
+  function worker(){
     if(!queue.length) return;
     var ind=queue.shift();
-    fetchOne(ind).catch(function(){}).then(function(){ tick(); if(queue.length) setTimeout(next,80); });
+    fetchOne(ind, function(){
+      tick();
+      setTimeout(worker, 180); // 180ms gap prevents proxy rate limiting
+    });
   }
-  // 4 parallel streams
-  next(); next(); next(); next();
+  worker(); worker(); // 2 parallel workers
 }
 
-// ─────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
 // INIT
-// ─────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
 buildTFBar(); buildTabs(); renderGrid();
 var _cjs=setInterval(function(){if(typeof Chart!=="undefined"){clearInterval(_cjs);renderGrid();}},200);
 setTimeout(function(){clearInterval(_cjs);},15000);
-setSB("🔄 Racing proxies — fetching live BLS & FRED data...","inf");
+setSB("🔄 Connecting to FRED & BLS...","inf");
 loadAll();
 </script>
 </body>
