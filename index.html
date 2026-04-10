@@ -5,9 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>US Macro Dashboard</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🇺🇸</text></svg>">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,500;9..40,700;9..40,800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script>
-// Chart.js loader with multiple CDN fallbacks
 (function(){
   var cdns = [
     "https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js",
@@ -18,26 +17,12 @@
   ];
   var i = 0;
   function tryNext(){
-    if(i >= cdns.length){
-      console.error("ALL Chart.js CDNs failed!");
-      return;
-    }
+    if(i >= cdns.length){ console.error("ALL Chart.js CDNs failed!"); return; }
     var url = cdns[i++];
-    console.log("Trying Chart.js CDN: " + url);
     var s = document.createElement("script");
     s.src = url;
-    s.onload = function(){
-      if(typeof Chart !== "undefined"){
-        console.log("Chart.js loaded successfully from: " + url);
-      } else {
-        console.warn("Script loaded but Chart is undefined, trying next...");
-        tryNext();
-      }
-    };
-    s.onerror = function(){
-      console.warn("Failed to load: " + url);
-      tryNext();
-    };
+    s.onload = function(){ if(typeof Chart === "undefined"){ tryNext(); } };
+    s.onerror = function(){ tryNext(); };
     document.head.appendChild(s);
   }
   tryNext();
@@ -45,194 +30,466 @@
 </script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
 :root{
-  --bg:#06080C;
-  --card:#0C0F15;
-  --card-hover:#10141C;
-  --surface:#131822;
-  --elevated:#1A2030;
-  --border:rgba(255,255,255,.04);
-  --border-hover:rgba(255,255,255,.08);
-  --t1:#E8ECF4;
-  --t2:#8892A6;
-  --t3:#4A5268;
-  --red:#F0475A;
-  --green:#00D68F;
-  --blue:#3B82F6;
-  --purple:#8B5CF6;
-  --glow-green:rgba(0,214,143,.12);
-  --glow-red:rgba(240,71,90,.12);
-}
-html{background:var(--bg);color:var(--t1);font-family:'DM Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-body{min-height:100vh}
-::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#1E2640;border-radius:3px}
-button{font-family:inherit;cursor:pointer}
+  /* Core Palette */
+  --bg: #070C18;
+  --bg-secondary: #0A1020;
+  --card: #0D1526;
+  --card-hover: #111C30;
+  --surface: #141E33;
+  --elevated: #1A2640;
+  --panel: #0F1929;
 
-/* ── Header ── */
-.header{
-  padding:14px 24px;
-  border-bottom:1px solid var(--border);
-  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
-  position:sticky;top:0;z-index:100;
-  background:rgba(6,8,12,.88);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
-}
-.header-left{display:flex;align-items:center;gap:12px}
-.header-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.logo{
-  width:32px;height:32px;border-radius:8px;
-  background:linear-gradient(135deg,#3B82F6,#8B5CF6);
-  display:flex;align-items:center;justify-content:center;
-  font-size:15px;font-weight:800;color:#fff;
-}
-.title{font-size:15px;font-weight:700;letter-spacing:-0.3px}
-.subtitle{font-size:10px;color:var(--t3);margin-top:1px;font-family:'JetBrains Mono',monospace}
+  /* Borders */
+  --border: rgba(148,163,210,0.08);
+  --border-hover: rgba(148,163,210,0.18);
+  --border-accent: rgba(99,130,255,0.3);
 
-/* ── Timeframe Bar ── */
-.tf-bar{display:flex;gap:1px;background:var(--surface);border-radius:7px;padding:2px}
-.tf-btn{
-  padding:4px 10px;border:none;border-radius:5px;
-  font-size:10px;font-weight:600;font-family:'JetBrains Mono',monospace;
-  background:transparent;color:var(--t3);transition:all .2s;
-}
-.tf-btn.active{background:var(--elevated);color:var(--t1)}
-.tf-btn:hover:not(.active){color:var(--t2)}
-.refresh-btn{
-  padding:5px 14px;border:1px solid var(--border);border-radius:7px;
-  background:transparent;color:var(--t2);font-size:11px;font-weight:600;transition:all .2s;
-}
-.refresh-btn:hover{border-color:var(--border-hover);color:var(--t1)}
-.refresh-btn:disabled{opacity:.5;cursor:default}
+  /* Typography */
+  --t1: #F0F4FF;
+  --t2: #8FA4C8;
+  --t3: #4D6080;
+  --t4: #2D3D55;
 
-/* ── Tabs ── */
-.tabs{
-  padding:8px 24px;display:flex;gap:3px;overflow-x:auto;
-  border-bottom:1px solid var(--border);background:var(--bg);
-  -ms-overflow-style:none;scrollbar-width:none;
-}
-.tabs::-webkit-scrollbar{display:none}
-.tab{
-  padding:5px 12px;border:none;border-radius:16px;
-  font-size:11px;font-weight:600;white-space:nowrap;
-  background:transparent;color:var(--t3);transition:all .2s;
-}
-.tab.active{background:var(--elevated);color:var(--t1)}
-.tab:hover:not(.active){color:var(--t2)}
+  /* Accent Colors */
+  --indigo: #6382FF;
+  --cyan: #22D3EE;
+  --green: #10E8A0;
+  --red: #FF4D6A;
+  --amber: #F59E0B;
+  --violet: #A78BFA;
 
-/* ── Progress ── */
-.progress-wrap{padding:0 24px;margin-top:4px}
-.progress-track{height:2px;background:var(--surface);border-radius:2px;overflow:hidden}
-.progress-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--blue),var(--purple));transition:width .3s ease}
+  /* Glows */
+  --glow-green: rgba(16,232,160,.1);
+  --glow-red: rgba(255,77,106,.1);
+  --glow-indigo: rgba(99,130,255,.12);
 
-/* ── Status ── */
-.status-box{margin:12px 24px;padding:10px 16px;border-radius:10px;font-size:12px;line-height:1.5;display:none}
-.status-box.error{display:block;background:rgba(240,71,90,.06);border:1px solid rgba(240,71,90,.15);color:var(--red)}
-.status-box.success{display:block;background:rgba(0,214,143,.06);border:1px solid rgba(0,214,143,.15);color:var(--green)}
-.status-box.info{display:block;background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.15);color:var(--blue)}
-
-/* ── Grid ── */
-.grid{
-  padding:16px 24px 40px;
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(340px,1fr));
-  gap:8px;
-}
-@media(max-width:440px){.grid{grid-template-columns:1fr;padding:12px 12px 40px}}
-@media(min-width:1600px){.grid{grid-template-columns:repeat(auto-fill,minmax(360px,1fr))}}
-
-/* ── Card ── */
-.card{
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:12px;
-  overflow:hidden;
-  transition:all .3s ease;
-  animation:fadeIn .4s ease both;
-}
-.card:hover{
-  background:var(--card-hover);
-  border-color:var(--border-hover);
+  /* Header accent line */
+  --header-line: linear-gradient(90deg, var(--indigo), var(--cyan), var(--green));
 }
 
-/* Card top section: indicator name + value + change */
-.card-top{
-  padding:14px 16px 0;
-  display:flex;justify-content:space-between;align-items:flex-start;
-}
-.card-meta{flex:1;min-width:0}
-.card-value-area{text-align:right;flex-shrink:0}
-
-.label-row{display:flex;align-items:center;gap:6px;margin-bottom:4px}
-.dot{width:6px;height:6px;border-radius:50%;display:inline-block;flex-shrink:0}
-.label-text{
-  font-size:10px;color:var(--t3);text-transform:uppercase;
-  letter-spacing:.7px;font-weight:600;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+html {
+  background: var(--bg);
+  color: var(--t1);
+  font-family: 'Sora', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  font-size: 14px;
 }
 
-.big-val{
-  font-size:24px;font-weight:700;
-  font-family:'JetBrains Mono',monospace;
-  letter-spacing:-0.5px;line-height:1.1;
+body { min-height: 100vh; }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--elevated); border-radius: 2px; }
+
+button { font-family: inherit; cursor: pointer; }
+a { color: inherit; text-decoration: none; }
+
+/* ═══ HEADER ═══ */
+.header {
+  padding: 0 28px;
+  height: 58px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(7, 12, 24, 0.92);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
 }
 
-.delta-row{display:flex;align-items:center;gap:6px;margin-top:5px}
-.delta-badge{
-  font-size:11px;font-weight:600;font-family:'JetBrains Mono',monospace;
-  display:inline-flex;align-items:center;gap:2px;
-  padding:1px 6px;border-radius:4px;
-}
-.delta-pct{font-size:10px;color:var(--t3);font-family:'JetBrains Mono',monospace}
-.date-text{font-size:9px;color:var(--t3);font-family:'JetBrains Mono',monospace}
-.freq-text{font-size:9px;color:var(--t3);margin-top:1px;opacity:.5}
-
-/* Card chart section: always visible */
-.chart-section{
-  padding:4px 8px 10px;
-  position:relative;
-}
-.chart-wrap{
-  position:relative;
-  height:110px;
-  width:100%;
-}
-.chart-wrap canvas{
-  position:absolute;
-  top:0;left:0;
-  width:100%!important;
-  height:100%!important;
-}
-.chart-desc{
-  font-size:9px;color:var(--t3);
-  padding:2px 8px 0;
-  opacity:.5;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+/* Accent line at very top */
+.header::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--header-line);
 }
 
-/* Skeleton loader */
-.skeleton-chart{
-  height:100px;margin:4px 8px 10px;
-  border-radius:8px;
-  background:linear-gradient(90deg,var(--surface) 25%,#1A2030 50%,var(--surface) 75%);
-  background-size:200% 100%;
-  animation:shimmer 1.5s infinite;
-}
-.skeleton-val{
-  height:24px;width:80px;border-radius:6px;
-  background:linear-gradient(90deg,var(--surface) 25%,#1A2030 50%,var(--surface) 75%);
-  background-size:200% 100%;
-  animation:shimmer 1.5s infinite;
-}
-@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.header-left { display: flex; align-items: center; gap: 14px; }
+.header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
-/* ── Footer ── */
-.footer{
-  padding:16px 24px;text-align:center;
-  border-top:1px solid var(--border);
-  color:var(--t3);font-size:10px;line-height:1.7;
+.logo {
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #3B5BFF 0%, #22D3EE 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 800; color: #fff;
+  letter-spacing: -0.5px;
+  box-shadow: 0 0 20px rgba(59,91,255,0.35);
+  flex-shrink: 0;
 }
-.footer span{color:var(--t2)}
 
-@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.brand { display: flex; flex-direction: column; gap: 1px; }
+.brand-name {
+  font-size: 14px; font-weight: 700;
+  color: var(--t1);
+  letter-spacing: -0.3px;
+}
+.brand-sub {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9.5px;
+  color: var(--t3);
+  letter-spacing: 0.3px;
+}
+
+/* Divider */
+.header-divider {
+  width: 1px; height: 20px;
+  background: var(--border);
+}
+
+/* ═══ TIMEFRAME BAR ═══ */
+.tf-bar {
+  display: flex;
+  gap: 1px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 3px;
+}
+
+.tf-btn {
+  padding: 4px 11px;
+  border: none;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: 'IBM Plex Mono', monospace;
+  background: transparent;
+  color: var(--t3);
+  transition: all .18s ease;
+  letter-spacing: 0.3px;
+}
+
+.tf-btn.active {
+  background: var(--indigo);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(99,130,255,.4);
+}
+
+.tf-btn:hover:not(.active) {
+  color: var(--t2);
+  background: var(--elevated);
+}
+
+/* ═══ REFRESH BUTTON ═══ */
+.refresh-btn {
+  padding: 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--t2);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  transition: all .18s ease;
+}
+
+.refresh-btn:hover {
+  border-color: var(--indigo);
+  color: var(--t1);
+  background: var(--glow-indigo);
+}
+
+.refresh-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ═══ TABS ═══ */
+.tabs {
+  padding: 0 28px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar { display: none; }
+
+.tab {
+  padding: 5px 13px;
+  border: none;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  background: transparent;
+  color: var(--t3);
+  transition: all .18s ease;
+  letter-spacing: 0.1px;
+}
+
+.tab.active {
+  background: var(--elevated);
+  color: var(--t1);
+  font-weight: 600;
+}
+
+.tab:hover:not(.active) {
+  color: var(--t2);
+  background: var(--surface);
+}
+
+/* ═══ PROGRESS BAR ═══ */
+.progress-wrap { padding: 0 28px; margin-top: 6px; }
+.progress-track {
+  height: 2px;
+  background: var(--surface);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--header-line);
+  transition: width .3s ease;
+}
+
+/* ═══ STATUS BOX ═══ */
+.status-box {
+  margin: 14px 28px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 500;
+  display: none;
+}
+.status-box.error   { display:block; background:rgba(255,77,106,.06); border:1px solid rgba(255,77,106,.2); color:#FF6B84; }
+.status-box.success { display:block; background:rgba(16,232,160,.06); border:1px solid rgba(16,232,160,.2); color:#10E8A0; }
+.status-box.info    { display:block; background:rgba(99,130,255,.06); border:1px solid rgba(99,130,255,.2); color:#809BFF; }
+
+/* ═══ GRID ═══ */
+.grid {
+  padding: 20px 28px 60px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 10px;
+}
+
+@media(max-width: 480px) { .grid { grid-template-columns: 1fr; padding: 14px 14px 60px; } }
+@media(min-width: 1600px) { .grid { grid-template-columns: repeat(auto-fill, minmax(370px, 1fr)); } }
+
+/* ═══ CARD ═══ */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color .2s ease, background .2s ease, transform .2s ease, box-shadow .2s ease;
+  animation: fadeUp .4s ease both;
+  position: relative;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-accent), transparent);
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+
+.card:hover {
+  background: var(--card-hover);
+  border-color: var(--border-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 32px rgba(0,0,0,.4), 0 0 0 1px var(--border-hover);
+}
+
+.card:hover::before { opacity: 1; }
+
+/* Card Layout */
+.card-top {
+  padding: 16px 18px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.card-meta { flex: 1; min-width: 0; }
+.card-value-area { text-align: right; flex-shrink: 0; }
+
+/* Label row */
+.label-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 8px;
+}
+
+.dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.label-text {
+  font-size: 10px;
+  color: var(--t2);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Value */
+.big-val {
+  font-size: 26px;
+  font-weight: 700;
+  font-family: 'IBM Plex Mono', monospace;
+  letter-spacing: -0.5px;
+  line-height: 1;
+  color: var(--t1);
+}
+
+/* Delta */
+.delta-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 7px;
+}
+
+.delta-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  font-family: 'IBM Plex Mono', monospace;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.delta-arrow { font-size: 8px; }
+
+.delta-pct {
+  font-size: 10px;
+  color: var(--t3);
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+/* Meta: date & freq */
+.date-text {
+  font-size: 10px;
+  color: var(--t2);
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 500;
+}
+
+.freq-badge {
+  display: inline-block;
+  margin-top: 5px;
+  font-size: 9px;
+  color: var(--t3);
+  font-family: 'IBM Plex Mono', monospace;
+  background: var(--surface);
+  padding: 2px 7px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  letter-spacing: 0.3px;
+}
+
+/* Chart */
+.chart-desc {
+  font-size: 9.5px;
+  color: var(--t3);
+  padding: 10px 18px 0;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0.1px;
+}
+
+.chart-section { padding: 8px 10px 12px; }
+.chart-wrap { position: relative; height: 100px; width: 100%; }
+.chart-wrap canvas {
+  position: absolute; top: 0; left: 0;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Skeleton */
+.skeleton-val {
+  height: 26px; width: 90px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, var(--surface) 25%, var(--elevated) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite;
+}
+
+.skeleton-chart {
+  height: 90px; margin: 8px 10px 12px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--surface) 25%, var(--elevated) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite;
+}
+
+/* Separator line inside card */
+.card-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0 18px;
+  opacity: 0.7;
+}
+
+/* ═══ FOOTER ═══ */
+.footer {
+  padding: 20px 28px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--t3);
+  font-size: 10.5px;
+  line-height: 1.8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.footer-brand {
+  color: var(--t2);
+  font-weight: 600;
+}
+
+.footer-right {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9.5px;
+  color: var(--t4);
+}
+
+/* ═══ KEYFRAMES ═══ */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 </style>
 </head>
 <body>
@@ -240,21 +497,34 @@ button{font-family:inherit;cursor:pointer}
 <header class="header">
   <div class="header-left">
     <div class="logo">M</div>
-    <div>
-      <div class="title">US Macro Dashboard</div>
-      <div class="subtitle" id="subtitle">Connecting...</div>
+    <div class="brand">
+      <div class="brand-name">US Macro Dashboard</div>
+      <div class="brand-sub" id="subtitle">CONNECTING TO FRED API...</div>
     </div>
+    <div class="header-divider"></div>
   </div>
   <div class="header-right">
     <div class="tf-bar" id="tf-bar"></div>
     <button class="refresh-btn" id="refresh-btn" onclick="loadAll()">↻ Refresh</button>
   </div>
 </header>
+
 <nav class="tabs" id="tabs"></nav>
-<div class="progress-wrap" id="progress-wrap" style="display:none"><div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div></div>
+
+<div class="progress-wrap" id="progress-wrap" style="display:none">
+  <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+</div>
+
 <div class="status-box" id="status-box"></div>
+
 <div class="grid" id="grid"></div>
-<footer class="footer">Data sourced from <span>Federal Reserve Economic Data (FRED)</span> · Federal Reserve Bank of St. Louis<br>Dashboard auto-refreshes on page load</footer>
+
+<footer class="footer">
+  <div>
+    Data sourced from <span class="footer-brand">Federal Reserve Economic Data (FRED)</span> · Federal Reserve Bank of St. Louis
+  </div>
+  <div class="footer-right">AUTO-REFRESHES ON PAGE LOAD</div>
+</footer>
 
 <script>
 // ═══════════════════════════════════════════════
@@ -263,7 +533,6 @@ button{font-family:inherit;cursor:pointer}
 var FRED_API_KEY = "bc1f32b397114934e95d879ec2646074";
 // ═══════════════════════════════════════════════
 
-// CORS proxy list
 var PROXY_LIST = [
   function(u){ return "https://corsproxy.io/?" + encodeURIComponent(u); },
   function(u){ return "https://api.cors.lol/?url=" + encodeURIComponent(u); },
@@ -272,46 +541,54 @@ var PROXY_LIST = [
 var workingProxy = null;
 
 var INDICATORS = [
-  { id:"cpi",           label:"CPI (YoY%)",               series:"CPIAUCNS",        cat:"inflation", desc:"Consumer Price Index, All Urban (NSA)", fredUnits:"pc1", unit:"%",  type:"area",      color:"#F0475A", freq:"Monthly" },
-  { id:"coreCpi",       label:"Core CPI (YoY%)",           series:"CPILFESL",        cat:"inflation", desc:"CPI Less Food & Energy",                fredUnits:"pc1", unit:"%",  type:"area",      color:"#FB7185", freq:"Monthly" },
+  { id:"cpi",           label:"CPI (YoY%)",               series:"CPIAUCNS",        cat:"inflation", desc:"Consumer Price Index, All Urban (NSA)", fredUnits:"pc1", unit:"%",  type:"area",      color:"#FF4D6A", freq:"Monthly" },
+  { id:"coreCpi",       label:"Core CPI (YoY%)",           series:"CPILFESL",        cat:"inflation", desc:"CPI Less Food & Energy",                fredUnits:"pc1", unit:"%",  type:"area",      color:"#FF7B8A", freq:"Monthly" },
   { id:"pce",           label:"PCE Inflation (YoY%)",      series:"PCEPI",           cat:"inflation", desc:"PCE Price Index",                       fredUnits:"pc1", unit:"%",  type:"area",      color:"#E11D48", freq:"Monthly" },
   { id:"ppi",           label:"PPI (YoY%)",               series:"PPIACO",          cat:"inflation", desc:"Producer Price Index, All Commodities",  fredUnits:"pc1", unit:"%",  type:"bar",       color:"#F97316", freq:"Monthly" },
-  { id:"fedFunds",      label:"Fed Funds Rate",            series:"FEDFUNDS",        cat:"rates",     desc:"Effective Federal Funds Rate",           fredUnits:"lin", unit:"%",  type:"step",      color:"#8B5CF6", freq:"Monthly" },
-  { id:"treasury10y2y", label:"10Y-2Y Spread",             series:"T10Y2Y",          cat:"rates",     desc:"10Y minus 2Y Treasury Spread",          fredUnits:"lin", unit:"%",  type:"area_zero", color:"#6366F1", freq:"Daily" },
-  { id:"treasury10y",   label:"10Y Treasury Yield",        series:"DGS10",           cat:"rates",     desc:"10-Year Treasury Constant Maturity",    fredUnits:"lin", unit:"%",  type:"line",      color:"#A78BFA", freq:"Daily" },
-  { id:"unemployment",  label:"Unemployment Rate",         series:"UNRATE",          cat:"labor",     desc:"Civilian Unemployment Rate",             fredUnits:"lin", unit:"%",  type:"area",      color:"#3B82F6", freq:"Monthly" },
-  { id:"nfp",           label:"Nonfarm Payrolls (MoM)",    series:"PAYEMS",          cat:"labor",     desc:"Total Nonfarm, MoM Change",             fredUnits:"ch1", unit:"K",  type:"bar_pn",    color:"#60A5FA", freq:"Monthly", note:"chg" },
-  { id:"initialClaims", label:"Initial Jobless Claims",    series:"ICSA",            cat:"labor",     desc:"Initial Claims, Unemployment Insurance", fredUnits:"lin", unit:"K",  type:"line",      color:"#38BDF8", freq:"Weekly", div:1000 },
-  { id:"participRate",  label:"Labor Force Participation", series:"CIVPART",         cat:"labor",     desc:"Civilian Labor Force Participation Rate",fredUnits:"lin", unit:"%",  type:"line",      color:"#7DD3FC", freq:"Monthly" },
-  { id:"gdp",           label:"Real GDP Growth (QoQ%)",    series:"A191RL1Q225SBEA", cat:"growth",    desc:"Real GDP, Quarterly Annualized",        fredUnits:"lin", unit:"%",  type:"bar_pn",    color:"#00D68F", freq:"Quarterly" },
+  { id:"fedFunds",      label:"Fed Funds Rate",            series:"FEDFUNDS",        cat:"rates",     desc:"Effective Federal Funds Rate",           fredUnits:"lin", unit:"%",  type:"step",      color:"#A78BFA", freq:"Monthly" },
+  { id:"treasury10y2y", label:"10Y–2Y Spread",             series:"T10Y2Y",          cat:"rates",     desc:"10Y minus 2Y Treasury Spread",          fredUnits:"lin", unit:"%",  type:"area_zero", color:"#6382FF", freq:"Daily" },
+  { id:"treasury10y",   label:"10Y Treasury Yield",        series:"DGS10",           cat:"rates",     desc:"10-Year Treasury Constant Maturity",    fredUnits:"lin", unit:"%",  type:"line",      color:"#818CF8", freq:"Daily" },
+  { id:"unemployment",  label:"Unemployment Rate",         series:"UNRATE",          cat:"labor",     desc:"Civilian Unemployment Rate",             fredUnits:"lin", unit:"%",  type:"area",      color:"#22D3EE", freq:"Monthly" },
+  { id:"nfp",           label:"Nonfarm Payrolls (MoM)",    series:"PAYEMS",          cat:"labor",     desc:"Total Nonfarm, MoM Change",             fredUnits:"ch1", unit:"K",  type:"bar_pn",    color:"#38BDF8", freq:"Monthly", note:"chg" },
+  { id:"initialClaims", label:"Initial Jobless Claims",    series:"ICSA",            cat:"labor",     desc:"Initial Claims, Unemployment Insurance", fredUnits:"lin", unit:"K",  type:"line",      color:"#7DD3FC", freq:"Weekly", div:1000 },
+  { id:"participRate",  label:"Labor Force Participation", series:"CIVPART",         cat:"labor",     desc:"Civilian Labor Force Participation Rate",fredUnits:"lin", unit:"%",  type:"line",      color:"#93C5FD", freq:"Monthly" },
+  { id:"gdp",           label:"Real GDP Growth (QoQ%)",    series:"A191RL1Q225SBEA", cat:"growth",    desc:"Real GDP, Quarterly Annualized",        fredUnits:"lin", unit:"%",  type:"bar_pn",    color:"#10E8A0", freq:"Quarterly" },
   { id:"retailSales",   label:"Retail Sales (MoM%)",       series:"RSAFS",           cat:"growth",    desc:"Advance Retail Sales: Total",            fredUnits:"pch", unit:"%",  type:"bar_pn",    color:"#34D399", freq:"Monthly" },
   { id:"indProd",       label:"Industrial Prod. (YoY%)",   series:"INDPRO",          cat:"growth",    desc:"Industrial Production: Total Index",     fredUnits:"pc1", unit:"%",  type:"area",      color:"#6EE7B7", freq:"Monthly" },
   { id:"capUtil",       label:"Capacity Utilization",      series:"TCU",             cat:"growth",    desc:"Total Industry Capacity Utilization",    fredUnits:"lin", unit:"%",  type:"line",      color:"#A7F3D0", freq:"Monthly" },
-  { id:"umich",         label:"Consumer Sentiment",        series:"UMCSENT",         cat:"sentiment", desc:"U. of Michigan Consumer Sentiment",     fredUnits:"lin", unit:"",   type:"area",      color:"#FBBF24", freq:"Monthly" },
+  { id:"umich",         label:"Consumer Sentiment",        series:"UMCSENT",         cat:"sentiment", desc:"U. of Michigan Consumer Sentiment",     fredUnits:"lin", unit:"",   type:"area",      color:"#F59E0B", freq:"Monthly" },
   { id:"confBoard",     label:"Consumer Confidence",       series:"CSCICP03USM665S", cat:"sentiment", desc:"OECD Consumer Confidence Indicator",    fredUnits:"lin", unit:"",   type:"line",      color:"#FCD34D", freq:"Monthly" },
-  { id:"housingStarts", label:"Housing Starts",            series:"HOUST",           cat:"housing",   desc:"New Housing Units Started (K)",          fredUnits:"lin", unit:"K",  type:"bar",       color:"#06B6D4", freq:"Monthly" },
-  { id:"buildPermits",  label:"Building Permits",          series:"PERMIT",          cat:"housing",   desc:"New Private Housing Units Authorized",   fredUnits:"lin", unit:"K",  type:"line",      color:"#22D3EE", freq:"Monthly" },
-  { id:"caseShiller",   label:"Case-Shiller Home (YoY%)",  series:"CSUSHPINSA",      cat:"housing",   desc:"S&P/Case-Shiller National Home Price",  fredUnits:"pc1", unit:"%",  type:"area",      color:"#67E8F9", freq:"Monthly" },
+  { id:"housingStarts", label:"Housing Starts",            series:"HOUST",           cat:"housing",   desc:"New Housing Units Started (K)",          fredUnits:"lin", unit:"K",  type:"bar",       color:"#22D3EE", freq:"Monthly" },
+  { id:"buildPermits",  label:"Building Permits",          series:"PERMIT",          cat:"housing",   desc:"New Private Housing Units Authorized",   fredUnits:"lin", unit:"K",  type:"line",      color:"#06B6D4", freq:"Monthly" },
+  { id:"caseShiller",   label:"Case-Shiller (YoY%)",       series:"CSUSHPINSA",      cat:"housing",   desc:"S&P/Case-Shiller National Home Price",  fredUnits:"pc1", unit:"%",  type:"area",      color:"#67E8F9", freq:"Monthly" },
   { id:"tradeBal",      label:"Trade Balance",             series:"BOPGSTB",         cat:"trade",     desc:"Trade Balance: Goods & Services ($B)",   fredUnits:"lin", unit:"$B", type:"area_zero", color:"#EC4899", freq:"Monthly" },
   { id:"m2",            label:"M2 Money Supply (YoY%)",    series:"M2SL",            cat:"monetary",  desc:"M2 Money Stock",                        fredUnits:"pc1", unit:"%",  type:"area",      color:"#C084FC", freq:"Monthly" }
 ];
 
-var CATEGORIES=[
-  {key:"all",label:"All Indicators",icon:"◉"},{key:"inflation",label:"Inflation",icon:"🔥"},
-  {key:"rates",label:"Rates & Yields",icon:"📐"},{key:"labor",label:"Labor Market",icon:"👷"},
-  {key:"growth",label:"Growth & Output",icon:"🏭"},{key:"sentiment",label:"Sentiment",icon:"📊"},
-  {key:"housing",label:"Housing",icon:"🏠"},{key:"trade",label:"Trade",icon:"🚢"},
-  {key:"monetary",label:"Monetary",icon:"💰"}
+var CATEGORIES = [
+  {key:"all",label:"All Indicators",icon:"◈"},
+  {key:"inflation",label:"Inflation",icon:"▲"},
+  {key:"rates",label:"Rates & Yields",icon:"◆"},
+  {key:"labor",label:"Labor Market",icon:"●"},
+  {key:"growth",label:"Growth & Output",icon:"■"},
+  {key:"sentiment",label:"Sentiment",icon:"◐"},
+  {key:"housing",label:"Housing",icon:"▣"},
+  {key:"trade",label:"Trade",icon:"◇"},
+  {key:"monetary",label:"Monetary",icon:"○"}
 ];
 
-var TF_OPTIONS=["1Y","2Y","5Y","10Y","MAX"];
-var TF_MAP={"1Y":12,"2Y":24,"5Y":60,"10Y":120,"MAX":9999};
-// Chart display: always show last 18 data points for the inline chart
+var TF_OPTIONS = ["1Y","2Y","5Y","10Y","MAX"];
+var TF_MAP = {"1Y":12,"2Y":24,"5Y":60,"10Y":120,"MAX":9999};
 var CHART_POINTS = 18;
-var allData={},charts={},currentTF="5Y",currentCat="all";
+var allData = {}, charts = {}, currentTF = "5Y", currentCat = "all";
 
-function showStatus(m,t){var e=document.getElementById("status-box");e.className="status-box "+t;e.innerHTML=m;e.style.display="block"}
-function hideStatus(){document.getElementById("status-box").style.display="none"}
+function showStatus(m, t) {
+  var e = document.getElementById("status-box");
+  e.className = "status-box " + t;
+  e.innerHTML = m;
+  e.style.display = "block";
+}
+function hideStatus() { document.getElementById("status-box").style.display = "none"; }
 
 function fetchWithProxy(url) {
   if (workingProxy !== null) {
@@ -332,11 +609,8 @@ function fetchWithProxy(url) {
     return fetch(proxy(url)).then(function(r) {
       if (!r.ok) throw new Error("HTTP " + r.status);
       workingProxy = proxy;
-      console.log("Working proxy found!");
       return r.json();
-    }).catch(function() {
-      return tryNext();
-    });
+    }).catch(function() { return tryNext(); });
   }
   return tryNext();
 }
@@ -347,79 +621,85 @@ function fetchFRED(seriesId, limit, fredUnits) {
     + "&units=" + (fredUnits || "lin");
   return fetchWithProxy(url).then(function(j) {
     if (j.error_code) throw new Error(j.error_message || "FRED error");
-    return j.observations.filter(function(o){return o.value!=="."}).map(function(o){return{date:o.date,value:parseFloat(o.value)}}).reverse();
+    return j.observations
+      .filter(function(o) { return o.value !== "."; })
+      .map(function(o) { return { date: o.date, value: parseFloat(o.value) }; })
+      .reverse();
   });
 }
 
-function transform(raw,cfg){
-  var d=raw.slice();
-  if(cfg.div) d=d.map(function(v){return{date:v.date,value:v.value/cfg.div}});
+function transform(raw, cfg) {
+  var d = raw.slice();
+  if (cfg.div) d = d.map(function(v) { return { date: v.date, value: v.value / cfg.div }; });
   return d;
 }
 
-function fmtVal(v,cfg){
-  if(cfg.unit==="$B") return "$"+v.toFixed(1)+"B";
-  if(cfg.unit==="K") return v.toFixed(0)+"K";
-  if(cfg.unit==="%") return v.toFixed(2)+"%";
+function fmtVal(v, cfg) {
+  if (cfg.unit === "$B") return "$" + v.toFixed(1) + "B";
+  if (cfg.unit === "K")  return v.toFixed(0) + "K";
+  if (cfg.unit === "%")  return v.toFixed(2) + "%";
   return v.toFixed(2);
 }
 
-function buildTFBar(){
-  var bar=document.getElementById("tf-bar");bar.innerHTML="";
-  TF_OPTIONS.forEach(function(tf){
-    var b=document.createElement("button");
-    b.className="tf-btn"+(currentTF===tf?" active":"");
-    b.textContent=tf;
-    b.onclick=function(){currentTF=tf;buildTFBar();loadAll()};
+function buildTFBar() {
+  var bar = document.getElementById("tf-bar");
+  bar.innerHTML = "";
+  TF_OPTIONS.forEach(function(tf) {
+    var b = document.createElement("button");
+    b.className = "tf-btn" + (currentTF === tf ? " active" : "");
+    b.textContent = tf;
+    b.onclick = function() { currentTF = tf; buildTFBar(); loadAll(); };
     bar.appendChild(b);
   });
 }
 
-function buildTabs(){
-  var nav=document.getElementById("tabs");nav.innerHTML="";
-  CATEGORIES.forEach(function(cat){
-    var b=document.createElement("button");
-    b.className="tab"+(currentCat===cat.key?" active":"");
-    b.textContent=cat.icon+" "+cat.label;
-    b.onclick=function(){currentCat=cat.key;buildTabs();renderGrid()};
+function buildTabs() {
+  var nav = document.getElementById("tabs");
+  nav.innerHTML = "";
+  CATEGORIES.forEach(function(cat) {
+    var b = document.createElement("button");
+    b.className = "tab" + (currentCat === cat.key ? " active" : "");
+    b.textContent = cat.icon + "  " + cat.label;
+    b.onclick = function() { currentCat = cat.key; buildTabs(); renderGrid(); };
     nav.appendChild(b);
   });
 }
 
-function renderGrid(){
-  var grid=document.getElementById("grid");
-  // Destroy existing charts
-  Object.keys(charts).forEach(function(k){if(charts[k]){charts[k].destroy();delete charts[k]}});
-  grid.innerHTML="";
+function renderGrid() {
+  var grid = document.getElementById("grid");
+  Object.keys(charts).forEach(function(k) { if (charts[k]) { charts[k].destroy(); delete charts[k]; } });
+  grid.innerHTML = "";
   var cards = [];
-  INDICATORS.filter(function(ind){return currentCat==="all"||ind.cat===currentCat}).forEach(function(ind,i){
-    var card = buildCard(ind, i);
-    grid.appendChild(card);
-    cards.push(card);
-  });
-  // Now all cards are in the DOM — render charts after layout completes
-  setTimeout(function(){
-    cards.forEach(function(card){
-      if(card._chartData && card._ind){
+  INDICATORS.filter(function(ind) { return currentCat === "all" || ind.cat === currentCat; })
+    .forEach(function(ind, i) {
+      var card = buildCard(ind, i);
+      grid.appendChild(card);
+      cards.push(card);
+    });
+  setTimeout(function() {
+    cards.forEach(function(card) {
+      if (card._chartData && card._ind) {
         var canvas = document.getElementById("chart-" + card._ind.id);
-        if(canvas) renderChart(canvas, card._ind, card._chartData);
+        if (canvas) renderChart(canvas, card._ind, card._chartData);
       }
     });
   }, 50);
 }
 
-function buildCard(ind, idx){
+function buildCard(ind, idx) {
   var data = allData[ind.id] || [];
   var card = document.createElement("div");
   card.className = "card";
-  card.style.animationDelay = (idx * 30) + "ms";
+  card.style.animationDelay = (idx * 25) + "ms";
 
-  // No data yet — show skeleton
-  if(!data.length){
+  if (!data.length) {
     card.innerHTML =
       '<div class="card-top">' +
         '<div class="card-meta">' +
-          '<div class="label-row"><span class="dot" style="background:'+ind.color+';opacity:.3"></span><span class="label-text">'+ind.label+'</span></div>' +
+          '<div class="label-row">' +
+            '<span class="dot" style="background:' + ind.color + ';opacity:.3"></span>' +
+            '<span class="label-text">' + ind.label + '</span>' +
+          '</div>' +
           '<div class="skeleton-val"></div>' +
         '</div>' +
       '</div>' +
@@ -427,7 +707,6 @@ function buildCard(ind, idx){
     return card;
   }
 
-  // Full data available
   var tf = TF_MAP[currentTF] || 60;
   var fullSliced = data.slice(-tf);
   var latest = fullSliced[fullSliced.length - 1];
@@ -436,123 +715,128 @@ function buildCard(ind, idx){
   var pct = prev && prev.value !== 0 ? ((latest.value - prev.value) / Math.abs(prev.value)) * 100 : 0;
   var up = change >= 0;
 
-  // Chart data: last 18 points from the full sliced data
   var chartData = fullSliced.slice(-CHART_POINTS);
 
-  var upColor = "var(--green)";
-  var downColor = "var(--red)";
-  var changeColor = up ? upColor : downColor;
-  var changeBg = up ? "var(--glow-green)" : "var(--glow-red)";
+  var changeColor = up ? "var(--green)" : "var(--red)";
+  var changeBg    = up ? "var(--glow-green)" : "var(--glow-red)";
+  var changeBorder = up ? "rgba(16,232,160,.2)" : "rgba(255,77,106,.2)";
 
   card.innerHTML =
     '<div class="card-top">' +
       '<div class="card-meta">' +
         '<div class="label-row">' +
-          '<span class="dot" style="background:'+ind.color+';box-shadow:0 0 6px '+ind.color+'50"></span>' +
-          '<span class="label-text">'+ind.label+'</span>' +
+          '<span class="dot" style="background:' + ind.color + ';box-shadow:0 0 6px ' + ind.color + '60"></span>' +
+          '<span class="label-text">' + ind.label + '</span>' +
         '</div>' +
-        '<div class="big-val">'+fmtVal(latest.value,ind)+'</div>' +
+        '<div class="big-val">' + fmtVal(latest.value, ind) + '</div>' +
         '<div class="delta-row">' +
-          '<span class="delta-badge" style="color:'+changeColor+';background:'+changeBg+'">' +
-            '<span style="font-size:8px">'+(up?"▲":"▼")+'</span> '+Math.abs(change).toFixed(2)+
+          '<span class="delta-badge" style="color:' + changeColor + ';background:' + changeBg + ';border:1px solid ' + changeBorder + '">' +
+            '<span class="delta-arrow">' + (up ? "▲" : "▼") + '</span>' +
+            Math.abs(change).toFixed(2) +
           '</span>' +
-          '<span class="delta-pct">'+(pct>=0?"+":"")+pct.toFixed(2)+'%</span>' +
+          '<span class="delta-pct">' + (pct >= 0 ? "+" : "") + pct.toFixed(2) + '%</span>' +
         '</div>' +
       '</div>' +
       '<div class="card-value-area">' +
-        '<div class="date-text">'+latest.date+'</div>' +
-        '<div class="freq-text">'+ind.freq+'</div>' +
+        '<div class="date-text">' + latest.date + '</div>' +
+        '<div class="freq-badge">' + ind.freq.toUpperCase() + '</div>' +
       '</div>' +
     '</div>' +
-    '<div class="chart-desc">'+ind.desc+'</div>' +
-    '<div class="chart-section"><div class="chart-wrap"><canvas id="chart-'+ind.id+'"></canvas></div></div>';
+    '<div class="chart-desc">' + ind.desc + '</div>' +
+    '<div class="card-divider" style="margin-top:12px"></div>' +
+    '<div class="chart-section"><div class="chart-wrap"><canvas id="chart-' + ind.id + '"></canvas></div></div>';
 
-  // Store chart data on the element so renderGrid can draw after append
   card._chartData = chartData;
   card._ind = ind;
-
   return card;
 }
 
-function renderChart(canvas, ind, data){
-  if(typeof Chart === "undefined"){
-    console.warn("renderChart called but Chart.js not loaded yet for: " + ind.id);
-    return;
-  }
-  var labels = data.map(function(d){
+function renderChart(canvas, ind, data) {
+  if (typeof Chart === "undefined") return;
+
+  var labels = data.map(function(d) {
     var p = d.date.split("-");
     return p[1] + "/" + p[0].slice(2);
   });
-  var values = data.map(function(d){ return d.value; });
+  var values = data.map(function(d) { return d.value; });
   var ctx = canvas.getContext("2d");
 
-  if(charts[ind.id]) charts[ind.id].destroy();
+  if (charts[ind.id]) charts[ind.id].destroy();
 
   var type, datasets;
+
   var baseOpts = {
     responsive: true,
     maintainAspectRatio: false,
-    animation: { duration: 300, easing: 'easeOutQuart' },
+    animation: { duration: 350, easing: 'easeOutQuart' },
     interaction: { mode: 'index', intersect: false },
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: "#111620",
-        borderColor: "#2A3550",
+        backgroundColor: "#0D1526",
+        borderColor: "rgba(99,130,255,0.25)",
         borderWidth: 1,
-        titleColor: "#7A8499",
-        bodyColor: "#E8ECF4",
-        titleFont: { family: "'DM Sans'", size: 10 },
-        bodyFont: { family: "'JetBrains Mono'", size: 11, weight: '600' },
-        padding: 8,
+        titleColor: "#4D6080",
+        bodyColor: "#F0F4FF",
+        titleFont: { family: "'Sora'", size: 9.5, weight: '500' },
+        bodyFont: { family: "'IBM Plex Mono'", size: 11, weight: '600' },
+        padding: 10,
         cornerRadius: 6,
         displayColors: false,
         callbacks: {
-          label: function(c){ return fmtVal(c.parsed.y, ind); }
+          label: function(c) { return fmtVal(c.parsed.y, ind); }
         }
       }
     },
     scales: {
       x: {
-        ticks: { font: { family: "'JetBrains Mono'", size: 9 }, color: "#3A4258", maxTicksLimit: 5 },
+        ticks: {
+          font: { family: "'IBM Plex Mono'", size: 8.5 },
+          color: "#2D3D55",
+          maxTicksLimit: 5
+        },
         grid: { display: false },
         border: { display: false }
       },
       y: {
         ticks: {
-          font: { family: "'JetBrains Mono'", size: 9 }, color: "#3A4258", maxTicksLimit: 4,
-          callback: function(v){ return Math.abs(v)>=1000?(v/1000).toFixed(0)+"k":Number.isInteger(v)?v:v.toFixed(1); }
+          font: { family: "'IBM Plex Mono'", size: 8.5 },
+          color: "#2D3D55",
+          maxTicksLimit: 4,
+          callback: function(v) {
+            return Math.abs(v) >= 1000 ? (v / 1000).toFixed(0) + "k" : Number.isInteger(v) ? v : v.toFixed(1);
+          }
         },
-        grid: { color: "rgba(255,255,255,.02)", drawTicks: false },
+        grid: { color: "rgba(148,163,210,.04)", drawTicks: false },
         border: { display: false }
       }
     }
   };
 
-  if(ind.type === "bar" || ind.type === "bar_pn"){
+  if (ind.type === "bar" || ind.type === "bar_pn") {
     type = "bar";
     var bg = ind.type === "bar_pn"
-      ? values.map(function(v){ return v >= 0 ? "rgba(0,214,143,.6)" : "rgba(240,71,90,.6)"; })
+      ? values.map(function(v) { return v >= 0 ? "rgba(16,232,160,.55)" : "rgba(255,77,106,.55)"; })
       : ind.color + "99";
     var borderCol = ind.type === "bar_pn"
-      ? values.map(function(v){ return v >= 0 ? "rgba(0,214,143,.9)" : "rgba(240,71,90,.9)"; })
+      ? values.map(function(v) { return v >= 0 ? "rgba(16,232,160,.85)" : "rgba(255,77,106,.85)"; })
       : ind.color;
-    datasets = [{ data: values, backgroundColor: bg, borderColor: borderCol, borderWidth: 1, borderRadius: 2, maxBarThickness: 16 }];
+    datasets = [{ data: values, backgroundColor: bg, borderColor: borderCol, borderWidth: 1, borderRadius: 2, maxBarThickness: 14 }];
   }
-  else if(ind.type === "area" || ind.type === "area_zero"){
+  else if (ind.type === "area" || ind.type === "area_zero") {
     type = "line";
     var gradient = ctx.createLinearGradient(0, 0, 0, 100);
-    gradient.addColorStop(0, ind.color + "30");
+    gradient.addColorStop(0, ind.color + "2A");
     gradient.addColorStop(1, ind.color + "03");
     datasets = [{ data: values, borderColor: ind.color, borderWidth: 1.5, backgroundColor: gradient, fill: true, pointRadius: 0, pointHoverRadius: 3, pointHoverBackgroundColor: ind.color, tension: .35 }];
-    if(ind.type === "area_zero"){
+    if (ind.type === "area_zero") {
       baseOpts.scales.y.grid = {
-        color: function(c){ return c.tick.value === 0 ? "#4A5268" : "rgba(255,255,255,.02)"; },
+        color: function(c) { return c.tick.value === 0 ? "rgba(99,130,255,0.3)" : "rgba(148,163,210,.04)"; },
         drawTicks: false
       };
     }
   }
-  else if(ind.type === "step"){
+  else if (ind.type === "step") {
     type = "line";
     datasets = [{ data: values, borderColor: ind.color, borderWidth: 2, pointRadius: 0, pointHoverRadius: 3, pointHoverBackgroundColor: ind.color, stepped: "after", fill: false }];
   }
@@ -564,9 +848,9 @@ function renderChart(canvas, ind, data){
   charts[ind.id] = new Chart(ctx, { type: type, data: { labels: labels, datasets: datasets }, options: baseOpts });
 }
 
-function loadAll(){
-  if(FRED_API_KEY === "YOUR_FRED_API_KEY_HERE"){
-    showStatus("⚠️ Replace YOUR_FRED_API_KEY_HERE with your FRED API key. Get one free at <a href='https://fred.stlouisfed.org/docs/api/api_key.html' style='color:inherit' target='_blank'>fred.stlouisfed.org</a>","error");
+function loadAll() {
+  if (FRED_API_KEY === "YOUR_FRED_API_KEY_HERE") {
+    showStatus("⚠️ Replace YOUR_FRED_API_KEY_HERE with your FRED API key. Get one free at <a href='https://fred.stlouisfed.org/docs/api/api_key.html' style='color:inherit;text-decoration:underline' target='_blank'>fred.stlouisfed.org</a>", "error");
     return;
   }
   hideStatus();
@@ -575,57 +859,56 @@ function loadAll(){
   var done = 0, total = INDICATORS.length, successCount = 0, failedList = [];
   document.getElementById("refresh-btn").textContent = "0/" + total;
 
-  function tick(){
+  function tick() {
     done++;
-    document.getElementById("progress-fill").style.width = (done/total*100) + "%";
+    document.getElementById("progress-fill").style.width = (done / total * 100) + "%";
     document.getElementById("refresh-btn").textContent = done + "/" + total;
-    if(done >= total) finish();
+    if (done >= total) finish();
   }
-  function finish(){
+
+  function finish() {
     document.getElementById("progress-wrap").style.display = "none";
     document.getElementById("refresh-btn").disabled = false;
     document.getElementById("refresh-btn").textContent = "↻ Refresh";
-    document.getElementById("subtitle").textContent = "Updated " + new Date().toLocaleTimeString() + " · " + successCount + "/" + total + " loaded";
+    document.getElementById("subtitle").textContent =
+      "UPDATED " + new Date().toLocaleTimeString().toUpperCase() + " · " + successCount + "/" + total + " LOADED";
     renderGrid();
-    if(successCount === 0) showStatus("❌ All indicators failed. Error: " + failedList[0] + ". Try disabling ad blockers or opening in incognito.", "error");
-    else if(failedList.length > 0) showStatus("⚠️ " + failedList.length + " indicator(s) failed to load", "info");
-    else showStatus("✅ All " + successCount + " indicators loaded successfully!", "success");
-    if(successCount > 0) setTimeout(hideStatus, 3000);
+    if (successCount === 0) showStatus("❌ All indicators failed. " + failedList[0] + ". Try disabling ad blockers or opening in incognito.", "error");
+    else if (failedList.length > 0) showStatus("⚠️ " + failedList.length + " indicator(s) failed to load", "info");
+    else showStatus("✅ All " + successCount + " indicators loaded successfully.", "success");
+    if (successCount > 0) setTimeout(hideStatus, 3000);
   }
 
   var queue = INDICATORS.slice();
-  function next(){
-    if(queue.length === 0) return;
+  function next() {
+    if (queue.length === 0) return;
     var ind = queue.shift();
     var lim = currentTF === "MAX" ? 600 : 200;
     fetchFRED(ind.series, lim, ind.fredUnits)
-      .then(function(raw){ allData[ind.id] = transform(raw, ind); successCount++; if(successCount % 4 === 0) renderGrid(); })
-      .catch(function(e){ console.warn("Failed:", ind.id, e.message); failedList.push(ind.id + ": " + e.message); allData[ind.id] = []; })
-      .then(function(){ tick(); if(queue.length > 0) setTimeout(next, 200); });
+      .then(function(raw) { allData[ind.id] = transform(raw, ind); successCount++; if (successCount % 4 === 0) renderGrid(); })
+      .catch(function(e) { failedList.push(ind.id + ": " + e.message); allData[ind.id] = []; })
+      .then(function() { tick(); if (queue.length > 0) setTimeout(next, 200); });
   }
-  // Start 2 parallel streams
   next(); next();
 }
 
 // Init
-buildTFBar(); buildTabs(); renderGrid();
+buildTFBar();
+buildTabs();
+renderGrid();
 
-// Wait for Chart.js to load (it loads async via fallback loader)
-// Once loaded, re-render grid so charts appear
-var chartCheckInterval = setInterval(function(){
-  if(typeof Chart !== "undefined"){
+var chartCheckInterval = setInterval(function() {
+  if (typeof Chart !== "undefined") {
     clearInterval(chartCheckInterval);
-    console.log("Chart.js is now available, re-rendering grid...");
     renderGrid();
   }
 }, 200);
-// Stop checking after 15s
-setTimeout(function(){ clearInterval(chartCheckInterval); }, 15000);
+setTimeout(function() { clearInterval(chartCheckInterval); }, 15000);
 
-if(FRED_API_KEY === "YOUR_FRED_API_KEY_HERE"){
-  showStatus("⚠️ Replace YOUR_FRED_API_KEY_HERE with your FRED API key. Get one free at <a href='https://fred.stlouisfed.org/docs/api/api_key.html' style='color:inherit' target='_blank'>fred.stlouisfed.org</a>","error");
+if (FRED_API_KEY === "YOUR_FRED_API_KEY_HERE") {
+  showStatus("⚠️ Replace YOUR_FRED_API_KEY_HERE with your FRED API key. Get one free at <a href='https://fred.stlouisfed.org/docs/api/api_key.html' style='color:inherit;text-decoration:underline' target='_blank'>fred.stlouisfed.org</a>", "error");
 } else {
-  showStatus("🔄 Finding best proxy and connecting to FRED API...","info");
+  showStatus("🔄 Connecting to FRED API...", "info");
   loadAll();
 }
 </script>
