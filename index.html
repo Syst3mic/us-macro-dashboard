@@ -86,14 +86,9 @@ button{font-family:inherit;cursor:pointer}
 .card{background:var(--card);border:1px solid var(--b0);border-radius:12px;overflow:hidden;transition:border-color .2s,background .2s,transform .2s,box-shadow .2s;animation:fadeUp .4s ease both}
 .card:hover{background:var(--cardh);border-color:var(--b1);transform:translateY(-1px);box-shadow:0 8px 32px rgba(0,0,0,.4)}
 
-/* 
-  CARD TOP: left side = label+value+delta, right side = meta column
-  Meta column stacks: date / source badge / freq badge — NO absolute positioning
-*/
 .ct{padding:16px 18px 0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
 .cm{flex:1;min-width:0}
 
-/* Right meta column — pure flex column, fully stacked, zero overlap */
 .cmeta{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0}
 .cdate{font-size:10px;font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--t1);white-space:nowrap}
 .csrc{font-family:'IBM Plex Mono',monospace;font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:.5px;white-space:nowrap;background:rgba(99,130,255,.08);border:1px solid rgba(99,130,255,.18);color:#6B80A8}
@@ -115,6 +110,10 @@ button{font-family:inherit;cursor:pointer}
 
 .skelv{height:26px;width:80px;border-radius:5px;background:linear-gradient(90deg,var(--surf) 25%,var(--elev) 50%,var(--surf) 75%);background-size:200% 100%;animation:shimmer 1.6s infinite}
 .skelc{height:90px;margin:8px 10px 12px;border-radius:8px;background:linear-gradient(90deg,var(--surf) 25%,var(--elev) 50%,var(--surf) 75%);background-size:200% 100%;animation:shimmer 1.6s infinite}
+
+/* Indicator status pill shown inside skeleton card before data arrives */
+.cstat{font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--t3);padding:6px 18px 0;letter-spacing:.4px}
+.cstat.err{color:#FF6B84}
 
 /* NFP release history table */
 .nfp-table{margin:12px 18px 0;border-radius:6px;overflow:hidden;border:1px solid var(--b0)}
@@ -170,72 +169,81 @@ button{font-family:inherit;cursor:pointer}
 var FRED_KEY = "bc1f32b397114934e95d879ec2646074";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DATA SOURCE: FRED ONLY
-// All indicators use FRED. No BLS API needed (no BLS key, no BLS CORS issues).
-// FRED sources its labor data from BLS and updates same day as BLS releases.
-// PAYEMS ch1 = Nonfarm Payrolls MoM change in thousands (same as BLS print).
-// UNRATE     = Unemployment rate (same as BLS print).
-// CIVPART    = Labor force participation (same as BLS print).
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PROXY
-// One proxy at a time — sequential with locking.
-// Two parallel workers share one proxy once it is locked.
-// If the locked proxy fails mid-run, reset and re-probe from scratch.
+// PROXIES — updated April 2026
 //
-// Critical fix vs previous versions:
-//   probeProxies() is called ONCE before workers start.
-//   Workers do not trigger probing themselves — they wait for the lock.
-//   This prevents the race condition where 2 workers both try to probe
-//   at the same time and interfere with each other.
+// Why the old list broke:
+//   - corsproxy.io changed URL format: now REQUIRES ?url=<encoded> (was ?<raw>)
+//   - api.cors.lol marked inactive as of mid-2025 per community reports
+//   - api.codetabs.com rate-limits aggressively and often 502s
+//   - api.allorigins.win has no SLA and frequent extended outages
+//
+// New list, ordered by current reliability for JSON API proxying:
+//   1. proxy.corsfix.com           — free tier, unlimited requests, 60 rpm
+//   2. corsproxy.io (new format)   — most popular, 99%+ uptime, now with ?url=
+//   3. api.allorigins.win/raw      — backup; /raw endpoint is simpler than /get
+//   4. api.codetabs.com            — last-resort; flaky but sometimes works
+//
+// Each entry is self-describing via `build(url)` so we never have to remember
+// a format quirk in two places.
 // ─────────────────────────────────────────────────────────────────────────────
 var PROXIES = [
-  { url: function(u){ return "https://corsproxy.io/?"+encodeURIComponent(u); },       unwrap: function(j){ return j; } },
-  { url: function(u){ return "https://api.cors.lol/?url="+encodeURIComponent(u); },   unwrap: function(j){ return j; } },
-  { url: function(u){ return "https://api.codetabs.com/v1/proxy?quest="+encodeURIComponent(u); }, unwrap: function(j){ return j; } },
-  { url: function(u){ return "https://api.allorigins.win/get?url="+encodeURIComponent(u); }, unwrap: function(j){ return (j&&j.contents)?JSON.parse(j.contents):j; } }
+  { name:"corsfix",    build:function(u){ return "https://proxy.corsfix.com/?"+u; },                      unwrap:function(j){ return j; } },
+  { name:"corsproxy",  build:function(u){ return "https://corsproxy.io/?url="+encodeURIComponent(u); },    unwrap:function(j){ return j; } },
+  { name:"allorigins", build:function(u){ return "https://api.allorigins.win/raw?url="+encodeURIComponent(u); }, unwrap:function(j){ return j; } },
+  { name:"codetabs",   build:function(u){ return "https://api.codetabs.com/v1/proxy?quest="+encodeURIComponent(u); }, unwrap:function(j){ return j; } }
 ];
 
 var activeProxyIdx = -1; // -1 = not yet probed
 
-// Probe all proxies sequentially, return index of first working one
+// Probe all proxies sequentially with a timeout; return index of first working one.
+// AbortController timeout prevents a hung proxy from stalling the whole probe.
 function probeAllProxies() {
-  // Use a simple FRED request to test — same domain we'll actually use
   var testURL = "https://api.stlouisfed.org/fred/series/observations?series_id=FEDFUNDS&api_key="+FRED_KEY+"&file_type=json&sort_order=desc&limit=1&units=lin";
   var i = 0;
   function tryNext() {
     if (i >= PROXIES.length) return Promise.reject(new Error("All proxies failed probe"));
     var p = PROXIES[i]; var idx = i; i++;
-    return fetch(p.url(testURL))
-      .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+    var ctl = new AbortController();
+    var to  = setTimeout(function(){ ctl.abort(); }, 8000);
+    return fetch(p.build(testURL), { signal: ctl.signal })
+      .then(function(r){ clearTimeout(to); if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
       .then(function(raw){
         var j = p.unwrap(raw);
-        if (!j || !j.observations) throw new Error("bad response");
-        console.log("✓ Proxy "+idx+" works");
+        if (!j || !j.observations) throw new Error("bad response shape");
+        console.log("✓ Proxy "+idx+" ("+p.name+") works");
         return idx;
       })
-      .catch(function(e){ console.warn("✗ Proxy "+idx+" failed:", e.message); return tryNext(); });
+      .catch(function(e){
+        clearTimeout(to);
+        console.warn("✗ Proxy "+idx+" ("+p.name+") failed:", e.message);
+        return tryNext();
+      });
   }
   return tryNext();
 }
 
-// Fetch via locked proxy; reset + re-probe if it fails
-function proxyFetch(url) {
+// Fetch via locked proxy; reset + re-probe if it fails mid-run.
+// Retry limit (3) prevents infinite loop if all proxies die during a run.
+function proxyFetch(url, retriesLeft) {
+  if (retriesLeft === undefined) retriesLeft = 3;
   var p = PROXIES[activeProxyIdx];
-  return fetch(p.url(url))
-    .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+  var ctl = new AbortController();
+  var to  = setTimeout(function(){ ctl.abort(); }, 15000);
+  return fetch(p.build(url), { signal: ctl.signal })
+    .then(function(r){ clearTimeout(to); if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
     .then(function(raw){
       var j = p.unwrap(raw);
       if (!j) throw new Error("empty response");
       return j;
     })
     .catch(function(e){
-      console.warn("Proxy "+activeProxyIdx+" failed mid-run:", e.message+". Re-probing...");
+      clearTimeout(to);
+      if (retriesLeft <= 0) throw e;
+      console.warn("Proxy "+activeProxyIdx+" ("+p.name+") failed mid-run:", e.message+". Re-probing...");
       activeProxyIdx = -1;
       return probeAllProxies().then(function(idx){
         activeProxyIdx = idx;
-        return proxyFetch(url); // retry with new proxy
+        return proxyFetch(url, retriesLeft - 1);
       });
     });
 }
@@ -244,22 +252,21 @@ function proxyFetch(url) {
 // FRED FETCH
 // ─────────────────────────────────────────────────────────────────────────────
 function fetchFRED(seriesId, limit, units) {
-  // Cache-buster: forces proxy to fetch fresh data, not serve cached response.
-  // This is critical for indicators like PAYEMS where proxies cache old data.
-  var bust = "&_cb="+Math.floor(Date.now()/60000); // changes every 60 seconds
+  var bust = "&_cb="+Math.floor(Date.now()/60000);
   var url = "https://api.stlouisfed.org/fred/series/observations"
     +"?series_id="+seriesId
     +"&api_key="+FRED_KEY
     +"&file_type=json&sort_order=desc&limit="+limit
     +"&units="+(units||"lin")
-    +"&realtime_start="+new Date().toISOString().slice(0,10) // force current vintage
+    +"&realtime_start="+new Date().toISOString().slice(0,10)
     +bust;
   return proxyFetch(url).then(function(j){
     if (j.error_code) throw new Error("FRED error: "+j.error_message);
+    if (!j.observations) throw new Error("No observations in response");
     return j.observations
       .filter(function(o){ return o.value !== "."; })
       .map(function(o){ return { date: o.date, value: parseFloat(o.value) }; })
-      .reverse(); // oldest → newest
+      .reverse();
   });
 }
 
@@ -269,9 +276,6 @@ function fetchFRED(seriesId, limit, units) {
 function transform(raw, ind) {
   var d = raw.slice();
   if (ind.div) d = d.map(function(v){ return {date:v.date, value:v.value/ind.div}; });
-  // momDiff: fetch as level, compute period-over-period change in JS
-  // PAYEMS unit = thousands of persons → diff = net new jobs in thousands
-  // e.g. 159,356 - 159,178 = 178 → displayed as "178K"
   if (ind.momDiff) {
     var out = [];
     for (var i = 1; i < d.length; i++) {
@@ -296,46 +300,32 @@ function fmtDisp(v, ind) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INDICATORS — all FRED, no BLS API needed
-// FRED sources labor data directly from BLS and posts it same day.
-// ch1 = change from prior period (MoM for monthly series)
-// pc1 = percent change from year ago
-// pch = percent change from prior period
-// lin = level (no transformation)
+// INDICATORS
 // ─────────────────────────────────────────────────────────────────────────────
 var INDS = [
-  // INFLATION
   {id:"cpi",     lbl:"CPI (YoY%)",              s:"CPIAUCSL",        cat:"inflation", desc:"Consumer Price Index, All Urban Consumers SA",    u:"pc1", unit:"%",  type:"area",      col:"#FF4D6A", freq:"Monthly"},
   {id:"coreCpi", lbl:"Core CPI (YoY%)",          s:"CPILFESL",        cat:"inflation", desc:"CPI Excluding Food & Energy SA",                  u:"pc1", unit:"%",  type:"area",      col:"#FF7B8A", freq:"Monthly"},
   {id:"pce",     lbl:"PCE Inflation (YoY%)",     s:"PCEPI",           cat:"inflation", desc:"Personal Consumption Expenditures Price Index",   u:"pc1", unit:"%",  type:"area",      col:"#E11D48", freq:"Monthly"},
   {id:"ppi",     lbl:"PPI (YoY%)",               s:"PPIACO",          cat:"inflation", desc:"Producer Price Index: All Commodities",           u:"pc1", unit:"%",  type:"bar",       col:"#F97316", freq:"Monthly"},
-  // RATES (daily = most current)
   {id:"fedfunds",lbl:"Fed Funds Rate",           s:"FEDFUNDS",        cat:"rates",     desc:"Effective Federal Funds Rate (monthly avg)",      u:"lin", unit:"%",  type:"step",      col:"#A78BFA", freq:"Monthly"},
   {id:"sofr",    lbl:"SOFR (Daily)",             s:"SOFR",            cat:"rates",     desc:"Secured Overnight Financing Rate",                u:"lin", unit:"%",  type:"line",      col:"#C4B5FD", freq:"Daily"},
   {id:"t10y2y",  lbl:"10Y–2Y Spread",            s:"T10Y2Y",          cat:"rates",     desc:"10-Year minus 2-Year Treasury Spread",            u:"lin", unit:"%",  type:"area_zero", col:"#6382FF", freq:"Daily"},
   {id:"t10y",    lbl:"10Y Treasury Yield",       s:"DGS10",           cat:"rates",     desc:"10-Year Treasury Constant Maturity Rate",         u:"lin", unit:"%",  type:"line",      col:"#818CF8", freq:"Daily"},
   {id:"t2y",     lbl:"2Y Treasury Yield",        s:"DGS2",            cat:"rates",     desc:"2-Year Treasury Constant Maturity Rate",          u:"lin", unit:"%",  type:"line",      col:"#A5B4FC", freq:"Daily"},
-  // LABOR — sourced via FRED (FRED ingests BLS data same day as BLS release)
-  // PAYEMS fetched as LEVEL (lin), MoM diff computed in JS = exact same figure as BLS press release
   {id:"nfp",     lbl:"Nonfarm Payrolls (MoM)",   s:"PAYEMS",          cat:"labor",     desc:"Total Nonfarm Payrolls, MoM Change (000s)",       u:"lin", unit:"K",  type:"bar_pn",    col:"#38BDF8", freq:"Monthly", momDiff:true},
   {id:"unemp",   lbl:"Unemployment Rate",        s:"UNRATE",          cat:"labor",     desc:"Civilian Unemployment Rate, SA",                  u:"lin", unit:"%",  type:"area",      col:"#22D3EE", freq:"Monthly"},
   {id:"part",    lbl:"Labor Force Participation",s:"CIVPART",         cat:"labor",     desc:"Civilian Labor Force Participation Rate",         u:"lin", unit:"%",  type:"line",      col:"#93C5FD", freq:"Monthly"},
   {id:"claims",  lbl:"Initial Jobless Claims",   s:"ICSA",            cat:"labor",     desc:"Initial Unemployment Insurance Claims",           u:"lin", unit:"K",  type:"line",      col:"#7DD3FC", freq:"Weekly", div:1000},
-  // GROWTH
   {id:"gdp",     lbl:"Real GDP (QoQ ann.%)",     s:"A191RL1Q225SBEA", cat:"growth",    desc:"Real GDP Growth, Quarterly Annualized",           u:"lin", unit:"%",  type:"bar_pn",    col:"#10E8A0", freq:"Quarterly"},
   {id:"retail",  lbl:"Retail Sales (MoM%)",      s:"RSAFS",           cat:"growth",    desc:"Advance Retail Sales: Total, SA",                 u:"pch", unit:"%",  type:"bar_pn",    col:"#34D399", freq:"Monthly"},
   {id:"indprod", lbl:"Industrial Prod. (YoY%)",  s:"INDPRO",          cat:"growth",    desc:"Industrial Production Index",                     u:"pc1", unit:"%",  type:"area",      col:"#6EE7B7", freq:"Monthly"},
   {id:"caputil", lbl:"Capacity Utilization",     s:"TCU",             cat:"growth",    desc:"Total Industry Capacity Utilization",             u:"lin", unit:"%",  type:"line",      col:"#A7F3D0", freq:"Monthly"},
-  // SENTIMENT
   {id:"umich",   lbl:"Consumer Sentiment",       s:"UMCSENT",         cat:"sentiment", desc:"U. of Michigan Consumer Sentiment Index",         u:"lin", unit:"",   type:"area",      col:"#F59E0B", freq:"Monthly"},
   {id:"conf",    lbl:"Consumer Confidence",      s:"CSCICP03USM665S", cat:"sentiment", desc:"OECD Consumer Confidence Indicator",              u:"lin", unit:"",   type:"line",      col:"#FCD34D", freq:"Monthly"},
-  // HOUSING
   {id:"houst",   lbl:"Housing Starts (K)",       s:"HOUST",           cat:"housing",   desc:"New Residential Housing Units Started, SA",       u:"lin", unit:"K",  type:"bar",       col:"#22D3EE", freq:"Monthly"},
   {id:"permits", lbl:"Building Permits (K)",     s:"PERMIT",          cat:"housing",   desc:"New Private Housing Units Authorized",            u:"lin", unit:"K",  type:"line",      col:"#06B6D4", freq:"Monthly"},
   {id:"cs",      lbl:"Case-Shiller (YoY%)",      s:"CSUSHPINSA",      cat:"housing",   desc:"S&P/Case-Shiller National Home Price Index",      u:"pc1", unit:"%",  type:"area",      col:"#67E8F9", freq:"Monthly"},
-  // TRADE
   {id:"trade",   lbl:"Trade Balance ($B)",       s:"BOPGSTB",         cat:"trade",     desc:"Trade Balance: Goods and Services",               u:"lin", unit:"$B", type:"area_zero", col:"#EC4899", freq:"Monthly"},
-  // MONETARY
   {id:"m2",      lbl:"M2 Money Supply (YoY%)",   s:"M2SL",            cat:"monetary",  desc:"M2 Money Stock",                                  u:"pc1", unit:"%",  type:"area",      col:"#C084FC", freq:"Monthly"}
 ];
 
@@ -400,6 +390,8 @@ function buildCard(ind, idx){
   card.style.animationDelay=(idx*25)+"ms";
 
   if(!data.length){
+    // Skeleton with status line — shows "LOADING" or "FAILED" instead of silent blank
+    var status = allData[ind.id+":err"] ? '<div class="cstat err">✗ '+allData[ind.id+":err"]+'</div>' : '<div class="cstat">LOADING…</div>';
     card.innerHTML=
       '<div class="ct">'+
         '<div class="cm">'+
@@ -409,6 +401,7 @@ function buildCard(ind, idx){
         '</div>'+
         '<div class="cmeta"><span class="csrc">FRED</span></div>'+
       '</div>'+
+      status+
       '<div class="skelc"></div>';
     return card;
   }
@@ -417,11 +410,10 @@ function buildCard(ind, idx){
   var sl  = data.slice(-tf);
   var lat = sl[sl.length-1];
   var prv = sl.length>1 ? sl[sl.length-2] : null;
-  var pp  = sl.length>2 ? sl[sl.length-3] : null; // two periods back
   var chg = prv ? lat.value-prv.value : 0;
   var pct = prv&&prv.value!==0 ? ((lat.value-prv.value)/Math.abs(prv.value))*100 : 0;
   var isMoM = !!ind.momDiff;
-  var up  = chg>=0; // always based on change, not raw value
+  var up  = chg>=0;
   var cd  = sl.slice(-CPTS);
   var dv  = fmtDisp(lat.value, ind);
 
@@ -438,9 +430,7 @@ function buildCard(ind, idx){
     cstr = (pct>=0?"+":"")+pct.toFixed(2)+"%";
   }
 
-  // NFP special layout: release history table instead of chart
   if (isMoM) {
-    // Build last 4 releases as rows: Release date | Actual | Previous | Forecast (N/A via FRED)
     var rows = [];
     for (var ri = sl.length-1; ri >= 0 && rows.length < 4; ri--) {
       var cur = sl[ri];
@@ -457,8 +447,8 @@ function buildCard(ind, idx){
       return v >= 0 ? " nfp-g" : " nfp-r";
     }
 
-    var tableRows = rows.map(function(r, i) {
-      var d = r.date.slice(0,7); // "YYYY-MM"
+    var tableRows = rows.map(function(r) {
+      var d = r.date.slice(0,7);
       return '<div class="nfp-row nfp-data">'+
         '<div class="nfp-cell">'+d+'</div>'+
         '<div class="nfp-cell'+colorK(r.actual)+'">'+fmtK(r.actual)+'</div>'+
@@ -474,7 +464,6 @@ function buildCard(ind, idx){
             '<span class="dot" style="background:'+ind.col+';box-shadow:0 0 6px '+ind.col+'55"></span>'+
             '<span class="lt">'+ind.lbl+'</span>'+
           '</div>'+
-          // Headline: white (neutral) — NFP positive ≠ inherently good
           '<div class="bv">'+dv+'</div>'+
           '<div class="dr">'+
             '<span class="db" style="color:'+gc+';background:'+gb+';border:1px solid '+gbd+'">'+
@@ -489,7 +478,6 @@ function buildCard(ind, idx){
           '<span class="cfreq">'+ind.freq.toUpperCase()+'</span>'+
         '</div>'+
       '</div>'+
-      // Release history table
       '<div class="nfp-table">'+
         '<div class="nfp-row nfp-hdr">'+
           '<div class="nfp-cell">Release</div>'+
@@ -506,7 +494,6 @@ function buildCard(ind, idx){
     return card;
   }
 
-  // Standard card layout for all other indicators
   card.innerHTML=
     '<div class="ct">'+
       '<div class="cm">'+
@@ -597,12 +584,12 @@ function renderChart(canvas, ind, data){
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LOAD ALL
-// Probe proxy ONCE up front, then run sequential queue with 2 workers.
-// Workers share the locked proxy — no race conditions.
 // ─────────────────────────────────────────────────────────────────────────────
 function loadAll(){
   hideSB();
-  activeProxyIdx = -1; // reset proxy lock on each load
+  activeProxyIdx = -1;
+  // Clear per-indicator error state so previous failures don't leak into new run
+  Object.keys(allData).forEach(function(k){ if(k.indexOf(":err")>-1) delete allData[k]; });
   document.getElementById("pw").style.display="block";
   document.getElementById("rbtn").disabled=true;
   var done=0, total=INDS.length, ok=0;
@@ -623,10 +610,10 @@ function loadAll(){
       "UPDATED "+new Date().toLocaleTimeString().toUpperCase()+" · "+ok+"/"+total+" LOADED";
     renderGrid();
     if(ok===0){
-      setSB("❌ All indicators failed. Check F12 console. Try disabling ad blockers or VPN.","err");
+      setSB("❌ All indicators failed. Check browser console (F12). This is almost always a CORS-proxy outage — try refreshing in a minute, or disable ad blockers/VPN.","err");
     } else if(ok<total){
-      setSB("⚠️ "+ok+"/"+total+" loaded. Refresh to retry the remaining "+(total-ok)+".","inf");
-      setTimeout(hideSB,8000);
+      setSB("⚠️ "+ok+"/"+total+" loaded. Failed indicators show ✗ — click Refresh to retry.","inf");
+      setTimeout(hideSB,10000);
     } else {
       setSB("✅ All "+ok+" indicators loaded successfully.","ok");
       setTimeout(hideSB,4000);
@@ -635,13 +622,11 @@ function loadAll(){
 
   var fredLim = curTF==="MAX"?600:200;
 
-  // Step 1: Probe proxy once before starting workers
   setSB("🔄 Finding best proxy...","inf");
   probeAllProxies().then(function(idx){
     activeProxyIdx = idx;
-    setSB("🔄 Proxy ready. Fetching "+total+" indicators from FRED...","inf");
+    setSB("🔄 Connected via "+PROXIES[idx].name+". Fetching "+total+" indicators...","inf");
 
-    // Step 2: Sequential queue with 2 parallel workers
     var queue = INDS.slice();
     function worker(){
       if(!queue.length) return;
@@ -649,7 +634,7 @@ function loadAll(){
       fetchFRED(ind.s, fredLim, ind.u)
         .then(function(raw){
           allData[ind.id]=transform(raw, ind);
-          // Debug: log last 3 values for NFP so you can verify in F12 console
+          delete allData[ind.id+":err"];
           if(ind.id==="nfp"){
             var d=allData[ind.id]; var n=d.length;
             console.log("NFP last 3:", d.slice(-3).map(function(x){return x.date+": "+(x.value>=0?"+":"")+x.value+"K";}));
@@ -660,21 +645,25 @@ function loadAll(){
         .catch(function(e){
           console.error("Failed:", ind.id, e.message);
           allData[ind.id]=[];
+          // Record error code for skeleton display — short + sanitized
+          var msg = e.message || "error";
+          if(msg.length>40) msg = msg.slice(0,40)+"…";
+          allData[ind.id+":err"] = msg;
         })
         .then(function(){
           tick();
-          setTimeout(worker, 150); // 150ms gap prevents proxy rate-limiting
+          setTimeout(worker, 150);
         });
     }
-    worker(); // worker 1
-    worker(); // worker 2
+    worker();
+    worker();
 
   }).catch(function(e){
     console.error("Proxy probe failed:", e.message);
     document.getElementById("pw").style.display="none";
     document.getElementById("rbtn").disabled=false;
     document.getElementById("rbtn").textContent="↻ Refresh";
-    setSB("❌ Cannot reach any proxy. Disable ad blockers or VPN and try again.","err");
+    setSB("❌ Cannot reach any CORS proxy. All 4 proxies failed to respond. This is usually temporary — wait a minute and retry, or disable ad blockers / VPN. Check F12 console for per-proxy error messages.","err");
   });
 }
 
