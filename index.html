@@ -111,7 +111,6 @@ button{font-family:inherit;cursor:pointer}
 .skelv{height:26px;width:80px;border-radius:5px;background:linear-gradient(90deg,var(--surf) 25%,var(--elev) 50%,var(--surf) 75%);background-size:200% 100%;animation:shimmer 1.6s infinite}
 .skelc{height:90px;margin:8px 10px 12px;border-radius:8px;background:linear-gradient(90deg,var(--surf) 25%,var(--elev) 50%,var(--surf) 75%);background-size:200% 100%;animation:shimmer 1.6s infinite}
 
-/* Indicator status pill shown inside skeleton card before data arrives */
 .cstat{font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--t3);padding:6px 18px 0;letter-spacing:.4px}
 .cstat.err{color:#FF6B84}
 
@@ -163,40 +162,17 @@ button{font-family:inherit;cursor:pointer}
 </footer>
 
 <script>
-// ─────────────────────────────────────────────────────────────────────────────
-// FRED API KEY
-// ─────────────────────────────────────────────────────────────────────────────
 var FRED_KEY = "bc1f32b397114934e95d879ec2646074";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PROXIES — updated April 2026
-//
-// Why the old list broke:
-//   - corsproxy.io changed URL format: now REQUIRES ?url=<encoded> (was ?<raw>)
-//   - api.cors.lol marked inactive as of mid-2025 per community reports
-//   - api.codetabs.com rate-limits aggressively and often 502s
-//   - api.allorigins.win has no SLA and frequent extended outages
-//
-// New list, ordered by current reliability for JSON API proxying:
-//   1. proxy.corsfix.com           — free tier, unlimited requests, 60 rpm
-//   2. corsproxy.io (new format)   — most popular, 99%+ uptime, now with ?url=
-//   3. api.allorigins.win/raw      — backup; /raw endpoint is simpler than /get
-//   4. api.codetabs.com            — last-resort; flaky but sometimes works
-//
-// Each entry is self-describing via `build(url)` so we never have to remember
-// a format quirk in two places.
-// ─────────────────────────────────────────────────────────────────────────────
 var PROXIES = [
-  { name:"corsfix",    build:function(u){ return "https://proxy.corsfix.com/?"+u; },                      unwrap:function(j){ return j; } },
-  { name:"corsproxy",  build:function(u){ return "https://corsproxy.io/?url="+encodeURIComponent(u); },    unwrap:function(j){ return j; } },
+  { name:"corsfix",    build:function(u){ return "https://proxy.corsfix.com/?url="+encodeURIComponent(u); }, unwrap:function(j){ return j; } },
+  { name:"corsproxy",  build:function(u){ return "https://corsproxy.io/?url="+encodeURIComponent(u); },     unwrap:function(j){ return j; } },
   { name:"allorigins", build:function(u){ return "https://api.allorigins.win/raw?url="+encodeURIComponent(u); }, unwrap:function(j){ return j; } },
   { name:"codetabs",   build:function(u){ return "https://api.codetabs.com/v1/proxy?quest="+encodeURIComponent(u); }, unwrap:function(j){ return j; } }
 ];
 
-var activeProxyIdx = -1; // -1 = not yet probed
+var activeProxyIdx = -1;
 
-// Probe all proxies sequentially with a timeout; return index of first working one.
-// AbortController timeout prevents a hung proxy from stalling the whole probe.
 function probeAllProxies() {
   var testURL = "https://api.stlouisfed.org/fred/series/observations?series_id=FEDFUNDS&api_key="+FRED_KEY+"&file_type=json&sort_order=desc&limit=1&units=lin";
   var i = 0;
@@ -222,8 +198,6 @@ function probeAllProxies() {
   return tryNext();
 }
 
-// Fetch via locked proxy; reset + re-probe if it fails mid-run.
-// Retry limit (3) prevents infinite loop if all proxies die during a run.
 function proxyFetch(url, retriesLeft) {
   if (retriesLeft === undefined) retriesLeft = 3;
   var p = PROXIES[activeProxyIdx];
@@ -248,9 +222,7 @@ function proxyFetch(url, retriesLeft) {
     });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FRED FETCH
-// ─────────────────────────────────────────────────────────────────────────────
+// ── FIXED: removed realtime_start parameter ──
 function fetchFRED(seriesId, limit, units) {
   var bust = "&_cb="+Math.floor(Date.now()/60000);
   var url = "https://api.stlouisfed.org/fred/series/observations"
@@ -258,7 +230,6 @@ function fetchFRED(seriesId, limit, units) {
     +"&api_key="+FRED_KEY
     +"&file_type=json&sort_order=desc&limit="+limit
     +"&units="+(units||"lin")
-    +"&realtime_start="+new Date().toISOString().slice(0,10)
     +bust;
   return proxyFetch(url).then(function(j){
     if (j.error_code) throw new Error("FRED error: "+j.error_message);
@@ -270,9 +241,6 @@ function fetchFRED(seriesId, limit, units) {
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TRANSFORM & FORMAT
-// ─────────────────────────────────────────────────────────────────────────────
 function transform(raw, ind) {
   var d = raw.slice();
   if (ind.div) d = d.map(function(v){ return {date:v.date, value:v.value/ind.div}; });
@@ -299,9 +267,6 @@ function fmtDisp(v, ind) {
   return v.toFixed(2);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// INDICATORS
-// ─────────────────────────────────────────────────────────────────────────────
 var INDS = [
   {id:"cpi",     lbl:"CPI (YoY%)",              s:"CPIAUCSL",        cat:"inflation", desc:"Consumer Price Index, All Urban Consumers SA",    u:"pc1", unit:"%",  type:"area",      col:"#FF4D6A", freq:"Monthly"},
   {id:"coreCpi", lbl:"Core CPI (YoY%)",          s:"CPILFESL",        cat:"inflation", desc:"CPI Excluding Food & Energy SA",                  u:"pc1", unit:"%",  type:"area",      col:"#FF7B8A", freq:"Monthly"},
@@ -390,7 +355,6 @@ function buildCard(ind, idx){
   card.style.animationDelay=(idx*25)+"ms";
 
   if(!data.length){
-    // Skeleton with status line — shows "LOADING" or "FAILED" instead of silent blank
     var status = allData[ind.id+":err"] ? '<div class="cstat err">✗ '+allData[ind.id+":err"]+'</div>' : '<div class="cstat">LOADING…</div>';
     card.innerHTML=
       '<div class="ct">'+
@@ -582,13 +546,9 @@ function renderChart(canvas, ind, data){
   charts[ind.id]=new Chart(ctx,{type:type,data:{labels:labels,datasets:ds},options:opts});
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LOAD ALL
-// ─────────────────────────────────────────────────────────────────────────────
 function loadAll(){
   hideSB();
   activeProxyIdx = -1;
-  // Clear per-indicator error state so previous failures don't leak into new run
   Object.keys(allData).forEach(function(k){ if(k.indexOf(":err")>-1) delete allData[k]; });
   document.getElementById("pw").style.display="block";
   document.getElementById("rbtn").disabled=true;
@@ -635,17 +595,12 @@ function loadAll(){
         .then(function(raw){
           allData[ind.id]=transform(raw, ind);
           delete allData[ind.id+":err"];
-          if(ind.id==="nfp"){
-            var d=allData[ind.id]; var n=d.length;
-            console.log("NFP last 3:", d.slice(-3).map(function(x){return x.date+": "+(x.value>=0?"+":"")+x.value+"K";}));
-          }
           ok++;
           if(ok%4===0) renderGrid();
         })
         .catch(function(e){
           console.error("Failed:", ind.id, e.message);
           allData[ind.id]=[];
-          // Record error code for skeleton display — short + sanitized
           var msg = e.message || "error";
           if(msg.length>40) msg = msg.slice(0,40)+"…";
           allData[ind.id+":err"] = msg;
@@ -667,9 +622,6 @@ function loadAll(){
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// INIT
-// ─────────────────────────────────────────────────────────────────────────────
 buildTFBar(); buildTabs(); renderGrid();
 var _cjs=setInterval(function(){if(typeof Chart!=="undefined"){clearInterval(_cjs);renderGrid();}},200);
 setTimeout(function(){clearInterval(_cjs);},15000);
