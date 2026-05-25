@@ -823,7 +823,12 @@ def render_card(key: str, cfg: dict, df) -> None:
             )
         with col_btn:
             if st.button("⛶", key=f"exp_direct_{key}", help="Expand chart"):
-                st.session_state[f"modal_{key}"] = ("mom", f"{cfg['name']} — Actual Prints")
+                st.session_state["expanded"] = {
+                    "key": key, "which": "mom",
+                    "title": f"{cfg['name']} — Actual Prints",
+                    "cfg": cfg, "df_c": df_c
+                }
+                st.rerun()
         st.caption(cfg["full"])
 
     # Price index indicators (CPI / Core CPI / PPI): MoM / YoY tab toggle
@@ -841,7 +846,12 @@ def render_card(key: str, cfg: dict, df) -> None:
                 )
             with col_btn:
                 if st.button("⛶", key=f"exp_mom_{key}", help="Expand chart"):
-                    st.session_state[f"modal_{key}"] = ("mom", f"{cfg['name']} — Month-over-Month")
+                    st.session_state["expanded"] = {
+                        "key": key, "which": "mom",
+                        "title": f"{cfg['name']} — Month-over-Month",
+                        "cfg": cfg, "df_c": df_c
+                    }
+                    st.rerun()
             st.caption(cfg["full"])
 
         with tab_yoy:
@@ -855,44 +865,17 @@ def render_card(key: str, cfg: dict, df) -> None:
                 )
             with col_btn2:
                 if st.button("⛶", key=f"exp_yoy_{key}", help="Expand chart"):
-                    st.session_state[f"modal_{key}"] = ("yoy", f"{cfg['name']} — Year-over-Year")
+                    st.session_state["expanded"] = {
+                        "key": key, "which": "yoy",
+                        "title": f"{cfg['name']} — Year-over-Year",
+                        "cfg": cfg, "df_c": df_c
+                    }
+                    st.rerun()
             st.caption(cfg["full"])
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── Modal (expanded chart) ─────────────────────────────────────────────
-    modal_state = st.session_state.get(f"modal_{key}")
-    if modal_state:
-        which_modal, modal_title = modal_state
-        fig_modal = make_chart(df_c, cfg, which_modal, height=480)
-        with st.container():
-            st.markdown(f"""
-            <div style="
-                position:fixed;top:0;left:0;right:0;bottom:0;
-                background:rgba(0,0,0,.88);z-index:9999;
-                display:flex;align-items:center;justify-content:center;
-                backdrop-filter:blur(6px);
-            ">
-              <div style="
-                  background:#0B1020;
-                  border:1px solid rgba(91,141,239,.3);
-                  border-radius:14px;padding:28px;
-                  width:92vw;max-width:1100px;
-                  box-shadow:0 24px 80px rgba(0,0,0,.8);
-                  position:relative;
-              ">
-                <div style="font-family:'Sora',sans-serif;font-size:17px;font-weight:700;
-                     color:#FFFFFF;margin-bottom:18px">{modal_title}</div>
-            """, unsafe_allow_html=True)
-            st.plotly_chart(
-                fig_modal, use_container_width=True,
-                config={"displayModeBar": True},
-                key=f"modal_chart_{key}_{which_modal}"
-            )
-            if st.button("✕  Close", key=f"close_modal_{key}"):
-                del st.session_state[f"modal_{key}"]
-                st.rerun()
-            st.markdown("</div></div>", unsafe_allow_html=True)
+    # Modal handled at top level in main() via st.session_state["expanded"]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MAIN
@@ -900,6 +883,48 @@ def render_card(key: str, cfg: dict, df) -> None:
 def main():
     sgt = timezone(timedelta(hours=8))
     now_str = datetime.now(sgt).strftime("%d %b %Y · %H:%M SGT")
+
+    # ── Expanded chart view ────────────────────────────────────────────────
+    # If an expand button was clicked, show ONLY the expanded chart +
+    # a Back button. Nothing else renders until Back is pressed.
+    if "expanded" in st.session_state:
+        exp     = st.session_state["expanded"]
+        cfg_e   = exp["cfg"]
+        df_e    = exp["df_c"]
+        which_e = exp["which"]
+        title_e = exp["title"]
+
+        # Back button — top left
+        st.markdown("<div style='margin-bottom:20px'>", unsafe_allow_html=True)
+        if st.button("← Back to Dashboard", key="back_btn"):
+            del st.session_state["expanded"]
+            st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # Chart title
+        st.markdown(f"""
+        <div style="
+            font-family:'Sora',sans-serif;font-size:22px;font-weight:700;
+            color:#FFFFFF;margin-bottom:6px;letter-spacing:-.3px
+        ">{title_e}</div>
+        <div style="
+            font-family:'IBM Plex Mono',monospace;font-size:11px;
+            color:#4D6080;margin-bottom:24px;letter-spacing:.3px
+        ">{cfg_e['full']}</div>
+        """, unsafe_allow_html=True)
+
+        # Full-height expanded chart
+        fig_exp = make_chart(df_e, cfg_e, which_e, height=550)
+        st.plotly_chart(
+            fig_exp, use_container_width=True,
+            config={
+                "displayModeBar": True,
+                "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+                "displaylogo": False
+            },
+            key="expanded_chart"
+        )
+        return  # Stop here — don't render the rest of the dashboard
 
     # ── Hero banner ────────────────────────────────────────────────────────
     st.markdown(f"""
