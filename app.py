@@ -9,6 +9,7 @@ import requests
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime, timezone, timedelta
+import yfinance as yf
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGE CONFIG
@@ -374,6 +375,91 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 /* ── Status text ── */
 .status-ok  { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #0FD68A; }
 .status-warn{ font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #F59E0B; }
+
+/* ── Page toggle (MACRO / MARKETS) ── */
+.page-toggle {
+    display: flex; gap: 4px;
+    background: #0D1628;
+    border: 1px solid rgba(120,140,200,.12);
+    border-radius: 8px; padding: 4px;
+    margin-bottom: 24px; width: fit-content;
+}
+.ptbtn {
+    padding: 8px 28px; border-radius: 5px;
+    font-size: 12px; font-weight: 700;
+    font-family: 'Sora', sans-serif;
+    letter-spacing: .5px; cursor: pointer;
+    border: none; transition: all .15s;
+    background: transparent; color: #4D6080;
+}
+.ptbtn.active {
+    background: linear-gradient(135deg, #5B8DEF, #22D3EE);
+    color: #FFFFFF;
+    box-shadow: 0 0 16px rgba(91,141,239,.35);
+}
+.ptbtn:hover:not(.active) { color: #FFFFFF; background: rgba(255,255,255,.05); }
+
+/* ── Screener ── */
+.screener-header {
+    display: flex; align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap; gap: 12px;
+    margin-bottom: 16px;
+}
+.screener-title {
+    font-family: 'Sora', sans-serif;
+    font-size: 20px; font-weight: 700;
+    color: #FFFFFF; letter-spacing: -.2px;
+}
+.screener-meta {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px; color: #4D6080; letter-spacing: .4px;
+}
+.pill-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.pill {
+    padding: 5px 14px; border-radius: 20px;
+    font-size: 10px; font-weight: 700;
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: .4px; cursor: pointer;
+    border: 1px solid rgba(120,140,200,.15);
+    background: rgba(255,255,255,.03); color: #8898BB;
+    transition: all .15s;
+}
+.pill.active {
+    background: rgba(91,141,239,.15);
+    border-color: rgba(91,141,239,.4); color: #FFFFFF;
+}
+.stock-table { width: 100%; border-collapse: collapse; }
+.stock-table th {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px; font-weight: 700; letter-spacing: .7px;
+    text-transform: uppercase; color: #4D6080;
+    padding: 8px 12px; border-bottom: 1px solid rgba(120,140,200,.1);
+    text-align: left; background: #080C16;
+}
+.stock-table td {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px; padding: 9px 12px;
+    border-bottom: 1px solid rgba(120,140,200,.05);
+    color: #FFFFFF;
+}
+.stock-table tr:hover td { background: rgba(91,141,239,.04); }
+.chg-pos { color: #0FD68A !important; font-weight: 700; }
+.chg-neg { color: #F0485A !important; font-weight: 700; }
+.ticker-badge {
+    font-weight: 700; color: #7BA4F5;
+    background: rgba(91,141,239,.08);
+    padding: 2px 7px; border-radius: 4px;
+    font-size: 11px;
+}
+.sector-tag {
+    font-size: 9px; padding: 2px 7px; border-radius: 3px;
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(120,140,200,.1);
+    color: #8898BB; white-space: nowrap;
+}
+.mkt-status-open  { color: #0FD68A; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 700; }
+.mkt-status-closed{ color: #F59E0B; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 700; }
 </style>
 
 <!-- Modal HTML (shared, one instance) -->
@@ -1227,11 +1313,306 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# MARKETS SCREENER — DATA
+# ─────────────────────────────────────────────────────────────────────────────
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def fetch_sp500_constituents() -> pd.DataFrame:
+    """Pull S&P 500 constituent list from Wikipedia."""
+    try:
+        tables = pd.read_html(
+            "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies",
+            attrs={"id": "constituents"}
+        )
+        df = tables[0][["Symbol", "Security", "GICS Sector", "GICS Sub-Industry"]]
+        df.columns = ["ticker", "company", "sector", "sub_industry"]
+        df["ticker"] = df["ticker"].str.replace(".", "-", regex=False)
+        df["index"] = "S&P 500"
+        return df.reset_index(drop=True)
+    except Exception as e:
+        print(f"SP500 constituents fetch failed: {e}")
+        return pd.DataFrame(columns=["ticker","company","sector","sub_industry","index"])
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def fetch_ndx_constituents() -> pd.DataFrame:
+    """Pull Nasdaq 100 constituent list from Wikipedia."""
+    try:
+        tables = pd.read_html(
+            "https://en.wikipedia.org/wiki/Nasdaq-100",
+            attrs={"id": "constituents"}
+        )
+        df = tables[0]
+        # Column names vary — normalise
+        df.columns = [c.lower().strip() for c in df.columns]
+        ticker_col  = next((c for c in df.columns if "tick" in c or "symbol" in c), df.columns[0])
+        company_col = next((c for c in df.columns if "comp" in c or "secur" in c), df.columns[1])
+        sector_col  = next((c for c in df.columns if "sector" in c or "gics" in c), None)
+        out = pd.DataFrame()
+        out["ticker"]  = df[ticker_col].str.replace(".", "-", regex=False)
+        out["company"] = df[company_col]
+        out["sector"]  = df[sector_col] if sector_col else "—"
+        out["sub_industry"] = "—"
+        out["index"] = "Nasdaq 100"
+        return out.reset_index(drop=True)
+    except Exception as e:
+        print(f"NDX constituents fetch failed: {e}")
+        return pd.DataFrame(columns=["ticker","company","sector","sub_industry","index"])
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_price_data(tickers: tuple) -> pd.DataFrame:
+    """
+    Batch fetch last 5 days OHLCV for all tickers via yfinance.
+    Compute % change and $ change vs prior close.
+    Returns one row per ticker with latest close data.
+    """
+    try:
+        raw = yf.download(
+            list(tickers),
+            period="5d",
+            auto_adjust=True,
+            progress=False,
+            threads=True,
+        )
+        if raw.empty:
+            return pd.DataFrame()
+
+        close = raw["Close"]
+        volume = raw["Volume"]
+
+        # Need at least 2 days
+        if len(close) < 2:
+            return pd.DataFrame()
+
+        last_close = close.iloc[-1]
+        prev_close = close.iloc[-2]
+        last_vol   = volume.iloc[-1]
+        last_date  = close.index[-1].date()
+
+        rows = []
+        for ticker in tickers:
+            if ticker not in close.columns:
+                continue
+            lc = last_close[ticker]
+            pc = prev_close[ticker]
+            if pd.isna(lc) or pd.isna(pc) or pc == 0:
+                continue
+            chg_pct = (lc / pc - 1) * 100
+            chg_abs = lc - pc
+            vol     = last_vol[ticker] if ticker in last_vol.index else 0
+            rows.append({
+                "ticker":    ticker,
+                "price":     round(lc, 2),
+                "chg_pct":   round(chg_pct, 2),
+                "chg_abs":   round(chg_abs, 2),
+                "volume":    int(vol) if not pd.isna(vol) else 0,
+                "trade_date": str(last_date),
+            })
+
+        return pd.DataFrame(rows)
+    except Exception as e:
+        print(f"Price fetch failed: {e}")
+        return pd.DataFrame()
+
+
+def fmt_volume(v: int) -> str:
+    if v >= 1_000_000_000: return f"{v/1_000_000_000:.1f}B"
+    if v >= 1_000_000:     return f"{v/1_000_000:.1f}M"
+    if v >= 1_000:         return f"{v/1_000:.0f}K"
+    return str(v)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MARKETS SCREENER — RENDERER
+# ─────────────────────────────────────────────────────────────────────────────
+def render_screener() -> None:
+    sgt = timezone(timedelta(hours=8))
+    now = datetime.now(sgt)
+
+    st.markdown("""
+    <div class="screener-header">
+      <div>
+        <div class="screener-title">📈 Markets Screener</div>
+        <div class="screener-meta">END-OF-DAY · PHASE 1 · YAHOO FINANCE</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Index selector ────────────────────────────────────────────────────
+    idx_choice = st.radio(
+        "Index", ["S&P 500", "Nasdaq 100"],
+        horizontal=True, label_visibility="collapsed",
+        key="idx_choice"
+    )
+
+    # ── Load constituents ─────────────────────────────────────────────────
+    with st.spinner("Loading constituent list…"):
+        if idx_choice == "S&P 500":
+            constituents = fetch_sp500_constituents()
+        else:
+            constituents = fetch_ndx_constituents()
+
+    if constituents.empty:
+        st.error("Failed to load constituent list. Check network connectivity.")
+        return
+
+    tickers_tuple = tuple(constituents["ticker"].tolist())
+
+    # ── Load price data ───────────────────────────────────────────────────
+    with st.spinner(f"Fetching prices for {len(tickers_tuple)} stocks…"):
+        prices = fetch_price_data(tickers_tuple)
+
+    if prices.empty:
+        st.error("Failed to fetch price data from Yahoo Finance.")
+        return
+
+    # ── Merge constituents + prices ───────────────────────────────────────
+    df = constituents.merge(prices, on="ticker", how="inner")
+    if df.empty:
+        st.error("No matching price data found.")
+        return
+
+    trade_date = df["trade_date"].iloc[0] if "trade_date" in df.columns else "—"
+    total_loaded = len(df)
+
+    st.markdown(
+        f"<div style='font-family:IBM Plex Mono,monospace;font-size:11px;"
+        f"color:#4D6080;margin-bottom:14px'>"
+        f"✓ {total_loaded} stocks loaded · Last trading day: <b style='color:#FFFFFF'>{trade_date}</b>"
+        f"</div>",
+        unsafe_allow_html=True
+    )
+
+    # ── Sector filter ─────────────────────────────────────────────────────
+    sectors     = ["All"] + sorted(df["sector"].dropna().unique().tolist())
+    sector_sel  = st.selectbox("Filter by Sector", sectors, key="sector_sel",
+                               label_visibility="collapsed")
+    if sector_sel != "All":
+        df = df[df["sector"] == sector_sel]
+
+    # ── View toggle: Gainers / Losers / All ───────────────────────────────
+    view = st.radio(
+        "View", ["🟢  Top Gainers", "🔴  Top Losers", "All Stocks"],
+        horizontal=True, key="view_sel", label_visibility="collapsed"
+    )
+    if "Gainers" in view:
+        df = df[df["chg_pct"] > 0].sort_values("chg_pct", ascending=False)
+    elif "Losers" in view:
+        df = df[df["chg_pct"] < 0].sort_values("chg_pct", ascending=True)
+    else:
+        df = df.sort_values("chg_pct", ascending=False)
+
+    # Show top 50
+    df = df.head(50).reset_index(drop=True)
+
+    # ── Summary stats row ─────────────────────────────────────────────────
+    all_prices = constituents.merge(prices, on="ticker", how="inner")
+    gainers    = (all_prices["chg_pct"] > 0).sum()
+    losers     = (all_prices["chg_pct"] < 0).sum()
+    unchanged  = (all_prices["chg_pct"] == 0).sum()
+    avg_chg    = all_prices["chg_pct"].mean()
+
+    c1, c2, c3, c4 = st.columns(4)
+    for col, label, val, color in [
+        (c1, "Advancing",  f"{gainers}",          "#0FD68A"),
+        (c2, "Declining",  f"{losers}",            "#F0485A"),
+        (c3, "Unchanged",  f"{unchanged}",         "#8898BB"),
+        (c4, "Avg Change", f"{avg_chg:+.2f}%",
+             "#0FD68A" if avg_chg >= 0 else "#F0485A"),
+    ]:
+        with col:
+            st.markdown(f"""
+            <div style="background:#0D1628;border:1px solid rgba(120,140,200,.1);
+                border-radius:8px;padding:12px 16px;text-align:center">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;
+                   color:#4D6080;letter-spacing:.6px;text-transform:uppercase;
+                   margin-bottom:4px">{label}</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:22px;
+                   font-weight:700;color:{color}">{val}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown("<div style='margin-top:16px'></div>", unsafe_allow_html=True)
+
+    # ── Stock table ───────────────────────────────────────────────────────
+    rows_html = ""
+    for i, row in df.iterrows():
+        chg_cls  = "chg-pos" if row["chg_pct"] >= 0 else "chg-neg"
+        chg_sign = "▲" if row["chg_pct"] >= 0 else "▼"
+        rows_html += f"""
+        <tr>
+          <td style="color:#4D6080;width:40px">{i+1}</td>
+          <td><span class="ticker-badge">{row['ticker']}</span></td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;
+              white-space:nowrap">{row['company']}</td>
+          <td><span class="sector-tag">{row['sector']}</span></td>
+          <td style="text-align:right">${row['price']:,.2f}</td>
+          <td class="{chg_cls}" style="text-align:right">
+              {chg_sign} {abs(row['chg_pct']):.2f}%</td>
+          <td class="{chg_cls}" style="text-align:right">
+              {'+' if row['chg_abs']>=0 else ''}{row['chg_abs']:.2f}</td>
+          <td style="text-align:right;color:#8898BB">{fmt_volume(row['volume'])}</td>
+        </tr>"""
+
+    st.markdown(f"""
+    <div style="background:#0B1020;border:1px solid rgba(120,140,200,.1);
+        border-radius:10px;overflow:hidden;overflow-x:auto">
+      <table class="stock-table">
+        <thead>
+          <tr>
+            <th>#</th><th>Ticker</th><th>Company</th><th>Sector</th>
+            <th style="text-align:right">Price</th>
+            <th style="text-align:right">Chg %</th>
+            <th style="text-align:right">Chg $</th>
+            <th style="text-align:right">Volume</th>
+          </tr>
+        </thead>
+        <tbody>{rows_html}</tbody>
+      </table>
+    </div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#4D6080;
+        margin-top:8px;text-align:right">
+      Data: Yahoo Finance · End-of-day prices · Showing top {len(df)} of {total_loaded}
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
     sgt = timezone(timedelta(hours=8))
     now_str = datetime.now(sgt).strftime("%d %b %Y · %H:%M SGT")
+
+    # ── Page toggle: MACRO / MARKETS ──────────────────────────────────────
+    if "page" not in st.session_state:
+        st.session_state["page"] = "MACRO"
+
+    st.markdown("<div style='padding:20px 0 0'>", unsafe_allow_html=True)
+    col_macro, col_markets, col_spacer = st.columns([1, 1, 8])
+    with col_macro:
+        if st.button(
+            "📊  MACRO",
+            key="btn_macro",
+            use_container_width=True,
+            type="primary" if st.session_state["page"] == "MACRO" else "secondary"
+        ):
+            st.session_state["page"] = "MACRO"
+            st.rerun()
+    with col_markets:
+        if st.button(
+            "📈  MARKETS",
+            key="btn_markets",
+            use_container_width=True,
+            type="primary" if st.session_state["page"] == "MARKETS" else "secondary"
+        ):
+            st.session_state["page"] = "MARKETS"
+            st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── Route to MARKETS screener ──────────────────────────────────────────
+    if st.session_state["page"] == "MARKETS":
+        render_screener()
+        return
 
     # ── Expanded chart view ────────────────────────────────────────────────
     # If an expand button was clicked, show ONLY the expanded chart +
