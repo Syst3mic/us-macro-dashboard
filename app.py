@@ -472,10 +472,10 @@ FRED_SERIES = {
         "source":    "DOL via FRED",
     },
     "adp": {
-        "id":        "ADPNFPCHNGUS",
+        "id":        "ADPWNUSNERSA",
         "name":      "ADP Employment",
         "full":      "ADP Nonfarm Private Employment MoM Change (000s)",
-        "transform": "adp",       # already a change series (K), show actual print
+        "transform": "adp",       # fetched as level, diff computed in fetch
         "color":     "#34D399",
         "unit":      "K",
         "dp":        0,
@@ -580,6 +580,10 @@ def fetch_fred_data() -> dict:
             # Claims: convert from persons to thousands
             if key == "claims":
                 df["value"] = df["value"] / 1000
+            # ADP: fetched as level (thousands), compute MoM diff to get net change
+            if key == "adp":
+                df["value"] = df["value"].diff(1)
+                df = df.dropna(subset=["value"]).reset_index(drop=True)
             result[key] = df
         except Exception as e:
             print(f"FRED fetch failed [{key}]: {e}")
