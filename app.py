@@ -472,17 +472,7 @@ FRED_SERIES = {
         "source":    "DOL via FRED",
     },
 
-    "umich": {
-        "id":        "UMCSENT",
-        "name":      "Michigan Consumer Sentiment",
-        "full":      "University of Michigan Consumer Sentiment Index",
-        "transform": "sentiment", # level index, show actual print + MoM change
-        "color":     "#FBBF24",
-        "unit":      "",
-        "dp":        1,
-        "freq":      "Monthly",
-        "source":    "UMich via FRED",
-    },
+
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1271,12 +1261,12 @@ def main():
         <div class="data-hover-bar">
           <div class="data-hover-item">
             <span class="data-hover-label">Source</span>
-            <span class="data-hover-val">BLS (Official) · FRED (DOL/ADP/UMich)</span>
+            <span class="data-hover-val">BLS (Official) · FRED (DOL)</span>
           </div>
           <div class="data-hover-divider"></div>
           <div class="data-hover-item">
             <span class="data-hover-label">Series</span>
-            <span class="data-hover-val">CPI · Core CPI · PPI · Unemp · NFP · Claims · Sentiment</span>
+            <span class="data-hover-val">CPI · Core CPI · PPI · Unemp · NFP · Claims</span>
           </div>
           <div class="data-hover-divider"></div>
           <div class="data-hover-item">
@@ -1365,24 +1355,14 @@ def main():
         with st.container(border=True):
             render_fred_card("claims", FRED_SERIES["claims"], fred_data.get("claims"))
 
-    st.markdown("<div style='margin-top:24px'></div>", unsafe_allow_html=True)
 
-    # ── SENTIMENT: Michigan Consumer Sentiment ─────────────────────────────
-    st.markdown(
-        '<div class="section-header"><span class="section-icon">◐</span>SENTIMENT</div>',
-        unsafe_allow_html=True
-    )
-    cols_sent = st.columns(3, gap="medium")
-    with cols_sent[0]:
-        with st.container(border=True):
-            render_fred_card("umich", FRED_SERIES["umich"], fred_data.get("umich"))
 
     # ── Footer ─────────────────────────────────────────────────────────────
     st.markdown("<hr style='margin-top:32px'>", unsafe_allow_html=True)
     st.markdown(
         "<p style='font-size:11px;color:#4D6080;font-family:IBM Plex Mono,monospace;text-align:center'>"
         "BLS data: CUSR0000SA0 · CUSR0000SA0L1E · WPSFD4 · LNS14000000 · CES0000000001 &nbsp;·&nbsp; "
-        "FRED data: ICSA · UMCSENT"
+        "FRED data: ICSA"
         "</p>",
         unsafe_allow_html=True
     )
