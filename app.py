@@ -472,9 +472,9 @@ FRED_SERIES = {
         "source":    "DOL via FRED",
     },
     "adp": {
-        "id":        "ADPNFPCA",
+        "id":        "ADPNFPCHNGUS",
         "name":      "ADP Employment",
-        "full":      "ADP Nonfarm Private Employment MoM Change",
+        "full":      "ADP Nonfarm Private Employment MoM Change (000s)",
         "transform": "adp",       # already a change series (K), show actual print
         "color":     "#34D399",
         "unit":      "K",
@@ -1208,7 +1208,57 @@ def main():
         """, unsafe_allow_html=True)
 
         # Full-height expanded chart
-        fig_exp = make_chart(df_e, cfg_e, which_e, height=550)
+        # FRED cards store transform in cfg — use raw value column directly
+        is_fred = cfg_e.get("transform") in ("claims", "adp", "sentiment")
+
+        if is_fred:
+            # Rebuild expanded chart from raw df using same logic as render_fred_card
+            plot_df = df_e.tail(104 if cfg_e.get("freq") == "Weekly" else 60)
+            color_e = cfg_e["color"]
+            r_e = int(color_e[1:3], 16)
+            g_e = int(color_e[3:5], 16)
+            b_e = int(color_e[5:7], 16)
+            fill_e = f"rgba({r_e},{g_e},{b_e},0.1)"
+
+            if cfg_e["transform"] == "adp":
+                bar_colors  = ["rgba(15,214,138,.7)"  if v >= 0 else "rgba(240,72,90,.7)"  for v in plot_df["value"]]
+                bar_borders = ["rgba(15,214,138,.95)" if v >= 0 else "rgba(240,72,90,.95)" for v in plot_df["value"]]
+                fig_exp = go.Figure(go.Bar(
+                    x=plot_df["date"], y=plot_df["value"],
+                    marker_color=bar_colors, marker_line_color=bar_borders,
+                    marker_line_width=1,
+                    hovertemplate="%{x|%b %Y}<br><b>%{y:+.0f}K</b><extra></extra>",
+                ))
+                fig_exp.add_hline(y=0, line_color="rgba(120,140,200,.2)", line_width=1)
+            else:
+                hover_fmt = "%{x|%d %b '%y}<br><b>%{y:.0f}K</b>" if cfg_e.get("freq") == "Weekly" else "%{x|%b %Y}<br><b>%{y:.1f}</b>"
+                fig_exp = go.Figure(go.Scatter(
+                    x=plot_df["date"], y=plot_df["value"],
+                    mode="lines", line=dict(color=color_e, width=2),
+                    fill="tozeroy", fillcolor=fill_e,
+                    hovertemplate=hover_fmt + "<extra></extra>",
+                ))
+                y_min = max(0, plot_df["value"].min() * 0.9)
+                y_max = plot_df["value"].max() * 1.05
+                fig_exp.update_yaxes(range=[y_min, y_max])
+
+            fig_exp.update_layout(
+                height=550,
+                margin=dict(l=0, r=0, t=8, b=0),
+                paper_bgcolor="#0B1020", plot_bgcolor="#0B1020",
+                font=dict(family="IBM Plex Mono, monospace", color="#8898BB", size=11),
+                xaxis=dict(showgrid=False, zeroline=False,
+                           tickfont=dict(size=11, color="#FFFFFF"),
+                           tickformat="%b '%y", nticks=8),
+                yaxis=dict(showgrid=True, gridcolor="rgba(120,140,200,.06)", zeroline=False,
+                           tickfont=dict(size=11, color="#FFFFFF"), nticks=6),
+                hoverlabel=dict(bgcolor="#0E1428", bordercolor="rgba(91,141,239,.3)",
+                                font=dict(family="IBM Plex Mono, monospace", size=13, color="#FFFFFF")),
+                showlegend=False,
+            )
+        else:
+            fig_exp = make_chart(df_e, cfg_e, which_e, height=550)
+
         st.plotly_chart(
             fig_exp, use_container_width=True,
             config={
