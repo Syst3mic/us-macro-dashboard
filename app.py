@@ -624,12 +624,20 @@ def render_card(key: str, cfg: dict, df) -> None:
     # prev_mom_level  = level 1 month ago  (for MoM box badge)
     # prev_yoy_level  = level 12 months ago (for YoY box badge)
     # These come from the raw df (before diffs), aligned by date
-    df_raw     = df.sort_values("date").reset_index(drop=True)
-    last_idx   = len(df_raw) - 1
-    prev1_val  = df_raw.iloc[last_idx - 1]["value"]  if last_idx >= 1  else None
-    prev12_val = df_raw.iloc[last_idx - 12]["value"] if last_idx >= 12 else None
-    prev1_date  = df_raw.iloc[last_idx - 1]["date"].strftime("%b %Y")  if last_idx >= 1  else "—"
-    prev12_date = df_raw.iloc[last_idx - 12]["date"].strftime("%b %Y") if last_idx >= 12 else "—"
+    df_raw   = df.sort_values("date").reset_index(drop=True)
+    last_date = last["date"]  # e.g. 2026-04-01
+
+    # Look up exactly 1 month prior by date arithmetic (not index offset)
+    prev1_target  = last_date - pd.DateOffset(months=1)
+    prev12_target = last_date - pd.DateOffset(months=12)
+
+    prev1_row  = df_raw[df_raw["date"] == prev1_target]
+    prev12_row = df_raw[df_raw["date"] == prev12_target]
+
+    prev1_val   = prev1_row.iloc[0]["value"]            if not prev1_row.empty  else None
+    prev12_val  = prev12_row.iloc[0]["value"]           if not prev12_row.empty else None
+    prev1_date  = prev1_row.iloc[0]["date"].strftime("%b %Y")  if not prev1_row.empty  else "—"
+    prev12_date = prev12_row.iloc[0]["date"].strftime("%b %Y") if not prev12_row.empty else "—"
 
     # ── Headline value ────────────────────────────────────────────────────
     # price_index : headline = MoM% change (e.g. +0.64%) / YoY% change (e.g. +3.95%)
