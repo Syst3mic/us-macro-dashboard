@@ -460,6 +460,18 @@ SERIES = {
 # FRED SERIES CONFIG  (for indicators not on BLS)
 # ─────────────────────────────────────────────────────────────────────────────
 FRED_SERIES = {
+    "corepce": {
+        "id":        "PCEPILFE",
+        "name":      "Core PCE",
+        "full":      "PCE Excluding Food & Energy — BEA",
+        "transform": "price_index",
+        "color":     "#F472B6",
+        "unit_mom":  "%",
+        "unit_yoy":  "%",
+        "dp":        2,
+        "freq":      "Monthly",
+        "source":    "BEA via FRED",
+    },
     "claims": {
         "id":        "ICSA",
         "name":      "Initial Jobless Claims",
@@ -957,6 +969,77 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
     """
     color = cfg["color"]
 
+    # ── Price index (Core PCE): delegate to render_card with FRED badge ──
+    if cfg.get("transform") == "price_index":
+        # render_card handles all price_index logic (MoM%/YoY%, charts, tabs)
+        # Override the source badge to show FRED instead of BLS
+        st.markdown(f"""
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="width:9px;height:9px;border-radius:50%;background:{color};
+                   box-shadow:0 0 10px {color}70;display:inline-block;flex-shrink:0"></span>
+            <span class="ind-name">{cfg['name']}</span>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <span class="ind-src" style="background:rgba(251,191,36,.07);border-color:rgba(251,191,36,.2);color:#FCD34D">FRED</span>
+            <span class="ind-freq">{cfg['freq'].upper()}</span>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+        if df is None or df.empty:
+            st.warning("Data unavailable", icon="⚠️")
+            return
+        # Use compute_series + same stat/chart logic as BLS price_index cards
+        df_c  = compute_series(df, "price_index")
+        valid = df_c.dropna(subset=["mom", "yoy"])
+        if len(valid) < 2:
+            st.warning("Insufficient data", icon="⚠️")
+            return
+        last     = valid.iloc[-1]
+        prev     = valid.iloc[-2]
+        date_str = last["date"].strftime("%b %Y")
+        mom_val  = last["mom"]
+        yoy_val  = last["yoy"]
+        mom_delta  = mom_val - prev["mom"]
+        yoy_delta  = yoy_val - prev["yoy"]
+        mom_up     = is_positive_signal(mom_val,   key)
+        delta_up   = is_positive_signal(mom_delta, key)
+        yoy_dlt_up = is_positive_signal(yoy_delta, key)
+        mom_str     = fmt_val(mom_val,   cfg, "mom")
+        yoy_str     = fmt_val(yoy_val,   cfg, "yoy")
+        mom_dlt_str = fmt_val(mom_delta, cfg, "mom") + " vs prior"
+        yoy_dlt_str = fmt_val(yoy_delta, cfg, "yoy") + " vs prior"
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown(stat_box_html("Month-over-Month", mom_str, mom_dlt_str, delta_up, date_str), unsafe_allow_html=True)
+        with c2:
+            st.markdown(stat_box_html("Year-over-Year",   yoy_str, yoy_dlt_str, yoy_dlt_up, date_str), unsafe_allow_html=True)
+        # Charts with MoM/YoY toggle — same as BLS price_index cards
+        st.markdown("<div style='margin-top:16px'>", unsafe_allow_html=True)
+        tab_mom, tab_yoy = st.tabs(["  MoM  ", "  YoY  "])
+        with tab_mom:
+            fig_mom = make_chart(df_c, cfg, "mom", height=200)
+            col_chart, col_btn = st.columns([10, 1])
+            with col_chart:
+                st.plotly_chart(fig_mom, use_container_width=True, config={"displayModeBar": False}, key=f"plt_mom_{key}")
+            with col_btn:
+                if st.button("⛶", key=f"exp_mom_{key}", help="Expand chart"):
+                    st.session_state["expanded"] = {"key": key, "which": "mom", "title": f"{cfg['name']} — Month-over-Month", "cfg": cfg, "df_c": df_c}
+                    st.rerun()
+            st.caption(cfg["full"])
+        with tab_yoy:
+            fig_yoy = make_chart(df_c, cfg, "yoy", height=200)
+            col_chart2, col_btn2 = st.columns([10, 1])
+            with col_chart2:
+                st.plotly_chart(fig_yoy, use_container_width=True, config={"displayModeBar": False}, key=f"plt_yoy_{key}")
+            with col_btn2:
+                if st.button("⛶", key=f"exp_yoy_{key}", help="Expand chart"):
+                    st.session_state["expanded"] = {"key": key, "which": "yoy", "title": f"{cfg['name']} — Year-over-Year", "cfg": cfg, "df_c": df_c}
+                    st.rerun()
+            st.caption(cfg["full"])
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
     # ── Label row ─────────────────────────────────────────────────────────
     src_label = cfg.get("source", "FRED")
     st.markdown(f"""
@@ -1261,12 +1344,12 @@ def main():
         <div class="data-hover-bar">
           <div class="data-hover-item">
             <span class="data-hover-label">Source</span>
-            <span class="data-hover-val">BLS (Official) · FRED (DOL)</span>
+            <span class="data-hover-val">BLS (Official) · FRED (BEA/DOL)</span>
           </div>
           <div class="data-hover-divider"></div>
           <div class="data-hover-item">
             <span class="data-hover-label">Series</span>
-            <span class="data-hover-val">CPI · Core CPI · PPI · Unemp · NFP · Claims</span>
+            <span class="data-hover-val">CPI · Core CPI · PPI · Core PCE · Unemp · NFP · Claims</span>
           </div>
           <div class="data-hover-divider"></div>
           <div class="data-hover-item">
@@ -1322,16 +1405,23 @@ def main():
 
     st.markdown("<div style='margin-bottom:20px'></div>", unsafe_allow_html=True)
 
-    # ── INFLATION: CPI · Core CPI · PPI ───────────────────────────────────
+    # ── INFLATION: CPI · Core CPI · PPI · Core PCE ───────────────────────
     st.markdown(
         '<div class="section-header"><span class="section-icon">▲</span>INFLATION</div>',
         unsafe_allow_html=True
     )
+    # Row 1: CPI · Core CPI · PPI (BLS)
     cols_price = st.columns(3, gap="medium")
     for col, key in zip(cols_price, ["cpi", "corecpi", "ppi"]):
         with col:
             with st.container(border=True):
                 render_card(key, SERIES[key], all_data.get(key))
+    st.markdown("<div style='margin-top:10px'></div>", unsafe_allow_html=True)
+    # Row 2: Core PCE (BEA via FRED) — Fed's preferred inflation measure
+    cols_pce = st.columns(3, gap="medium")
+    with cols_pce[0]:
+        with st.container(border=True):
+            render_fred_card("corepce", FRED_SERIES["corepce"], fred_data.get("corepce"))
 
     st.markdown("<div style='margin-top:24px'></div>", unsafe_allow_html=True)
 
@@ -1362,7 +1452,7 @@ def main():
     st.markdown(
         "<p style='font-size:11px;color:#4D6080;font-family:IBM Plex Mono,monospace;text-align:center'>"
         "BLS data: CUSR0000SA0 · CUSR0000SA0L1E · WPSFD4 · LNS14000000 · CES0000000001 &nbsp;·&nbsp; "
-        "FRED data: ICSA"
+        "FRED data: PCEPILFE (BEA) · ICSA (DOL)"
         "</p>",
         unsafe_allow_html=True
     )
