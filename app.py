@@ -21,15 +21,17 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CUSTOM CSS  — dark enterprise theme
+# CUSTOM CSS
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;600;700&display=swap');
+
 /* ── Global ── */
 html, body, [data-testid="stApp"] {
     background-color: #06080F;
-    color: #EEF2FF;
-    font-family: 'Segoe UI', system-ui, sans-serif;
+    color: #FFFFFF;
+    font-family: 'Sora', 'Segoe UI', system-ui, sans-serif;
 }
 [data-testid="stAppViewContainer"] { background-color: #06080F; }
 [data-testid="stHeader"] { background: transparent; }
@@ -37,101 +39,298 @@ section[data-testid="stSidebar"] { background: #080C16; }
 
 /* ── Hide Streamlit chrome ── */
 #MainMenu, footer, header { visibility: hidden; }
-.block-container { padding: 1.5rem 2rem 4rem; max-width: 1400px; }
-
-/* ── Metric cards ── */
-[data-testid="metric-container"] {
-    background: #0B1020;
-    border: 1px solid rgba(120,140,200,.1);
-    border-radius: 10px;
-    padding: 16px 20px;
-    transition: border-color .2s;
-}
-[data-testid="metric-container"]:hover {
-    border-color: rgba(120,140,200,.22);
-}
-[data-testid="stMetricLabel"] {
-    font-size: 10px !important;
-    font-weight: 700 !important;
-    letter-spacing: .8px !important;
-    text-transform: uppercase !important;
-    color: #8898BB !important;
-}
-[data-testid="stMetricValue"] {
-    font-size: 26px !important;
-    font-weight: 700 !important;
-    font-family: 'Courier New', monospace !important;
-    color: #EEF2FF !important;
-}
-[data-testid="stMetricDelta"] svg { display: none; }
-[data-testid="stMetricDelta"] > div {
-    font-family: 'Courier New', monospace !important;
-    font-size: 11px !important;
-    font-weight: 600 !important;
-}
+.block-container { padding: 0 2rem 4rem; max-width: 1400px; }
 
 /* ── Divider ── */
-hr { border-color: rgba(120,140,200,.08) !important; margin: 0.5rem 0 !important; }
+hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important; }
 
-/* ── Section headers ── */
-.section-header {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    color: #3D5070;
-    padding: 4px 0 10px;
-    border-bottom: 1px solid rgba(120,140,200,.07);
-    margin-bottom: 12px;
+/* ── Hero banner ── */
+.hero-banner {
+    background: linear-gradient(135deg, #080E20 0%, #0D1530 40%, #071018 100%);
+    border-bottom: 1px solid rgba(91,141,239,.2);
+    padding: 28px 32px 24px;
+    margin: 0 -2rem 28px;
+    position: relative;
+    overflow: hidden;
 }
-
-/* ── Top header bar ── */
-.dash-header {
+.hero-banner::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, #5B8DEF, #22D3EE, #0FD68A);
+}
+.hero-banner::after {
+    content: '';
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 300px; height: 300px;
+    background: radial-gradient(circle, rgba(91,141,239,.08) 0%, transparent 70%);
+    pointer-events: none;
+}
+.hero-top {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 0 18px;
-    border-bottom: 1px solid rgba(120,140,200,.08);
-    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
 }
-.dash-title { font-size: 18px; font-weight: 700; color: #EEF2FF; letter-spacing: -.3px; }
-.dash-sub   { font-size: 10px; color: #3D5070; letter-spacing: .4px; margin-top: 3px; font-family: 'Courier New', monospace; }
+.hero-left { display: flex; flex-direction: column; gap: 6px; }
+.hero-title {
+    font-size: 28px;
+    font-weight: 800;
+    color: #FFFFFF;
+    letter-spacing: -.5px;
+    line-height: 1;
+    font-family: 'Sora', sans-serif;
+}
+.hero-title span {
+    background: linear-gradient(90deg, #5B8DEF, #22D3EE);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.hero-sub {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: #8898BB;
+    letter-spacing: .5px;
+}
+.hero-right { display: flex; align-items: center; gap: 10px; }
 .bls-tag {
-    font-size: 9px; font-weight: 700; letter-spacing: .6px;
-    padding: 4px 10px; border-radius: 4px;
-    background: rgba(91,141,239,.08); border: 1px solid rgba(91,141,239,.2); color: #7BA4F5;
-    font-family: 'Courier New', monospace;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px; font-weight: 700; letter-spacing: .7px;
+    padding: 6px 14px; border-radius: 5px;
+    background: rgba(91,141,239,.1);
+    border: 1px solid rgba(91,141,239,.3);
+    color: #7BA4F5;
+}
+.refresh-icon-btn {
+    width: 34px; height: 34px; border-radius: 6px;
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(120,140,200,.15);
+    color: #FFFFFF; font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all .15s;
+}
+.refresh-icon-btn:hover {
+    background: rgba(91,141,239,.15);
+    border-color: rgba(91,141,239,.4);
+}
+.hero-stats {
+    display: flex; gap: 28px; margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(120,140,200,.08);
+    flex-wrap: wrap;
+}
+.hero-stat-item { display: flex; flex-direction: column; gap: 2px; }
+.hero-stat-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px; color: #4D6080; letter-spacing: .6px; text-transform: uppercase;
+}
+.hero-stat-val {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px; color: #FFFFFF; font-weight: 600;
+}
+
+/* ── Section headers ── */
+.section-header {
+    font-size: 20px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #FFFFFF;
+    padding: 6px 0 14px;
+    border-bottom: 1px solid rgba(120,140,200,.1);
+    margin-bottom: 16px;
+    font-family: 'Sora', sans-serif;
+}
+.section-header .section-icon {
+    color: #5B8DEF;
+    margin-right: 8px;
+}
+
+/* ── Indicator name ── */
+.ind-name {
+    font-size: 20px !important;
+    font-weight: 700 !important;
+    letter-spacing: .3px !important;
+    text-transform: uppercase !important;
+    color: #FFFFFF !important;
+    font-family: 'Sora', sans-serif !important;
+}
+.ind-src {
+    font-size: 9px; font-weight: 700; letter-spacing: .5px;
+    padding: 3px 8px; border-radius: 3px;
+    background: rgba(91,141,239,.07);
+    border: 1px solid rgba(91,141,239,.15);
+    color: #7BA4F5;
+    font-family: 'IBM Plex Mono', monospace;
+}
+.ind-freq {
+    font-size: 9px; color: #FFFFFF;
+    padding: 3px 8px; border-radius: 3px;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(120,140,200,.12);
+    font-family: 'IBM Plex Mono', monospace;
+}
+
+/* ── Stat boxes ── */
+.stat-box {
+    background: #0D1628;
+    border: 1px solid rgba(120,140,200,.12);
+    border-radius: 10px;
+    padding: 18px 20px 14px;
+    transition: border-color .2s;
+}
+.stat-box:hover { border-color: rgba(120,140,200,.25); }
+.stat-period {
+    font-size: 14px; font-weight: 700; letter-spacing: .5px;
+    text-transform: uppercase; color: #FFFFFF;
+    margin-bottom: 10px;
+    font-family: 'Sora', sans-serif;
+}
+.stat-val {
+    font-size: 30px; font-weight: 700; color: #FFFFFF;
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: -1px; line-height: 1;
+}
+.stat-delta {
+    font-size: 11px; font-weight: 600;
+    font-family: 'IBM Plex Mono', monospace;
+    margin-top: 8px; display: inline-block;
+    padding: 3px 9px; border-radius: 4px;
+}
+.stat-up { color: #0FD68A; background: rgba(15,214,138,.08); border: 1px solid rgba(15,214,138,.22); }
+.stat-dn { color: #F0485A; background: rgba(240,72,90,.08);  border: 1px solid rgba(240,72,90,.22); }
+.stat-date {
+    font-size: 10px; color: #FFFFFF;
+    margin-top: 5px; font-family: 'IBM Plex Mono', monospace;
+    opacity: .7;
 }
 
 /* ── Release table ── */
-.rel-table { width: 100%; border-collapse: collapse; font-family: 'Courier New', monospace; font-size: 11px; }
+.rel-table { width: 100%; border-collapse: collapse; font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
 .rel-table th {
-    text-align: left; padding: 6px 10px;
-    font-size: 8px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
-    color: #3D5070; background: #111827; border-bottom: 1px solid rgba(120,140,200,.08);
+    text-align: left; padding: 8px 12px;
+    font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
+    color: #FFFFFF; background: #111827;
+    border-bottom: 1px solid rgba(120,140,200,.1);
+    opacity: .7;
 }
-.rel-table td { padding: 7px 10px; color: #8898BB; border-bottom: 1px solid rgba(120,140,200,.05); }
-.rel-table tr:first-child td { color: #EEF2FF; font-weight: 600; }
-.pos { color: #0FD68A !important; }
-.neg { color: #F0485A !important; }
+.rel-table td {
+    padding: 8px 12px; color: #FFFFFF;
+    border-bottom: 1px solid rgba(120,140,200,.06);
+    opacity: .8;
+}
+.rel-table tr:first-child td { opacity: 1; font-weight: 600; }
+.pos { color: #0FD68A !important; opacity: 1 !important; }
+.neg { color: #F0485A !important; opacity: 1 !important; }
 
-/* ── Stat pair box ── */
-.stat-box {
-    background: #0B1020;
-    border: 1px solid rgba(120,140,200,.1);
-    border-radius: 10px;
-    padding: 16px 20px 12px;
+/* ── Chart expand button ── */
+.chart-expand-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px; font-weight: 700; letter-spacing: .4px;
+    padding: 3px 9px; border-radius: 4px;
+    background: rgba(91,141,239,.08);
+    border: 1px solid rgba(91,141,239,.2);
+    color: #7BA4F5; cursor: pointer;
+    transition: all .15s;
 }
-.stat-box:hover { border-color: rgba(120,140,200,.2); }
-.stat-period { font-size: 8px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; color: #3D5070; margin-bottom: 6px; font-family: 'Courier New', monospace; }
-.stat-val    { font-size: 24px; font-weight: 700; color: #EEF2FF; font-family: 'Courier New', monospace; letter-spacing: -1px; line-height: 1; }
-.stat-delta  { font-size: 10px; font-weight: 600; font-family: 'Courier New', monospace; margin-top: 6px; display: inline-block; padding: 2px 8px; border-radius: 4px; }
-.stat-up     { color: #0FD68A; background: rgba(15,214,138,.08); border: 1px solid rgba(15,214,138,.2); }
-.stat-dn     { color: #F0485A; background: rgba(240,72,90,.08);  border: 1px solid rgba(240,72,90,.2); }
-.stat-date   { font-size: 9px; color: #3D5070; margin-top: 4px; font-family: 'Courier New', monospace; }
-.ind-src     { font-size: 8px; font-weight: 700; letter-spacing: .5px; padding: 2px 6px; border-radius: 3px; background: rgba(91,141,239,.07); border: 1px solid rgba(91,141,239,.15); color: #5E7AAA; font-family: 'Courier New', monospace; }
-.ind-freq    { font-size: 8px; color: #3D5070; padding: 2px 6px; border-radius: 3px; background: #111827; border: 1px solid rgba(120,140,200,.08); font-family: 'Courier New', monospace; }
+.chart-expand-btn:hover {
+    background: rgba(91,141,239,.18);
+    border-color: rgba(91,141,239,.4);
+    color: #FFFFFF;
+}
+
+/* ── Modal overlay ── */
+.modal-overlay {
+    display: none;
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,.85);
+    z-index: 9999;
+    align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+}
+.modal-overlay.open { display: flex; }
+.modal-box {
+    background: #0B1020;
+    border: 1px solid rgba(91,141,239,.25);
+    border-radius: 14px;
+    padding: 24px;
+    width: 90vw; max-width: 1100px;
+    position: relative;
+    box-shadow: 0 24px 80px rgba(0,0,0,.7);
+}
+.modal-close {
+    position: absolute; top: 16px; right: 16px;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(120,140,200,.15);
+    color: #FFFFFF; font-size: 18px;
+    width: 32px; height: 32px; border-radius: 6px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all .15s;
+}
+.modal-close:hover { background: rgba(240,72,90,.15); border-color: rgba(240,72,90,.3); }
+.modal-title {
+    font-family: 'Sora', sans-serif;
+    font-size: 16px; font-weight: 700; color: #FFFFFF;
+    margin-bottom: 16px; letter-spacing: -.2px;
+}
+
+/* ── Streamlit button overrides (refresh) ── */
+[data-testid="stButton"] button {
+    background: rgba(255,255,255,.04) !important;
+    border: 1px solid rgba(120,140,200,.15) !important;
+    color: #FFFFFF !important;
+    font-size: 18px !important;
+    padding: 4px 10px !important;
+    border-radius: 6px !important;
+    font-family: 'Sora', sans-serif !important;
+    min-height: 34px !important;
+    line-height: 1 !important;
+}
+[data-testid="stButton"] button:hover {
+    background: rgba(91,141,239,.15) !important;
+    border-color: rgba(91,141,239,.4) !important;
+}
+
+/* ── Status text ── */
+.status-ok  { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #0FD68A; }
+.status-warn{ font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #F59E0B; }
 </style>
+
+<!-- Modal HTML (shared, one instance) -->
+<div class="modal-overlay" id="chartModal" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title" id="modalTitle"></div>
+    <div id="modalChart"></div>
+  </div>
+</div>
+
+<script>
+function openModal(title, chartDivId) {
+    document.getElementById('modalTitle').innerText = title;
+    var src = document.getElementById(chartDivId);
+    var dest = document.getElementById('modalChart');
+    if (src) {
+        dest.innerHTML = src.innerHTML;
+        // Resize the plotly chart inside modal
+        var plots = dest.querySelectorAll('.js-plotly-plot');
+        plots.forEach(function(p) {
+            if (window.Plotly) Plotly.relayout(p, {height: 480});
+        });
+    }
+    document.getElementById('chartModal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+function closeModal() {
+    document.getElementById('chartModal').classList.remove('open');
+    document.body.style.overflow = '';
+    document.getElementById('modalChart').innerHTML = '';
+}
+document.addEventListener('keydown', function(e) { if(e.key==='Escape') closeModal(); });
+</script>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -142,11 +341,9 @@ SERIES = {
         "id": "CUSR0000SA0",
         "name": "CPI",
         "full": "Consumer Price Index — All Items SA",
-        "transform": "price_index",   # MoM% and YoY% via pct_change
+        "transform": "price_index",
         "color": "#5B8DEF",
-        "unit_mom": "%",
-        "unit_yoy": "%",
-        "dp": 2,                      # decimal places
+        "unit_mom": "%", "unit_yoy": "%", "dp": 2,
     },
     "corecpi": {
         "id": "CUSR0000SA0L1E",
@@ -154,9 +351,7 @@ SERIES = {
         "full": "CPI ex Food & Energy SA",
         "transform": "price_index",
         "color": "#22D3EE",
-        "unit_mom": "%",
-        "unit_yoy": "%",
-        "dp": 2,
+        "unit_mom": "%", "unit_yoy": "%", "dp": 2,
     },
     "ppi": {
         "id": "WPSFD4",
@@ -164,61 +359,46 @@ SERIES = {
         "full": "PPI Final Demand",
         "transform": "price_index",
         "color": "#A78BFA",
-        "unit_mom": "%",
-        "unit_yoy": "%",
-        "dp": 2,
+        "unit_mom": "%", "unit_yoy": "%", "dp": 2,
     },
     "unemp": {
         "id": "LNS14000000",
         "name": "Unemployment Rate",
         "full": "Civilian Unemployment Rate (U-3) SA",
-        "transform": "rate",          # already in %, report pp change
+        "transform": "rate",
         "color": "#F59E0B",
-        "unit_mom": "pp",
-        "unit_yoy": "pp",
-        "dp": 1,
+        "unit_mom": "pp", "unit_yoy": "pp", "dp": 1,
     },
     "nfp": {
         "id": "CES0000000001",
         "name": "Nonfarm Payrolls",
         "full": "Total Nonfarm Payrolls SA",
-        "transform": "nfp",           # level in thousands, diff = net jobs
+        "transform": "nfp",
         "color": "#0FD68A",
-        "unit_mom": "K",
-        "unit_yoy": "K",
-        "dp": 0,
+        "unit_mom": "K", "unit_yoy": "K", "dp": 0,
     },
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# BLS API  — server-side, no CORS, no proxy needed
+# BLS API FETCH
 # ─────────────────────────────────────────────────────────────────────────────
-@st.cache_data(ttl=3600, show_spinner=False)  # cache 1 hour
-def fetch_bls_data() -> dict[str, pd.DataFrame]:
-    """
-    Single BLS v2 POST fetching all 5 series at once.
-    Returns dict of {key: DataFrame} with columns [date, value]
-    sorted oldest → newest.
-    """
-    api_key = st.secrets["BLS_API_KEY"]
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_bls_data() -> dict:
+    api_key    = st.secrets["BLS_API_KEY"]
     series_ids = [cfg["id"] for cfg in SERIES.values()]
-    keys       = list(SERIES.keys())
     id_to_key  = {cfg["id"]: k for k, cfg in SERIES.items()}
-
     end_year   = datetime.now().year
-    start_year = end_year - 10  # 10 years of history
+    start_year = end_year - 10
 
     payload = {
-        "seriesid":       series_ids,
-        "startyear":      str(start_year),
-        "endyear":        str(end_year),
+        "seriesid":        series_ids,
+        "startyear":       str(start_year),
+        "endyear":         str(end_year),
         "registrationkey": api_key,
     }
-
     resp = requests.post(
         "https://api.bls.gov/publicAPI/v2/timeseries/data/",
-        json=payload,
-        timeout=30,
+        json=payload, timeout=30,
     )
     resp.raise_for_status()
     data = resp.json()
@@ -234,35 +414,21 @@ def fetch_bls_data() -> dict[str, pd.DataFrame]:
             continue
         rows = []
         for obs in series["data"]:
-            # Skip annual averages (M13) and missing values
-            if obs["period"] == "M13":
+            if obs["period"] == "M13" or obs["value"] in ("-", ""):
                 continue
-            if obs["value"] in ("-", ""):
-                continue
-            month = int(obs["period"][1:])  # "M01" → 1
+            month = int(obs["period"][1:])
             rows.append({
                 "date":  pd.Timestamp(year=int(obs["year"]), month=month, day=1),
                 "value": float(obs["value"]),
             })
-        df = (
-            pd.DataFrame(rows)
-            .sort_values("date")
-            .reset_index(drop=True)
-        )
+        df = pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
         result[key] = df
-
     return result
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TRANSFORMATIONS
 # ─────────────────────────────────────────────────────────────────────────────
 def compute_series(df: pd.DataFrame, transform: str) -> pd.DataFrame:
-    """
-    Add mom and yoy columns to dataframe.
-      price_index : MoM% = pct_change(1)*100,  YoY% = pct_change(12)*100
-      rate        : MoM pp = diff(1),            YoY pp = diff(12)
-      nfp         : MoM K  = diff(1),            YoY K  = diff(12)
-    """
     df = df.copy()
     if transform == "price_index":
         df["mom"] = df["value"].pct_change(1)  * 100
@@ -284,109 +450,81 @@ def fmt_val(v: float, cfg: dict, which: str) -> str:
     return f"{sign}{v:.{dp}f}{unit}"
 
 def is_positive_signal(v: float, key: str) -> bool:
-    """
-    Inflation (cpi/corecpi/ppi): lower = better (green when negative)
-    Unemployment: lower = better (green when negative)
-    NFP: higher = better (green when positive)
-    """
-    if key == "nfp":
-        return v >= 0
-    return v <= 0  # lower inflation / lower unemployment = positive signal
-
-def delta_color(v: float, key: str) -> str:
-    return "normal" if is_positive_signal(v, key) else "inverse"
+    if key == "nfp":   return v >= 0
+    return v <= 0  # lower inflation / lower unemployment = positive
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PLOTLY CHART  — dark theme, consistent with dashboard aesthetic
+# PLOTLY CHART
 # ─────────────────────────────────────────────────────────────────────────────
-CHART_BG    = "#0B1020"
-CHART_PAPER = "#0B1020"
-GRID_COLOR  = "rgba(120,140,200,.06)"
-AXIS_COLOR  = "#3D5070"
-FONT_MONO   = "Courier New, monospace"
+CHART_BG  = "#0B1020"
+GRID_COL  = "rgba(120,140,200,.06)"
+AXIS_COL  = "#8898BB"
+FONT_MONO = "IBM Plex Mono, Courier New, monospace"
 
-def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy") -> go.Figure:
-    col_name = which  # "mom" or "yoy"
-    plot_df  = df.dropna(subset=[col_name]).tail(60)  # last 5 years
-
-    color    = cfg["color"]
-    fig      = go.Figure()
+def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy",
+               height: int = 200) -> go.Figure:
+    plot_df = df.dropna(subset=[which]).tail(60)
+    color   = cfg["color"]
+    fig     = go.Figure()
 
     if cfg["transform"] == "nfp":
-        # Bar chart with green/red coloring
-        bar_colors = [
-            "rgba(15,214,138,.7)" if v >= 0 else "rgba(240,72,90,.7)"
-            for v in plot_df[col_name]
-        ]
-        bar_borders = [
-            "rgba(15,214,138,.9)" if v >= 0 else "rgba(240,72,90,.9)"
-            for v in plot_df[col_name]
-        ]
+        bar_colors  = ["rgba(15,214,138,.7)"  if v >= 0 else "rgba(240,72,90,.7)"  for v in plot_df[which]]
+        bar_borders = ["rgba(15,214,138,.95)" if v >= 0 else "rgba(240,72,90,.95)" for v in plot_df[which]]
         fig.add_trace(go.Bar(
-            x=plot_df["date"],
-            y=plot_df[col_name],
+            x=plot_df["date"], y=plot_df[which],
             marker_color=bar_colors,
             marker_line_color=bar_borders,
             marker_line_width=1,
             hovertemplate="%{x|%b %Y}<br><b>%{y:+.0f}K</b><extra></extra>",
         ))
     else:
-        # Area chart — build fillcolor from hex before passing to Plotly
         unit = cfg[f"unit_{which}"]
-        hover_fmt = f"%{{y:+.2f}}{unit}"
         r = int(color[1:3], 16)
-        g_c = int(color[3:5], 16)
+        g = int(color[3:5], 16)
         b = int(color[5:7], 16)
-        fill_color = f"rgba({r},{g_c},{b},0.09)"
+        fill_color = f"rgba({r},{g},{b},0.1)"
         fig.add_trace(go.Scatter(
-            x=plot_df["date"],
-            y=plot_df[col_name],
+            x=plot_df["date"], y=plot_df[which],
             mode="lines",
-            line=dict(color=color, width=1.5),
+            line=dict(color=color, width=1.8),
             fill="tozeroy",
             fillcolor=fill_color,
-            hovertemplate=f"%{{x|%b %Y}}<br><b>{hover_fmt}</b><extra></extra>",
+            hovertemplate=f"%{{x|%b %Y}}<br><b>%{{y:+.2f}}{unit}</b><extra></extra>",
         ))
 
-    # Zero line
-    fig.add_hline(y=0, line_color="rgba(120,140,200,.18)", line_width=1)
+    fig.add_hline(y=0, line_color="rgba(120,140,200,.2)", line_width=1)
 
     fig.update_layout(
-        height=160,
-        margin=dict(l=0, r=0, t=4, b=0),
+        height=height,
+        margin=dict(l=0, r=0, t=8, b=0),
         paper_bgcolor=CHART_BG,
         plot_bgcolor=CHART_BG,
-        font=dict(family=FONT_MONO, color=AXIS_COLOR, size=9),
+        font=dict(family=FONT_MONO, color=AXIS_COL, size=10),
         xaxis=dict(
-            showgrid=False,
-            zeroline=False,
-            tickfont=dict(size=9, color=AXIS_COLOR),
-            tickformat="%b '%y",
-            nticks=6,
+            showgrid=False, zeroline=False,
+            tickfont=dict(size=10, color="#FFFFFF"),
+            tickformat="%b '%y", nticks=6,
         ),
         yaxis=dict(
-            showgrid=True,
-            gridcolor=GRID_COLOR,
-            zeroline=False,
-            tickfont=dict(size=9, color=AXIS_COLOR),
-            nticks=4,
+            showgrid=True, gridcolor=GRID_COL, zeroline=False,
+            tickfont=dict(size=10, color="#FFFFFF"), nticks=5,
         ),
         hoverlabel=dict(
             bgcolor="#0E1428",
-            bordercolor="rgba(91,141,239,.25)",
-            font=dict(family=FONT_MONO, size=11, color="#EEF2FF"),
+            bordercolor="rgba(91,141,239,.3)",
+            font=dict(family=FONT_MONO, size=12, color="#FFFFFF"),
         ),
         showlegend=False,
     )
     return fig
 
 # ─────────────────────────────────────────────────────────────────────────────
-# STAT BOX HTML helper
+# STAT BOX HTML
 # ─────────────────────────────────────────────────────────────────────────────
 def stat_box_html(label: str, value_str: str, delta_str: str,
                   is_up: bool, date_str: str) -> str:
-    arrow      = "▲" if is_up else "▼"
-    delta_cls  = "stat-up" if is_up else "stat-dn"
+    arrow     = "▲" if is_up else "▼"
+    delta_cls = "stat-up" if is_up else "stat-dn"
     return f"""
     <div class="stat-box">
       <div class="stat-period">{label}</div>
@@ -397,46 +535,40 @@ def stat_box_html(label: str, value_str: str, delta_str: str,
     """
 
 # ─────────────────────────────────────────────────────────────────────────────
-# NFP RELEASE TABLE  — last 6 prints
+# NFP RELEASE TABLE
 # ─────────────────────────────────────────────────────────────────────────────
 def nfp_release_table(df: pd.DataFrame) -> str:
     recent = df.dropna(subset=["mom"]).tail(6).iloc[::-1]
     rows   = ""
     for i, (_, row) in enumerate(recent.iterrows()):
-        mom   = row["mom"]
-        cls   = "pos" if mom >= 0 else "neg"
-        sign  = "+" if mom >= 0 else ""
-        bold  = "font-weight:700;color:#EEF2FF;" if i == 0 else ""
+        mom  = row["mom"]
+        cls  = "pos" if mom >= 0 else "neg"
+        sign = "+" if mom >= 0 else ""
         rows += f"""
         <tr>
-          <td style="{bold}">{row['date'].strftime('%b %Y')}</td>
-          <td class="{cls}" style="{bold}">{sign}{int(round(mom))}K</td>
-          <td style="color:#3D5070">—</td>
+          <td>{row['date'].strftime('%b %Y')}</td>
+          <td class="{cls}">{sign}{int(round(mom))}K</td>
+          <td style="color:#4D6080">—</td>
         </tr>"""
     return f"""
     <table class="rel-table">
-      <thead>
-        <tr><th>Release</th><th>Actual</th><th>Consensus</th></tr>
-      </thead>
+      <thead><tr><th>Release</th><th>Actual</th><th>Consensus</th></tr></thead>
       <tbody>{rows}</tbody>
     </table>"""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # RENDER ONE INDICATOR CARD
 # ─────────────────────────────────────────────────────────────────────────────
-def render_card(key: str, cfg: dict, df: pd.DataFrame | None) -> None:
-    """Renders a full indicator card: stat pair + chart with MoM/YoY toggle."""
-
-    # ── Header row ────────────────────────────────────────────────────────
+def render_card(key: str, cfg: dict, df) -> None:
+    # ── Label row ────────────────────────────────────────────────────────
     st.markdown(f"""
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="width:7px;height:7px;border-radius:50%;background:{cfg['color']};
-               box-shadow:0 0 8px {cfg['color']}60;display:inline-block"></span>
-        <span style="font-size:10px;font-weight:700;letter-spacing:.8px;
-               text-transform:uppercase;color:#8898BB">{cfg['name']}</span>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="width:9px;height:9px;border-radius:50%;background:{cfg['color']};
+               box-shadow:0 0 10px {cfg['color']}70;display:inline-block;flex-shrink:0"></span>
+        <span class="ind-name">{cfg['name']}</span>
       </div>
-      <div style="display:flex;gap:5px">
+      <div style="display:flex;gap:6px;align-items:center">
         <span class="ind-src">BLS</span>
         <span class="ind-freq">MONTHLY</span>
       </div>
@@ -447,75 +579,163 @@ def render_card(key: str, cfg: dict, df: pd.DataFrame | None) -> None:
         st.warning("Data unavailable", icon="⚠️")
         return
 
-    # ── Compute transforms ────────────────────────────────────────────────
-    df_c = compute_series(df, cfg["transform"])
-    last = df_c.dropna(subset=["mom", "yoy"]).iloc[-1]
-    prev = df_c.dropna(subset=["mom"]).iloc[-2]
+    # ── Compute ───────────────────────────────────────────────────────────
+    df_c  = compute_series(df, cfg["transform"])
+    valid = df_c.dropna(subset=["mom", "yoy"])
+    if len(valid) < 2:
+        st.warning("Insufficient data", icon="⚠️")
+        return
+
+    last       = valid.iloc[-1]
+    prev       = valid.iloc[-2]   # one period back
+    date_str   = last["date"].strftime("%b %Y")
 
     mom_val    = last["mom"]
     yoy_val    = last["yoy"]
-    mom_prev   = prev["mom"]
-    date_str   = last["date"].strftime("%b %Y")
 
-    # Delta vs prior MoM
-    mom_delta  = mom_val - mom_prev
+    # MoM delta: current MoM vs prior MoM
+    mom_delta  = mom_val - prev["mom"]
     mom_up     = is_positive_signal(mom_val,   key)
-    yoy_up     = is_positive_signal(yoy_val,   key)
     delta_up   = is_positive_signal(mom_delta, key)
+
+    # YoY delta: current YoY vs prior YoY (FIX #3)
+    yoy_delta  = yoy_val - prev["yoy"]
+    yoy_up     = is_positive_signal(yoy_val,   key)
+    yoy_dlt_up = is_positive_signal(yoy_delta, key)
 
     mom_str    = fmt_val(mom_val,   cfg, "mom")
     yoy_str    = fmt_val(yoy_val,   cfg, "yoy")
-    delta_str  = fmt_val(mom_delta, cfg, "mom") + " vs prior"
+
+    # Delta display strings
+    mom_dlt_str = fmt_val(mom_delta, cfg, "mom") + " vs prior"
+    yoy_dlt_str = fmt_val(yoy_delta, cfg, "yoy") + " vs prior"
 
     # ── Stat pair ─────────────────────────────────────────────────────────
     c1, c2 = st.columns(2)
     with c1:
         st.markdown(stat_box_html(
             "Month-over-Month", mom_str,
-            delta_str, delta_up, date_str
+            mom_dlt_str, delta_up, date_str
         ), unsafe_allow_html=True)
     with c2:
         st.markdown(stat_box_html(
             "Year-over-Year", yoy_str,
-            yoy_str + " YoY", yoy_up, date_str
+            yoy_dlt_str, yoy_dlt_up, date_str   # now shows YoY delta vs prior YoY
         ), unsafe_allow_html=True)
 
     # ── NFP release table ─────────────────────────────────────────────────
     if cfg["transform"] == "nfp":
-        st.markdown("<div style='margin-top:12px'>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-top:14px'>", unsafe_allow_html=True)
         st.markdown(nfp_release_table(df_c), unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── Chart with MoM / YoY toggle ───────────────────────────────────────
-    st.markdown("<div style='margin-top:14px;margin-bottom:4px'>", unsafe_allow_html=True)
-    tab_mom, tab_yoy = st.tabs(["MoM", "YoY"])
+    # ── Chart with MoM / YoY tabs + expand button ─────────────────────────
+    st.markdown("<div style='margin-top:16px'>", unsafe_allow_html=True)
+
+    tab_mom, tab_yoy = st.tabs(["  MoM  ", "  YoY  "])
+
     with tab_mom:
-        st.plotly_chart(
-            make_chart(df_c, cfg, "mom"),
-            use_container_width=True, config={"displayModeBar": False}
-        )
+        chart_id = f"chart_mom_{key}"
+        fig_mom  = make_chart(df_c, cfg, "mom", height=200)
+        col_chart, col_btn = st.columns([10, 1])
+        with col_chart:
+            st.plotly_chart(
+                fig_mom, use_container_width=True,
+                config={"displayModeBar": False},
+                key=f"plt_mom_{key}"
+            )
+        with col_btn:
+            # Expand button — opens modal with larger chart
+            if st.button("⛶", key=f"exp_mom_{key}", help="Expand chart"):
+                st.session_state[f"modal_{key}"] = ("mom", f"{cfg['name']} — Month-over-Month")
         st.caption(cfg["full"])
+
     with tab_yoy:
-        st.plotly_chart(
-            make_chart(df_c, cfg, "yoy"),
-            use_container_width=True, config={"displayModeBar": False}
-        )
+        fig_yoy = make_chart(df_c, cfg, "yoy", height=200)
+        col_chart2, col_btn2 = st.columns([10, 1])
+        with col_chart2:
+            st.plotly_chart(
+                fig_yoy, use_container_width=True,
+                config={"displayModeBar": False},
+                key=f"plt_yoy_{key}"
+            )
+        with col_btn2:
+            if st.button("⛶", key=f"exp_yoy_{key}", help="Expand chart"):
+                st.session_state[f"modal_{key}"] = ("yoy", f"{cfg['name']} — Year-over-Year")
         st.caption(cfg["full"])
+
     st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── Modal (expanded chart) ─────────────────────────────────────────────
+    modal_state = st.session_state.get(f"modal_{key}")
+    if modal_state:
+        which_modal, modal_title = modal_state
+        fig_modal = make_chart(df_c, cfg, which_modal, height=480)
+        with st.container():
+            st.markdown(f"""
+            <div style="
+                position:fixed;top:0;left:0;right:0;bottom:0;
+                background:rgba(0,0,0,.88);z-index:9999;
+                display:flex;align-items:center;justify-content:center;
+                backdrop-filter:blur(6px);
+            ">
+              <div style="
+                  background:#0B1020;
+                  border:1px solid rgba(91,141,239,.3);
+                  border-radius:14px;padding:28px;
+                  width:92vw;max-width:1100px;
+                  box-shadow:0 24px 80px rgba(0,0,0,.8);
+                  position:relative;
+              ">
+                <div style="font-family:'Sora',sans-serif;font-size:17px;font-weight:700;
+                     color:#FFFFFF;margin-bottom:18px">{modal_title}</div>
+            """, unsafe_allow_html=True)
+            st.plotly_chart(
+                fig_modal, use_container_width=True,
+                config={"displayModeBar": True},
+                key=f"modal_chart_{key}_{which_modal}"
+            )
+            if st.button("✕  Close", key=f"close_modal_{key}"):
+                del st.session_state[f"modal_{key}"]
+                st.rerun()
+            st.markdown("</div></div>", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
-    # ── Header ────────────────────────────────────────────────────────────
     now_str = datetime.now().strftime("%d %b %Y · %H:%M UTC")
+
+    # ── Hero banner ────────────────────────────────────────────────────────
     st.markdown(f"""
-    <div class="dash-header">
-      <div>
-        <div class="dash-title">📊 US Macro Dashboard</div>
-        <div class="dash-sub">OFFICIAL BLS DATA · {now_str}</div>
+    <div class="hero-banner">
+      <div class="hero-top">
+        <div class="hero-left">
+          <div class="hero-title">US <span>Macro</span> Dashboard</div>
+          <div class="hero-sub">OFFICIAL BLS DATA · {now_str}</div>
+        </div>
+        <div class="hero-right">
+          <span class="bls-tag">BLS · OFFICIAL</span>
+        </div>
       </div>
-      <span class="bls-tag">BLS · OFFICIAL</span>
+      <div class="hero-stats">
+        <div class="hero-stat-item">
+          <div class="hero-stat-label">Data Source</div>
+          <div class="hero-stat-val">Bureau of Labor Statistics</div>
+        </div>
+        <div class="hero-stat-item">
+          <div class="hero-stat-label">Series</div>
+          <div class="hero-stat-val">CPI · Core CPI · PPI · UNEMP · NFP</div>
+        </div>
+        <div class="hero-stat-item">
+          <div class="hero-stat-label">Frequency</div>
+          <div class="hero-stat-val">Monthly · 10yr History</div>
+        </div>
+        <div class="hero-stat-item">
+          <div class="hero-stat-label">Cache</div>
+          <div class="hero-stat-val">Refreshes Every Hour</div>
+        </div>
+      </div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -527,58 +747,54 @@ def main():
             st.error(f"❌ BLS API error: {e}")
             st.stop()
 
-    # ── Refresh button + last-updated ─────────────────────────────────────
-    col_info, col_btn = st.columns([5, 1])
-    with col_info:
-        loaded = len(all_data)
-        total  = len(SERIES)
-        color  = "#0FD68A" if loaded == total else "#F59E0B"
+    # ── Status + refresh row ───────────────────────────────────────────────
+    loaded = len(all_data)
+    total  = len(SERIES)
+    c_status, c_spacer, c_btn = st.columns([4, 6, 1])
+    with c_status:
+        color = "#0FD68A" if loaded == total else "#F59E0B"
+        cls   = "status-ok" if loaded == total else "status-warn"
         st.markdown(
-            f"<span style='font-family:Courier New,monospace;font-size:10px;color:{color}'>"
-            f"✓ {loaded}/{total} series loaded from BLS</span>",
+            f"<span class='{cls}'>✓ {loaded}/{total} series loaded from BLS</span>",
             unsafe_allow_html=True
         )
-    with col_btn:
-        if st.button("↻ Refresh", use_container_width=True):
+    with c_btn:
+        if st.button("↻", help="Refresh data", key="refresh_main"):
             st.cache_data.clear()
             st.rerun()
 
-    st.markdown("<hr>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-bottom:20px'></div>", unsafe_allow_html=True)
 
-    # ── Price Indicators row: CPI · Core CPI · PPI ────────────────────────
-    st.markdown('<div class="section-header">▲ &nbsp;INFLATION</div>', unsafe_allow_html=True)
+    # ── INFLATION: CPI · Core CPI · PPI ───────────────────────────────────
+    st.markdown(
+        '<div class="section-header"><span class="section-icon">▲</span>INFLATION</div>',
+        unsafe_allow_html=True
+    )
     cols_price = st.columns(3, gap="medium")
-    price_keys = ["cpi", "corecpi", "ppi"]
-    for col, key in zip(cols_price, price_keys):
+    for col, key in zip(cols_price, ["cpi", "corecpi", "ppi"]):
         with col:
             with st.container(border=True):
                 render_card(key, SERIES[key], all_data.get(key))
 
-    st.markdown("<div style='margin-top:16px'>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-top:24px'></div>", unsafe_allow_html=True)
 
-    # ── Labor Indicators row: Unemployment · NFP ──────────────────────────
-    st.markdown('<div class="section-header" style="margin-top:8px">● &nbsp;LABOR MARKET</div>',
-                unsafe_allow_html=True)
+    # ── LABOR: Unemployment · NFP ──────────────────────────────────────────
+    st.markdown(
+        '<div class="section-header"><span class="section-icon">●</span>LABOR MARKET</div>',
+        unsafe_allow_html=True
+    )
     cols_labor = st.columns(2, gap="medium")
-    labor_keys = ["unemp", "nfp"]
-    for col, key in zip(cols_labor, labor_keys):
+    for col, key in zip(cols_labor, ["unemp", "nfp"]):
         with col:
             with st.container(border=True):
                 render_card(key, SERIES[key], all_data.get(key))
-
-    st.markdown("</div>", unsafe_allow_html=True)
 
     # ── Footer ─────────────────────────────────────────────────────────────
-    st.markdown("<hr>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin-top:32px'>", unsafe_allow_html=True)
     st.markdown(
-        "<p style='font-size:10px;color:#3D5070;font-family:Courier New,monospace'>"
-        "Data sourced from <b style='color:#5E7AAA'>U.S. Bureau of Labor Statistics (BLS)</b> "
-        "via official API v2 &nbsp;·&nbsp; "
-        "CPI series: CUSR0000SA0 &nbsp;·&nbsp; "
-        "Core CPI: CUSR0000SA0L1E &nbsp;·&nbsp; "
-        "PPI: WPSFD4 &nbsp;·&nbsp; "
-        "Unemployment: LNS14000000 &nbsp;·&nbsp; "
-        "NFP: CES0000000001"
+        "<p style='font-size:11px;color:#4D6080;font-family:IBM Plex Mono,monospace;text-align:center'>"
+        "Data: <b style='color:#7BA4F5'>U.S. Bureau of Labor Statistics</b> · API v2 · "
+        "CUSR0000SA0 · CUSR0000SA0L1E · WPSFD4 · LNS14000000 · CES0000000001"
         "</p>",
         unsafe_allow_html=True
     )
