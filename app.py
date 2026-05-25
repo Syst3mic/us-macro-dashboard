@@ -698,40 +698,56 @@ def render_card(key: str, cfg: dict, df) -> None:
         st.markdown(nfp_release_table(df_c), unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── Chart with MoM / YoY tabs + expand button ─────────────────────────
+    # ── Chart section ─────────────────────────────────────────────────────
     st.markdown("<div style='margin-top:16px'>", unsafe_allow_html=True)
 
-    tab_mom, tab_yoy = st.tabs(["  MoM  ", "  YoY  "])
-
-    with tab_mom:
-        chart_id = f"chart_mom_{key}"
-        fig_mom  = make_chart(df_c, cfg, "mom", height=200)
+    # Rate (unemployment): no tab toggle — both tabs show identical chart,
+    # so just render the chart directly with no heading.
+    if cfg["transform"] == "rate":
+        fig_rate = make_chart(df_c, cfg, "mom", height=200)
         col_chart, col_btn = st.columns([10, 1])
         with col_chart:
             st.plotly_chart(
-                fig_mom, use_container_width=True,
+                fig_rate, use_container_width=True,
                 config={"displayModeBar": False},
-                key=f"plt_mom_{key}"
+                key=f"plt_rate_{key}"
             )
         with col_btn:
-            # Expand button — opens modal with larger chart
-            if st.button("⛶", key=f"exp_mom_{key}", help="Expand chart"):
-                st.session_state[f"modal_{key}"] = ("mom", f"{cfg['name']} — Month-over-Month")
+            if st.button("⛶", key=f"exp_rate_{key}", help="Expand chart"):
+                st.session_state[f"modal_{key}"] = ("mom", f"{cfg['name']} — Historical Rate")
         st.caption(cfg["full"])
 
-    with tab_yoy:
-        fig_yoy = make_chart(df_c, cfg, "yoy", height=200)
-        col_chart2, col_btn2 = st.columns([10, 1])
-        with col_chart2:
-            st.plotly_chart(
-                fig_yoy, use_container_width=True,
-                config={"displayModeBar": False},
-                key=f"plt_yoy_{key}"
-            )
-        with col_btn2:
-            if st.button("⛶", key=f"exp_yoy_{key}", help="Expand chart"):
-                st.session_state[f"modal_{key}"] = ("yoy", f"{cfg['name']} — Year-over-Year")
-        st.caption(cfg["full"])
+    # All other indicators: MoM / YoY tab toggle
+    else:
+        tab_mom, tab_yoy = st.tabs(["  MoM  ", "  YoY  "])
+
+        with tab_mom:
+            fig_mom = make_chart(df_c, cfg, "mom", height=200)
+            col_chart, col_btn = st.columns([10, 1])
+            with col_chart:
+                st.plotly_chart(
+                    fig_mom, use_container_width=True,
+                    config={"displayModeBar": False},
+                    key=f"plt_mom_{key}"
+                )
+            with col_btn:
+                if st.button("⛶", key=f"exp_mom_{key}", help="Expand chart"):
+                    st.session_state[f"modal_{key}"] = ("mom", f"{cfg['name']} — Month-over-Month")
+            st.caption(cfg["full"])
+
+        with tab_yoy:
+            fig_yoy = make_chart(df_c, cfg, "yoy", height=200)
+            col_chart2, col_btn2 = st.columns([10, 1])
+            with col_chart2:
+                st.plotly_chart(
+                    fig_yoy, use_container_width=True,
+                    config={"displayModeBar": False},
+                    key=f"plt_yoy_{key}"
+                )
+            with col_btn2:
+                if st.button("⛶", key=f"exp_yoy_{key}", help="Expand chart"):
+                    st.session_state[f"modal_{key}"] = ("yoy", f"{cfg['name']} — Year-over-Year")
+            st.caption(cfg["full"])
 
     st.markdown("</div>", unsafe_allow_html=True)
 
