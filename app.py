@@ -456,7 +456,7 @@ div[data-testid="stButton"]:has(button[kind="primaryFormSubmit"]) { display:none
 .stock-table th {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 9px; font-weight: 700; letter-spacing: .7px;
-    text-transform: uppercase; color: #4D6080;
+    text-transform: uppercase; color: #FFFFFF;
     padding: 8px 12px; border-bottom: 1px solid rgba(120,140,200,.1);
     text-align: left; background: #080C16;
 }
