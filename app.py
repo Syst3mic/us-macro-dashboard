@@ -649,9 +649,9 @@ def render_card(key: str, cfg: dict, df) -> None:
     elif cfg["transform"] == "rate":
         mom_headline = f"{level:.1f}%"
         yoy_headline = f"{level:.1f}%"
-    else:  # nfp
-        mom_headline = fmt_val(mom_val, cfg, "mom")
-        yoy_headline = fmt_val(yoy_val, cfg, "yoy")
+    else:  # nfp — show actual MoM net jobs in both boxes
+        mom_headline = fmt_val(mom_val, cfg, "mom")   # e.g. +115K
+        yoy_headline = fmt_val(mom_val, cfg, "mom")   # same print, badge shows YoY comparison
 
     # ── Delta badges ──────────────────────────────────────────────────────
     # price_index:
@@ -665,12 +665,49 @@ def render_card(key: str, cfg: dict, df) -> None:
     #   YoY box → change vs prior YoY print
 
     if cfg["transform"] == "rate":
-        # MoM badge: show prior month's actual rate
+        # MoM badge: show prior month actual rate
         mom_dlt_str = f"vs {prev1_date}: {prev1_val:.1f}%" if prev1_val is not None else "—"
         yoy_dlt_str = f"vs {prev12_date}: {prev12_val:.1f}%" if prev12_val is not None else "—"
-        # Colour: green if rate went down (or stayed same), red if it went up
-        delta_up   = is_positive_signal(mom_val, key)   # mom_val = diff(1) = change in rate
-        yoy_dlt_up = is_positive_signal(yoy_val, key)   # yoy_val = diff(12)
+        delta_up    = is_positive_signal(mom_val, key)
+        yoy_dlt_up  = is_positive_signal(yoy_val, key)
+
+    elif cfg["transform"] == "nfp":
+        # All comparisons use MoM diff values (net jobs), not raw levels.
+        # mom_val  = Apr 2026 print  = diff(Apr26 level - Mar26 level) e.g. +115K
+        # We need Apr 2025 print     = diff(Apr25 level - Mar25 level) e.g. +108K
+        # Retrieve from df_c (which has the mom column computed) by exact date match.
+
+        prev1_target_nfp  = last["date"] - pd.DateOffset(months=1)   # Mar 2026
+        prev12_target_nfp = last["date"] - pd.DateOffset(months=12)  # Apr 2025
+
+        prev1_row_nfp  = df_c[df_c["date"] == prev1_target_nfp]
+        prev12_row_nfp = df_c[df_c["date"] == prev12_target_nfp]
+
+        prev1_mom  = prev1_row_nfp.iloc[0]["mom"]  if not prev1_row_nfp.empty  else None
+        prev12_mom = prev12_row_nfp.iloc[0]["mom"] if not prev12_row_nfp.empty else None
+
+        prev1_date_nfp  = prev1_row_nfp.iloc[0]["date"].strftime("%b %Y")  if not prev1_row_nfp.empty  else "—"
+        prev12_date_nfp = prev12_row_nfp.iloc[0]["date"].strftime("%b %Y") if not prev12_row_nfp.empty else "—"
+
+        # MoM badge: vs prior month print  e.g. "vs Mar 2026: +185K"
+        if prev1_mom is not None:
+            s = "+" if prev1_mom >= 0 else ""
+            mom_dlt_str = f"vs {prev1_date_nfp}: {s}{int(round(prev1_mom))}K"
+        else:
+            mom_dlt_str = "—"
+
+        # YoY badge: diff vs same month last year  e.g. "+7K vs Apr 2025: +108K"
+        if prev12_mom is not None:
+            yoy_diff = mom_val - prev12_mom   # e.g. 115 - 108 = +7
+            diff_s   = "+" if yoy_diff  >= 0 else ""
+            prev_s   = "+" if prev12_mom >= 0 else ""
+            yoy_dlt_str = f"{diff_s}{int(round(yoy_diff))}K vs {prev12_date_nfp}: {prev_s}{int(round(prev12_mom))}K"
+        else:
+            yoy_dlt_str = "—"
+
+        delta_up   = is_positive_signal(mom_val - (prev1_mom  or 0), key)
+        yoy_dlt_up = is_positive_signal(mom_val - (prev12_mom or 0), key)
+
     else:
         mom_delta   = mom_val - prev["mom"]
         yoy_delta   = yoy_val - prev["yoy"]
@@ -692,32 +729,27 @@ def render_card(key: str, cfg: dict, df) -> None:
             yoy_dlt_str, yoy_dlt_up, date_str
         ), unsafe_allow_html=True)
 
-    # ── NFP release table ─────────────────────────────────────────────────
-    if cfg["transform"] == "nfp":
-        st.markdown("<div style='margin-top:14px'>", unsafe_allow_html=True)
-        st.markdown(nfp_release_table(df_c), unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+    # NFP release table removed — chart shows the actual prints directly
 
     # ── Chart section ─────────────────────────────────────────────────────
     st.markdown("<div style='margin-top:16px'>", unsafe_allow_html=True)
 
-    # Rate (unemployment): no tab toggle — both tabs show identical chart,
-    # so just render the chart directly with no heading.
-    if cfg["transform"] == "rate":
-        fig_rate = make_chart(df_c, cfg, "mom", height=200)
+    # Rate (unemployment) and NFP: no tab toggle — render chart directly
+    if cfg["transform"] in ("rate", "nfp"):
+        fig_direct = make_chart(df_c, cfg, "mom", height=200)
         col_chart, col_btn = st.columns([10, 1])
         with col_chart:
             st.plotly_chart(
-                fig_rate, use_container_width=True,
+                fig_direct, use_container_width=True,
                 config={"displayModeBar": False},
-                key=f"plt_rate_{key}"
+                key=f"plt_direct_{key}"
             )
         with col_btn:
-            if st.button("⛶", key=f"exp_rate_{key}", help="Expand chart"):
-                st.session_state[f"modal_{key}"] = ("mom", f"{cfg['name']} — Historical Rate")
+            if st.button("⛶", key=f"exp_direct_{key}", help="Expand chart"):
+                st.session_state[f"modal_{key}"] = ("mom", f"{cfg['name']} — Actual Prints")
         st.caption(cfg["full"])
 
-    # All other indicators: MoM / YoY tab toggle
+    # Price index indicators (CPI / Core CPI / PPI): MoM / YoY tab toggle
     else:
         tab_mom, tab_yoy = st.tabs(["  MoM  ", "  YoY  "])
 
