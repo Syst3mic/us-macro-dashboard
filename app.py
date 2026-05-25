@@ -376,6 +376,21 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 .status-ok  { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #0FD68A; }
 .status-warn{ font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #F59E0B; }
 
+/* ── Index selector buttons — active = bright white filled, inactive = dim ── */
+.idx-active button {
+    background: rgba(255,255,255,.12) !important;
+    border-color: rgba(255,255,255,.5) !important;
+    color: #FFFFFF !important;
+    font-weight: 700 !important;
+    box-shadow: 0 0 12px rgba(255,255,255,.08) !important;
+}
+.idx-inactive button {
+    background: transparent !important;
+    border-color: rgba(120,140,200,.2) !important;
+    color: rgba(255,255,255,.35) !important;
+    font-weight: 400 !important;
+}
+
 /* ── Screener view buttons — Gainers green, Losers red ── */
 div[data-testid="stButton"]:has(button[kind="primaryFormSubmit"]) { display:none; }
 /* Target by button text content via CSS attribute trick */
@@ -1877,20 +1892,28 @@ def render_screener() -> None:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Index selector — white text buttons ──────────────────────────────
+    # ── Index selector — wrap in styled divs so CSS can distinguish active ──
     if "idx_choice" not in st.session_state:
         st.session_state["idx_choice"] = "S&P 500"
+
+    is_sp  = st.session_state["idx_choice"] == "S&P 500"
+    is_ndx = st.session_state["idx_choice"] == "Nasdaq 100"
+
     col_sp, col_ndx, col_rest = st.columns([1, 1, 8])
     with col_sp:
-        sp_type  = "primary" if st.session_state["idx_choice"] == "S&P 500" else "secondary"
-        if st.button("S&P 500", key="btn_sp500", use_container_width=True, type=sp_type):
+        sp_cls = "idx-active" if is_sp else "idx-inactive"
+        st.markdown(f'<div class="{sp_cls}">', unsafe_allow_html=True)
+        if st.button("S&P 500", key="btn_sp500", use_container_width=True):
             st.session_state["idx_choice"] = "S&P 500"
             st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
     with col_ndx:
-        ndx_type = "primary" if st.session_state["idx_choice"] == "Nasdaq 100" else "secondary"
-        if st.button("Nasdaq 100", key="btn_ndx100", use_container_width=True, type=ndx_type):
+        ndx_cls = "idx-active" if is_ndx else "idx-inactive"
+        st.markdown(f'<div class="{ndx_cls}">', unsafe_allow_html=True)
+        if st.button("Nasdaq 100", key="btn_ndx100", use_container_width=True):
             st.session_state["idx_choice"] = "Nasdaq 100"
             st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
     idx_choice = st.session_state["idx_choice"]
 
     # ── Load constituents ─────────────────────────────────────────────────
