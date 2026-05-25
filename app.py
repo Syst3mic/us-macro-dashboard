@@ -463,13 +463,39 @@ FONT_MONO = "IBM Plex Mono, Courier New, monospace"
 
 def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy",
                height: int = 200) -> go.Figure:
-    plot_df = df.dropna(subset=[which]).tail(60)
-    color   = cfg["color"]
-    fig     = go.Figure()
+    color      = cfg["color"]
+    fig        = go.Figure()
+    yaxis_opts = {}
 
-    if cfg["transform"] == "nfp":
-        bar_colors  = ["rgba(15,214,138,.7)"  if v >= 0 else "rgba(240,72,90,.7)"  for v in plot_df[which]]
-        bar_borders = ["rgba(15,214,138,.95)" if v >= 0 else "rgba(240,72,90,.95)" for v in plot_df[which]]
+    def hex_fill(hex_col, alpha=0.1):
+        r = int(hex_col[1:3], 16)
+        g = int(hex_col[3:5], 16)
+        b = int(hex_col[5:7], 16)
+        return f"rgba({r},{g},{b},{alpha})"
+
+    # ── Rate (Unemployment): plot raw level — actual % prints ──────────────
+    # Both MoM and YoY tabs show the same historical rate series so the user
+    # sees real prints (4.3%, 4.4% etc.), not percentage-point diffs.
+    if cfg["transform"] == "rate":
+        plot_df = df.dropna(subset=["value"]).tail(60)
+        fig.add_trace(go.Scatter(
+            x=plot_df["date"], y=plot_df["value"],
+            mode="lines",
+            line=dict(color=color, width=1.8),
+            fill="tozeroy",
+            fillcolor=hex_fill(color, 0.1),
+            hovertemplate="%{x|%b %Y}<br><b>%{y:.1f}%</b><extra></extra>",
+        ))
+        # Floor y-axis close to data so small moves are visible
+        y_min = max(0, plot_df["value"].min() - 0.5)
+        y_max = plot_df["value"].max() + 0.5
+        yaxis_opts["range"] = [y_min, y_max]
+
+    # ── NFP: bar chart of MoM net jobs added ───────────────────────────────
+    elif cfg["transform"] == "nfp":
+        plot_df    = df.dropna(subset=[which]).tail(60)
+        bar_colors = ["rgba(15,214,138,.7)"  if v >= 0 else "rgba(240,72,90,.7)"  for v in plot_df[which]]
+        bar_borders= ["rgba(15,214,138,.95)" if v >= 0 else "rgba(240,72,90,.95)" for v in plot_df[which]]
         fig.add_trace(go.Bar(
             x=plot_df["date"], y=plot_df[which],
             marker_color=bar_colors,
@@ -477,22 +503,21 @@ def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy",
             marker_line_width=1,
             hovertemplate="%{x|%b %Y}<br><b>%{y:+.0f}K</b><extra></extra>",
         ))
+        fig.add_hline(y=0, line_color="rgba(120,140,200,.2)", line_width=1)
+
+    # ── Price index (CPI / Core CPI / PPI): MoM% or YoY% changes ──────────
     else:
-        unit = cfg[f"unit_{which}"]
-        r = int(color[1:3], 16)
-        g = int(color[3:5], 16)
-        b = int(color[5:7], 16)
-        fill_color = f"rgba({r},{g},{b},0.1)"
+        plot_df = df.dropna(subset=[which]).tail(60)
+        unit    = cfg[f"unit_{which}"]
         fig.add_trace(go.Scatter(
             x=plot_df["date"], y=plot_df[which],
             mode="lines",
             line=dict(color=color, width=1.8),
             fill="tozeroy",
-            fillcolor=fill_color,
+            fillcolor=hex_fill(color, 0.1),
             hovertemplate=f"%{{x|%b %Y}}<br><b>%{{y:+.2f}}{unit}</b><extra></extra>",
         ))
-
-    fig.add_hline(y=0, line_color="rgba(120,140,200,.2)", line_width=1)
+        fig.add_hline(y=0, line_color="rgba(120,140,200,.2)", line_width=1)
 
     fig.update_layout(
         height=height,
@@ -508,6 +533,7 @@ def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy",
         yaxis=dict(
             showgrid=True, gridcolor=GRID_COL, zeroline=False,
             tickfont=dict(size=10, color="#FFFFFF"), nticks=5,
+            **yaxis_opts,
         ),
         hoverlabel=dict(
             bgcolor="#0E1428",
