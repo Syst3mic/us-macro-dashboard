@@ -331,25 +331,22 @@ def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy") -> go.Figure:
             hovertemplate="%{x|%b %Y}<br><b>%{y:+.0f}K</b><extra></extra>",
         ))
     else:
-        # Area chart with gradient fill
+        # Area chart — build fillcolor from hex before passing to Plotly
         unit = cfg[f"unit_{which}"]
         hover_fmt = f"%{{y:+.2f}}{unit}"
-        # Fill: use zero baseline for spread/change series
+        r = int(color[1:3], 16)
+        g_c = int(color[3:5], 16)
+        b = int(color[5:7], 16)
+        fill_color = f"rgba({r},{g_c},{b},0.09)"
         fig.add_trace(go.Scatter(
             x=plot_df["date"],
             y=plot_df[col_name],
             mode="lines",
             line=dict(color=color, width=1.5),
             fill="tozeroy",
-            fillcolor=color.replace("#", "rgba(").rstrip(")") + ",0.08)"
-                if color.startswith("#") else color,
+            fillcolor=fill_color,
             hovertemplate=f"%{{x|%b %Y}}<br><b>{hover_fmt}</b><extra></extra>",
         ))
-        # Patch: rebuild fillcolor properly from hex
-        r = int(color[1:3], 16)
-        g_c = int(color[3:5], 16)
-        b = int(color[5:7], 16)
-        fig.data[0].fillcolor = f"rgba({r},{g_c},{b},0.09)"
 
     # Zero line
     fig.add_hline(y=0, line_color="rgba(120,140,200,.18)", line_width=1)
