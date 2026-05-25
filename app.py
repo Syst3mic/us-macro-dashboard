@@ -46,7 +46,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 
 /* ── Hero banner ── */
 .hero-banner {
-    background: linear-gradient(135deg, #2C2C2E 0%, #3A3A3C 25%, #48484A 50%, #3A3A3C 75%, #2C2C2E 100%);
+    background: #06080F;
     border-bottom: 1px solid rgba(91,141,239,.2);
     padding: 28px 32px 24px;
     margin: 0 -2rem 28px;
@@ -92,7 +92,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 .hero-sub {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 11px;
-    color: #8898BB;
+    color: #FFFFFF;
     letter-spacing: .5px;
 }
 .hero-right { display: flex; align-items: center; gap: 10px; }
@@ -906,7 +906,7 @@ def main():
     <div class="hero-banner">
       <div class="hero-top">
         <div class="hero-left">
-          <div class="hero-title">US <span>Macro</span> Dashboard</div>
+          <div class="hero-title"><span>US Macro Dashboard</span></div>
           <div class="hero-sub">OFFICIAL BLS DATA · {now_str}</div>
         </div>
         <div class="hero-right">
