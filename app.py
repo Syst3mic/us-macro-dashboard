@@ -580,9 +580,11 @@ def fetch_fred_data() -> dict:
             # Claims: convert from persons to thousands
             if key == "claims":
                 df["value"] = df["value"] / 1000
-            # ADP: fetched as level (thousands), compute MoM diff to get net change
+            # ADP: ADPWNUSNERSA is a level in raw persons (e.g. 130,109,000)
+            # Step 1: compute MoM diff → gives net persons added (e.g. +109,000)
+            # Step 2: divide by 1000 → convert to thousands (e.g. +109K)
             if key == "adp":
-                df["value"] = df["value"].diff(1)
+                df["value"] = df["value"].diff(1) / 1000
                 df = df.dropna(subset=["value"]).reset_index(drop=True)
             result[key] = df
         except Exception as e:
