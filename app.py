@@ -116,21 +116,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     background: rgba(91,141,239,.15);
     border-color: rgba(91,141,239,.4);
 }
-.hero-stats {
-    display: flex; gap: 28px; margin-top: 16px;
-    padding-top: 14px;
-    border-top: 1px solid rgba(120,140,200,.08);
-    flex-wrap: wrap;
-}
-.hero-stat-item { display: flex; flex-direction: column; gap: 2px; }
-.hero-stat-label {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px; color: #4D6080; letter-spacing: .6px; text-transform: uppercase;
-}
-.hero-stat-val {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 12px; color: #FFFFFF; font-weight: 600;
-}
+/* .hero-stats removed — replaced with hover tooltip */
 
 /* ── Section headers ── */
 .section-header {
@@ -275,6 +261,96 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     font-family: 'Sora', sans-serif;
     font-size: 16px; font-weight: 700; color: #FFFFFF;
     margin-bottom: 16px; letter-spacing: -.2px;
+}
+
+/* ── Data hover tooltip ── */
+.data-tooltip-wrap {
+    position: relative;
+    display: inline-block;
+}
+.data-tooltip-trigger {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .8px;
+    color: #7BA4F5;
+    cursor: default;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 5px;
+    background: rgba(91,141,239,.08);
+    border: 1px solid rgba(91,141,239,.2);
+    transition: background .15s, border-color .15s;
+}
+.data-tooltip-trigger:hover {
+    background: rgba(91,141,239,.16);
+    border-color: rgba(91,141,239,.4);
+}
+.data-q {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: rgba(91,141,239,.25);
+    border: 1px solid rgba(91,141,239,.4);
+    font-size: 9px;
+    color: #FFFFFF;
+    font-weight: 700;
+}
+.data-tooltip-box {
+    display: none;
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 0;
+    z-index: 999;
+    background: #0D1628;
+    border: 1px solid rgba(91,141,239,.25);
+    border-radius: 10px;
+    padding: 14px 18px;
+    min-width: 340px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.6);
+    animation: fadeUp .15s ease;
+}
+.data-tooltip-box::before {
+    content: '';
+    position: absolute;
+    top: -5px; left: 18px;
+    width: 10px; height: 10px;
+    background: #0D1628;
+    border-left: 1px solid rgba(91,141,239,.25);
+    border-top: 1px solid rgba(91,141,239,.25);
+    transform: rotate(45deg);
+}
+.data-tooltip-wrap:hover .data-tooltip-box { display: block; }
+.data-tooltip-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(120,140,200,.07);
+}
+.data-tooltip-row:last-child { border-bottom: none; padding-bottom: 0; }
+.data-tooltip-row:first-child { padding-top: 0; }
+.data-tooltip-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .6px;
+    text-transform: uppercase;
+    color: #4D6080;
+    white-space: nowrap;
+}
+.data-tooltip-val {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: #FFFFFF;
+    text-align: right;
 }
 
 /* ── Streamlit button overrides (refresh) ── */
@@ -835,22 +911,31 @@ def main():
           <span class="bls-tag">BLS · OFFICIAL</span>
         </div>
       </div>
-      <div class="hero-stats">
-        <div class="hero-stat-item">
-          <div class="hero-stat-label">Data Source</div>
-          <div class="hero-stat-val">Bureau of Labor Statistics</div>
-        </div>
-        <div class="hero-stat-item">
-          <div class="hero-stat-label">Series</div>
-          <div class="hero-stat-val">CPI · Core CPI · PPI · UNEMP · NFP</div>
-        </div>
-        <div class="hero-stat-item">
-          <div class="hero-stat-label">Frequency</div>
-          <div class="hero-stat-val">Monthly · 10yr History</div>
-        </div>
-        <div class="hero-stat-item">
-          <div class="hero-stat-label">Cache</div>
-          <div class="hero-stat-val">Refreshes Every Hour</div>
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(120,140,200,.08)">
+        <div class="data-tooltip-wrap">
+          <span class="data-tooltip-trigger">DATA <span class="data-q">?</span></span>
+          <div class="data-tooltip-box">
+            <div class="data-tooltip-row">
+              <span class="data-tooltip-label">Data Source</span>
+              <span class="data-tooltip-val">Bureau of Labor Statistics (BLS)</span>
+            </div>
+            <div class="data-tooltip-row">
+              <span class="data-tooltip-label">Series</span>
+              <span class="data-tooltip-val">CPI · Core CPI · PPI · UNEMP · NFP</span>
+            </div>
+            <div class="data-tooltip-row">
+              <span class="data-tooltip-label">Frequency</span>
+              <span class="data-tooltip-val">Monthly · 10yr History</span>
+            </div>
+            <div class="data-tooltip-row">
+              <span class="data-tooltip-label">Cache</span>
+              <span class="data-tooltip-val">Refreshes Every Hour</span>
+            </div>
+            <div class="data-tooltip-row">
+              <span class="data-tooltip-label">API</span>
+              <span class="data-tooltip-val">BLS Public Data API v2</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
