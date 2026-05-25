@@ -471,17 +471,7 @@ FRED_SERIES = {
         "freq":      "Weekly",
         "source":    "DOL via FRED",
     },
-    "adp": {
-        "id":        "ADPWNUSNERSA",
-        "name":      "ADP Employment",
-        "full":      "ADP Nonfarm Private Employment MoM Change (000s)",
-        "transform": "adp",       # fetched as level, diff computed in fetch
-        "color":     "#34D399",
-        "unit":      "K",
-        "dp":        0,
-        "freq":      "Monthly",
-        "source":    "ADP via FRED",
-    },
+
     "umich": {
         "id":        "UMCSENT",
         "name":      "Michigan Consumer Sentiment",
@@ -580,12 +570,7 @@ def fetch_fred_data() -> dict:
             # Claims: convert from persons to thousands
             if key == "claims":
                 df["value"] = df["value"] / 1000
-            # ADP: ADPWNUSNERSA is a level in raw persons (e.g. 130,109,000)
-            # Step 1: compute MoM diff → gives net persons added (e.g. +109,000)
-            # Step 2: divide by 1000 → convert to thousands (e.g. +109K)
-            if key == "adp":
-                df["value"] = df["value"].diff(1) / 1000
-                df = df.dropna(subset=["value"]).reset_index(drop=True)
+
             result[key] = df
         except Exception as e:
             print(f"FRED fetch failed [{key}]: {e}")
@@ -1082,20 +1067,8 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
         mom_sign = "+" if mom_chg >= 0 else ""
         mom_str  = f"{mom_sign}{mom_chg:.1f} vs {prev1['date'].strftime('%b %Y')}: {prev1_val:.1f}"
 
-        # YoY: same month last year
-        target_yoy = last["date"] - pd.DateOffset(months=12)
-        yoy_row    = df[df["date"] == target_yoy]
-        yoy_val    = yoy_row.iloc[0]["value"] if not yoy_row.empty else None
-        yoy_date   = yoy_row.iloc[0]["date"].strftime("%b %Y") if not yoy_row.empty else "—"
-
-        if yoy_val is not None:
-            yoy_diff   = last_val - yoy_val
-            yoy_sign   = "+" if yoy_diff >= 0 else ""
-            yoy_dlt_str= f"{yoy_sign}{yoy_diff:.1f} vs {yoy_date}: {yoy_val:.1f}"
-            yoy_dlt_up = yoy_diff >= 0
-        else:
-            yoy_dlt_str = "—"
-            yoy_dlt_up  = True
+        # Previous box: just show prior print with no delta badge
+        prev_date_str = prev1["date"].strftime("%b %Y")
 
         c1, c2 = st.columns(2)
         with c1:
@@ -1104,10 +1077,13 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
                 mom_str, mom_up, date_str
             ), unsafe_allow_html=True)
         with c2:
-            st.markdown(stat_box_html(
-                "Year-over-Year", fmt_idx(last_val),
-                yoy_dlt_str, yoy_dlt_up, date_str
-            ), unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="stat-box">
+              <div class="stat-period">Previous</div>
+              <div class="stat-val">{fmt_idx(prev1_val)}</div>
+              <div class="stat-date">{prev_date_str}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
     # ── Chart — actual prints, no MoM/YoY toggle ─────────────────────────
     st.markdown("<div style='margin-top:16px'>", unsafe_allow_html=True)
@@ -1300,7 +1276,7 @@ def main():
           <div class="data-hover-divider"></div>
           <div class="data-hover-item">
             <span class="data-hover-label">Series</span>
-            <span class="data-hover-val">CPI · Core CPI · PPI · Unemp · NFP · Claims · ADP · Sentiment</span>
+            <span class="data-hover-val">CPI · Core CPI · PPI · Unemp · NFP · Claims · Sentiment</span>
           </div>
           <div class="data-hover-divider"></div>
           <div class="data-hover-item">
@@ -1383,12 +1359,11 @@ def main():
 
     st.markdown("<div style='margin-top:10px'></div>", unsafe_allow_html=True)
 
-    # Row 2: Initial Claims + ADP (FRED)
+    # Row 2: Initial Claims (FRED)
     cols_labor2 = st.columns(2, gap="medium")
-    for col, key in zip(cols_labor2, ["claims", "adp"]):
-        with col:
-            with st.container(border=True):
-                render_fred_card(key, FRED_SERIES[key], fred_data.get(key))
+    with cols_labor2[0]:
+        with st.container(border=True):
+            render_fred_card("claims", FRED_SERIES["claims"], fred_data.get("claims"))
 
     st.markdown("<div style='margin-top:24px'></div>", unsafe_allow_html=True)
 
@@ -1407,7 +1382,7 @@ def main():
     st.markdown(
         "<p style='font-size:11px;color:#4D6080;font-family:IBM Plex Mono,monospace;text-align:center'>"
         "BLS data: CUSR0000SA0 · CUSR0000SA0L1E · WPSFD4 · LNS14000000 · CES0000000001 &nbsp;·&nbsp; "
-        "FRED data: ICSA · ADPNFPCA · UMCSENT"
+        "FRED data: ICSA · UMCSENT"
         "</p>",
         unsafe_allow_html=True
     )
