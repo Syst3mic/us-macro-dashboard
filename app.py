@@ -376,6 +376,14 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 .status-ok  { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #0FD68A; }
 .status-warn{ font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #F59E0B; }
 
+/* ── Screener view buttons — Gainers green, Losers red ── */
+div[data-testid="stButton"]:has(button[kind="primaryFormSubmit"]) { display:none; }
+/* Target by button text content via CSS attribute trick */
+.gainers-active button  { color: #0FD68A !important; border-color: rgba(15,214,138,.4) !important; background: rgba(15,214,138,.1) !important; }
+.losers-active  button  { color: #F0485A !important; border-color: rgba(240,72,90,.4)  !important; background: rgba(240,72,90,.1)  !important; }
+.gainers-inactive button{ color: #0FD68A !important; opacity: .5; }
+.losers-inactive  button{ color: #F0485A !important; opacity: .5; }
+
 /* ── Page toggle (MACRO / MARKETS) ── */
 .page-toggle {
     display: flex; gap: 4px;
@@ -1841,17 +1849,49 @@ def render_screener() -> None:
     <div class="screener-header">
       <div>
         <div class="screener-title">📈 Markets Screener — Top 50 Movers</div>
-        <div class="screener-meta">END-OF-DAY · YAHOO FINANCE · LIVE MARKET CAP</div>
+        <div class="data-hover-wrap" style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(120,140,200,.08)">
+          <div class="data-hover-trigger">DATA <span class="data-q">?</span></div>
+          <div class="data-hover-bar">
+            <div class="data-hover-item">
+              <span class="data-hover-label">Source</span>
+              <span class="data-hover-val">Yahoo Finance</span>
+            </div>
+            <div class="data-hover-divider"></div>
+            <div class="data-hover-item">
+              <span class="data-hover-label">Prices</span>
+              <span class="data-hover-val">End-of-Day · Last Trading Session</span>
+            </div>
+            <div class="data-hover-divider"></div>
+            <div class="data-hover-item">
+              <span class="data-hover-label">Market Cap</span>
+              <span class="data-hover-val">Live · Top 50 Only</span>
+            </div>
+            <div class="data-hover-divider"></div>
+            <div class="data-hover-item">
+              <span class="data-hover-label">Cache</span>
+              <span class="data-hover-val">Refreshes Every Hour</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Index selector ────────────────────────────────────────────────────
-    idx_choice = st.radio(
-        "Index", ["S&P 500", "Nasdaq 100"],
-        horizontal=True, label_visibility="collapsed",
-        key="idx_choice"
-    )
+    # ── Index selector — white text buttons ──────────────────────────────
+    if "idx_choice" not in st.session_state:
+        st.session_state["idx_choice"] = "S&P 500"
+    col_sp, col_ndx, col_rest = st.columns([1, 1, 8])
+    with col_sp:
+        sp_type  = "primary" if st.session_state["idx_choice"] == "S&P 500" else "secondary"
+        if st.button("S&P 500", key="btn_sp500", use_container_width=True, type=sp_type):
+            st.session_state["idx_choice"] = "S&P 500"
+            st.rerun()
+    with col_ndx:
+        ndx_type = "primary" if st.session_state["idx_choice"] == "Nasdaq 100" else "secondary"
+        if st.button("Nasdaq 100", key="btn_ndx100", use_container_width=True, type=ndx_type):
+            st.session_state["idx_choice"] = "Nasdaq 100"
+            st.rerun()
+    idx_choice = st.session_state["idx_choice"]
 
     # ── Load constituents ─────────────────────────────────────────────────
     with st.spinner("Loading constituent list…"):
@@ -1898,17 +1938,33 @@ def render_screener() -> None:
     if sector_sel != "All":
         df = df[df["sector"] == sector_sel]
 
-    # ── View toggle: Gainers / Losers / All ───────────────────────────────
-    view = st.radio(
-        "View", ["🟢  Top Gainers", "🔴  Top Losers", "All Stocks"],
-        horizontal=True, key="view_sel", label_visibility="collapsed"
-    )
-    if "Gainers" in view:
+    # ── View toggle: Gainers / Losers (no All Stocks) ───────────────────
+    if "view_sel" not in st.session_state:
+        st.session_state["view_sel"] = "Gainers"
+    is_gainers = st.session_state["view_sel"] == "Gainers"
+    is_losers  = st.session_state["view_sel"] == "Losers"
+
+    col_g, col_l, col_vrest = st.columns([1, 1, 8])
+    with col_g:
+        g_cls = "gainers-active" if is_gainers else "gainers-inactive"
+        st.markdown(f'<div class="{g_cls}">', unsafe_allow_html=True)
+        if st.button("Top Gainers", key="btn_gainers", use_container_width=True):
+            st.session_state["view_sel"] = "Gainers"
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+    with col_l:
+        l_cls = "losers-active" if is_losers else "losers-inactive"
+        st.markdown(f'<div class="{l_cls}">', unsafe_allow_html=True)
+        if st.button("Top Losers", key="btn_losers", use_container_width=True):
+            st.session_state["view_sel"] = "Losers"
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    view = st.session_state["view_sel"]
+    if view == "Gainers":
         df = df[df["chg_pct"] > 0].sort_values("chg_pct", ascending=False)
-    elif "Losers" in view:
-        df = df[df["chg_pct"] < 0].sort_values("chg_pct", ascending=True)
     else:
-        df = df.sort_values("chg_pct", ascending=False)
+        df = df[df["chg_pct"] < 0].sort_values("chg_pct", ascending=True)
 
     # ── Slice top 50 BEFORE fetching market cap ───────────────────────────
     df = df.head(50).reset_index(drop=True)
