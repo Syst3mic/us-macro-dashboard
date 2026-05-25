@@ -1892,28 +1892,44 @@ def render_screener() -> None:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Index selector — wrap in styled divs so CSS can distinguish active ──
+    # ── Index selector — inject per-render CSS targeting button keys ─────
     if "idx_choice" not in st.session_state:
         st.session_state["idx_choice"] = "S&P 500"
 
     is_sp  = st.session_state["idx_choice"] == "S&P 500"
-    is_ndx = st.session_state["idx_choice"] == "Nasdaq 100"
+    is_ndx = not is_sp
+
+    # Active = bright white filled. Inactive = dimmed.
+    sp_bg   = "rgba(255,255,255,.14)"  if is_sp  else "transparent"
+    sp_bd   = "rgba(255,255,255,.55)"  if is_sp  else "rgba(120,140,200,.18)"
+    sp_col  = "#FFFFFF"                if is_sp  else "rgba(255,255,255,.3)"
+    sp_fw   = "700"                    if is_sp  else "400"
+    ndx_bg  = "rgba(255,255,255,.14)"  if is_ndx else "transparent"
+    ndx_bd  = "rgba(255,255,255,.55)"  if is_ndx else "rgba(120,140,200,.18)"
+    ndx_col = "#FFFFFF"                if is_ndx else "rgba(255,255,255,.3)"
+    ndx_fw  = "700"                    if is_ndx else "400"
+
+    st.markdown(f"""
+    <style>
+    div[data-testid="stButton"]:has(button[data-testid="baseButton-secondary"][key="btn_sp500"]) button,
+    button.btn-sp500 {{ background:{sp_bg}!important; border-color:{sp_bd}!important; color:{sp_col}!important; font-weight:{sp_fw}!important; }}
+    div[data-testid="stButton"]:has(button[data-testid="baseButton-secondary"][key="btn_ndx100"]) button,
+    button.btn-ndx100 {{ background:{ndx_bg}!important; border-color:{ndx_bd}!important; color:{ndx_col}!important; font-weight:{ndx_fw}!important; }}
+    /* Simpler fallback: nth-child targeting within columns */
+    div[data-testid="column"]:nth-child(1) button {{ background:{sp_bg}!important; border-color:{sp_bd}!important; color:{sp_col}!important; font-weight:{sp_fw}!important; }}
+    div[data-testid="column"]:nth-child(2) button {{ background:{ndx_bg}!important; border-color:{ndx_bd}!important; color:{ndx_col}!important; font-weight:{ndx_fw}!important; }}
+    </style>
+    """, unsafe_allow_html=True)
 
     col_sp, col_ndx, col_rest = st.columns([1, 1, 8])
     with col_sp:
-        sp_cls = "idx-active" if is_sp else "idx-inactive"
-        st.markdown(f'<div class="{sp_cls}">', unsafe_allow_html=True)
         if st.button("S&P 500", key="btn_sp500", use_container_width=True):
             st.session_state["idx_choice"] = "S&P 500"
             st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
     with col_ndx:
-        ndx_cls = "idx-active" if is_ndx else "idx-inactive"
-        st.markdown(f'<div class="{ndx_cls}">', unsafe_allow_html=True)
         if st.button("Nasdaq 100", key="btn_ndx100", use_container_width=True):
             st.session_state["idx_choice"] = "Nasdaq 100"
             st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
     idx_choice = st.session_state["idx_choice"]
 
     # ── Load constituents ─────────────────────────────────────────────────
@@ -1965,23 +1981,33 @@ def render_screener() -> None:
     if "view_sel" not in st.session_state:
         st.session_state["view_sel"] = "Gainers"
     is_gainers = st.session_state["view_sel"] == "Gainers"
-    is_losers  = st.session_state["view_sel"] == "Losers"
+    is_losers  = not is_gainers
+
+    g_bg  = "rgba(15,214,138,.15)"  if is_gainers else "transparent"
+    g_bd  = "rgba(15,214,138,.5)"   if is_gainers else "rgba(15,214,138,.2)"
+    g_col = "#0FD68A"
+    g_fw  = "700"                   if is_gainers else "400"
+    l_bg  = "rgba(240,72,90,.15)"   if is_losers  else "transparent"
+    l_bd  = "rgba(240,72,90,.5)"    if is_losers  else "rgba(240,72,90,.2)"
+    l_col = "#F0485A"
+    l_fw  = "700"                   if is_losers  else "400"
+
+    st.markdown(f"""
+    <style>
+    div[data-testid="column"]:nth-child(4) button {{ background:{g_bg}!important; border-color:{g_bd}!important; color:{g_col}!important; font-weight:{g_fw}!important; }}
+    div[data-testid="column"]:nth-child(5) button {{ background:{l_bg}!important; border-color:{l_bd}!important; color:{l_col}!important; font-weight:{l_fw}!important; }}
+    </style>
+    """, unsafe_allow_html=True)
 
     col_g, col_l, col_vrest = st.columns([1, 1, 8])
     with col_g:
-        g_cls = "gainers-active" if is_gainers else "gainers-inactive"
-        st.markdown(f'<div class="{g_cls}">', unsafe_allow_html=True)
         if st.button("Top Gainers", key="btn_gainers", use_container_width=True):
             st.session_state["view_sel"] = "Gainers"
             st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
     with col_l:
-        l_cls = "losers-active" if is_losers else "losers-inactive"
-        st.markdown(f'<div class="{l_cls}">', unsafe_allow_html=True)
         if st.button("Top Losers", key="btn_losers", use_container_width=True):
             st.session_state["view_sel"] = "Losers"
             st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
 
     view = st.session_state["view_sel"]
     if view == "Gainers":
@@ -2007,8 +2033,8 @@ def render_screener() -> None:
 
     c1, c2, c3, c4 = st.columns(4)
     for col, label, val, color in [
-        (c1, "Advancing",  f"{gainers}",          "#0FD68A"),
-        (c2, "Declining",  f"{losers}",            "#F0485A"),
+        (c1, "Gainers",    f"{gainers}",          "#0FD68A"),
+        (c2, "Losers",     f"{losers}",            "#F0485A"),
         (c3, "Unchanged",  f"{unchanged}",         "#8898BB"),
         (c4, "Avg Change", f"{avg_chg:+.2f}%",
              "#0FD68A" if avg_chg >= 0 else "#F0485A"),
