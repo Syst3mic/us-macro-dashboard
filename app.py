@@ -594,41 +594,56 @@ def render_card(key: str, cfg: dict, df) -> None:
     yoy_val  = last["yoy"]   # YoY change (pp or % or K)
     level    = last["value"] # Raw level (unemployment rate %, NFP thousands)
 
+    # ── Pull prior period level values for badges ─────────────────────────
+    # prev_mom_level  = level 1 month ago  (for MoM box badge)
+    # prev_yoy_level  = level 12 months ago (for YoY box badge)
+    # These come from the raw df (before diffs), aligned by date
+    df_raw     = df.sort_values("date").reset_index(drop=True)
+    last_idx   = len(df_raw) - 1
+    prev1_val  = df_raw.iloc[last_idx - 1]["value"]  if last_idx >= 1  else None
+    prev12_val = df_raw.iloc[last_idx - 12]["value"] if last_idx >= 12 else None
+    prev1_date  = df_raw.iloc[last_idx - 1]["date"].strftime("%b %Y")  if last_idx >= 1  else "—"
+    prev12_date = df_raw.iloc[last_idx - 12]["date"].strftime("%b %Y") if last_idx >= 12 else "—"
+
     # ── Headline value ────────────────────────────────────────────────────
-    # price_index: headline = MoM% change  (e.g. +0.64%)
-    # rate:        headline = actual rate   (e.g. 4.3%)
-    # nfp:         headline = MoM net jobs  (e.g. +177K)
+    # price_index : headline = MoM% change (e.g. +0.64%) / YoY% change (e.g. +3.95%)
+    # rate        : headline = actual rate level (e.g. 4.3%) — same in both boxes
+    # nfp         : headline = MoM net jobs (e.g. +177K) / YoY net (e.g. +2100K)
     if cfg["transform"] == "price_index":
-        mom_headline = fmt_val(mom_val, cfg, "mom")   # e.g. +0.64%
-        yoy_headline = fmt_val(yoy_val, cfg, "yoy")   # e.g. +3.95%
+        mom_headline = fmt_val(mom_val, cfg, "mom")
+        yoy_headline = fmt_val(yoy_val, cfg, "yoy")
     elif cfg["transform"] == "rate":
-        # Show the actual rate as headline; MoM/YoY pp change as sub-label
-        mom_headline = f"{level:.1f}%"                # e.g. 4.3%
-        yoy_headline = f"{level:.1f}%"                # same level in both boxes
+        mom_headline = f"{level:.1f}%"
+        yoy_headline = f"{level:.1f}%"
     else:  # nfp
-        mom_headline = fmt_val(mom_val, cfg, "mom")   # e.g. +177K
-        yoy_headline = fmt_val(yoy_val, cfg, "yoy")   # e.g. +2100K
+        mom_headline = fmt_val(mom_val, cfg, "mom")
+        yoy_headline = fmt_val(yoy_val, cfg, "yoy")
 
-    # ── Delta badges (change vs prior period) ────────────────────────────
-    # MoM box delta: current MoM vs prior MoM
-    mom_delta   = mom_val - prev["mom"]
-    delta_up    = is_positive_signal(mom_delta, key)
+    # ── Delta badges ──────────────────────────────────────────────────────
+    # price_index:
+    #   MoM box → change vs prior MoM print  (e.g. +0.64% vs prior +0.38%)
+    #   YoY box → change vs prior YoY print  (e.g. +3.95% vs prior +2.40%)
+    # rate:
+    #   MoM box → "vs {prev month}: {prev_val}%"  (e.g. vs Mar: 4.3%)
+    #   YoY box → "vs {12mo ago}: {prev12_val}%"  (e.g. vs Apr 2025: 4.2%)
+    # nfp:
+    #   MoM box → change vs prior MoM print
+    #   YoY box → change vs prior YoY print
 
-    # YoY box delta: current YoY vs prior YoY
-    yoy_delta   = yoy_val - prev["yoy"]
-    yoy_dlt_up  = is_positive_signal(yoy_delta, key)
-
-    # For rate: delta badge shows the pp change itself (e.g. 0.0pp MoM)
     if cfg["transform"] == "rate":
-        mom_dlt_str = fmt_val(mom_val, cfg, "mom") + " MoM"   # e.g. 0.0pp MoM
-        yoy_dlt_str = fmt_val(yoy_val, cfg, "yoy") + " YoY"   # e.g. -0.1pp YoY
-        mom_up      = is_positive_signal(mom_val, key)
-        yoy_up      = is_positive_signal(yoy_val, key)
-        delta_up    = mom_up
-        yoy_dlt_up  = yoy_up
+        # MoM badge: show prior month's actual rate
+        mom_dlt_str = f"vs {prev1_date}: {prev1_val:.1f}%" if prev1_val is not None else "—"
+        yoy_dlt_str = f"vs {prev12_date}: {prev12_val:.1f}%" if prev12_val is not None else "—"
+        # Colour: green if rate went down (or stayed same), red if it went up
+        delta_up   = is_positive_signal(mom_val, key)   # mom_val = diff(1) = change in rate
+        yoy_dlt_up = is_positive_signal(yoy_val, key)   # yoy_val = diff(12)
     else:
+        mom_delta   = mom_val - prev["mom"]
+        yoy_delta   = yoy_val - prev["yoy"]
         mom_dlt_str = fmt_val(mom_delta, cfg, "mom") + " vs prior"
         yoy_dlt_str = fmt_val(yoy_delta, cfg, "yoy") + " vs prior"
+        delta_up    = is_positive_signal(mom_delta, key)
+        yoy_dlt_up  = is_positive_signal(yoy_delta, key)
 
     # ── Stat pair ─────────────────────────────────────────────────────────
     c1, c2 = st.columns(2)
