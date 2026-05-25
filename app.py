@@ -1,7 +1,7 @@
 """
 US Macro Dashboard — Streamlit
-Data: U.S. Bureau of Labor Statistics (BLS) Official API v2
-Indicators: CPI · Core CPI · PPI · Unemployment · Nonfarm Payrolls
+Data: BLS Official API v2 + FRED API
+Indicators: CPI · Core CPI · PPI · Unemployment · NFP · Initial Claims · ADP · Michigan Sentiment
 """
 
 import streamlit as st
@@ -457,6 +457,45 @@ SERIES = {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# FRED SERIES CONFIG  (for indicators not on BLS)
+# ─────────────────────────────────────────────────────────────────────────────
+FRED_SERIES = {
+    "claims": {
+        "id":        "ICSA",
+        "name":      "Initial Jobless Claims",
+        "full":      "Initial Unemployment Insurance Claims (Weekly SA)",
+        "transform": "claims",    # weekly level, show actual print + WoW change
+        "color":     "#F97316",
+        "unit":      "K",
+        "dp":        0,
+        "freq":      "Weekly",
+        "source":    "DOL via FRED",
+    },
+    "adp": {
+        "id":        "ADPNFPCA",
+        "name":      "ADP Employment",
+        "full":      "ADP Nonfarm Private Employment MoM Change",
+        "transform": "adp",       # already a change series (K), show actual print
+        "color":     "#34D399",
+        "unit":      "K",
+        "dp":        0,
+        "freq":      "Monthly",
+        "source":    "ADP via FRED",
+    },
+    "umich": {
+        "id":        "UMCSENT",
+        "name":      "Michigan Consumer Sentiment",
+        "full":      "University of Michigan Consumer Sentiment Index",
+        "transform": "sentiment", # level index, show actual print + MoM change
+        "color":     "#FBBF24",
+        "unit":      "",
+        "dp":        1,
+        "freq":      "Monthly",
+        "source":    "UMich via FRED",
+    },
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # BLS API FETCH
 # ─────────────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -500,6 +539,52 @@ def fetch_bls_data() -> dict:
             })
         df = pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
         result[key] = df
+    return result
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FRED API FETCH
+# ─────────────────────────────────────────────────────────────────────────────
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_fred_data() -> dict:
+    """
+    Fetch ICSA, ADPNFPCA, UMCSENT from FRED API.
+    Server-side GET — no CORS, no proxy needed.
+    """
+    fred_key = "bc1f32b397114934e95d879ec2646074"
+    result   = {}
+
+    for key, cfg in FRED_SERIES.items():
+        # Weekly series: fetch 3 years (156 weeks). Monthly: 10 years.
+        limit = 156 if cfg["freq"] == "Weekly" else 120
+        url   = (
+            f"https://api.stlouisfed.org/fred/series/observations"
+            f"?series_id={cfg['id']}"
+            f"&api_key={fred_key}"
+            f"&file_type=json"
+            f"&sort_order=desc"
+            f"&limit={limit}"
+        )
+        try:
+            resp = requests.get(url, timeout=20)
+            resp.raise_for_status()
+            data = resp.json()
+            rows = []
+            for obs in data.get("observations", []):
+                if obs["value"] in (".", ""):
+                    continue
+                rows.append({
+                    "date":  pd.Timestamp(obs["date"]),
+                    "value": float(obs["value"]),
+                })
+            df = pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
+            # Claims: convert from persons to thousands
+            if key == "claims":
+                df["value"] = df["value"] / 1000
+            result[key] = df
+        except Exception as e:
+            print(f"FRED fetch failed [{key}]: {e}")
+            result[key] = pd.DataFrame(columns=["date", "value"])
+
     return result
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -878,6 +963,215 @@ def render_card(key: str, cfg: dict, df) -> None:
     # Modal handled at top level in main() via st.session_state["expanded"]
 
 # ─────────────────────────────────────────────────────────────────────────────
+# FRED CARD RENDERER
+# ─────────────────────────────────────────────────────────────────────────────
+def render_fred_card(key: str, cfg: dict, df) -> None:
+    """
+    Renders a card for FRED-sourced indicators.
+    Layout:
+      Claims   — headline = latest weekly print (K), badge = WoW change
+      ADP      — headline = latest MoM print (K),    badge = vs same month prior year
+      Sentiment— headline = latest index level,       badge = MoM change + YoY comparison
+    Chart shows actual prints (no MoM/YoY toggle), with expand button.
+    """
+    color = cfg["color"]
+
+    # ── Label row ─────────────────────────────────────────────────────────
+    src_label = cfg.get("source", "FRED")
+    st.markdown(f"""
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="width:9px;height:9px;border-radius:50%;background:{color};
+               box-shadow:0 0 10px {color}70;display:inline-block;flex-shrink:0"></span>
+        <span class="ind-name">{cfg['name']}</span>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span class="ind-src" style="background:rgba(251,191,36,.07);border-color:rgba(251,191,36,.2);color:#FCD34D">FRED</span>
+        <span class="ind-freq">{cfg['freq'].upper()}</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if df is None or df.empty or len(df) < 2:
+        st.warning("Data unavailable", icon="⚠️")
+        return
+
+    df = df.sort_values("date").reset_index(drop=True)
+    last      = df.iloc[-1]
+    prev1     = df.iloc[-2]
+    last_val  = last["value"]
+    prev1_val = prev1["value"]
+    date_str  = last["date"].strftime("%d %b %Y") if cfg["freq"] == "Weekly" else last["date"].strftime("%b %Y")
+
+    def fmt_k(v, sign=True):
+        s = "+" if (v >= 0 and sign) else ("" if not sign else "")
+        return f"{s}{int(round(v))}K"
+
+    def fmt_idx(v):
+        return f"{v:.1f}"
+
+    # ── Claims ────────────────────────────────────────────────────────────
+    if cfg["transform"] == "claims":
+        wow        = last_val - prev1_val
+        wow_up     = wow <= 0    # fewer claims = positive signal
+        wow_sign   = "+" if wow >= 0 else ""
+        wow_str    = f"{wow_sign}{int(round(wow))}K vs prior week"
+        prev_str   = f"Prior: {int(round(prev1_val))}K ({prev1['date'].strftime('%d %b')})"
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown(stat_box_html(
+                "Latest Print", fmt_k(last_val, sign=False),
+                wow_str, wow_up, date_str
+            ), unsafe_allow_html=True)
+        with c2:
+            st.markdown(f"""
+            <div class="stat-box">
+              <div class="stat-period">Prior Week</div>
+              <div class="stat-val">{fmt_k(prev1_val, sign=False)}</div>
+              <div class="stat-date">{prev1['date'].strftime('%d %b %Y')}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # ── ADP ───────────────────────────────────────────────────────────────
+    elif cfg["transform"] == "adp":
+        # ADP series is already a change (K) — last_val IS the MoM print
+        # YoY: same month 1 year ago by exact date match
+        target_yoy = last["date"] - pd.DateOffset(months=12)
+        yoy_row    = df[df["date"] == target_yoy]
+        yoy_val    = yoy_row.iloc[0]["value"] if not yoy_row.empty else None
+        yoy_date   = yoy_row.iloc[0]["date"].strftime("%b %Y") if not yoy_row.empty else "—"
+
+        if yoy_val is not None:
+            yoy_diff     = last_val - yoy_val
+            yoy_diff_s   = "+" if yoy_diff >= 0 else ""
+            yoy_prev_s   = "+" if yoy_val  >= 0 else ""
+            yoy_dlt_str  = f"{yoy_diff_s}{int(round(yoy_diff))}K vs {yoy_date}: {yoy_prev_s}{int(round(yoy_val))}K"
+            yoy_dlt_up   = yoy_diff >= 0
+        else:
+            yoy_dlt_str = "—"
+            yoy_dlt_up  = True
+
+        # MoM badge: vs prior month
+        prev_s   = "+" if prev1_val >= 0 else ""
+        mom_str  = f"vs {prev1['date'].strftime('%b %Y')}: {prev_s}{int(round(prev1_val))}K"
+        mom_up   = last_val >= prev1_val
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown(stat_box_html(
+                "Month-over-Month", fmt_k(last_val),
+                mom_str, mom_up, date_str
+            ), unsafe_allow_html=True)
+        with c2:
+            st.markdown(stat_box_html(
+                "Year-over-Year", fmt_k(last_val),
+                yoy_dlt_str, yoy_dlt_up, date_str
+            ), unsafe_allow_html=True)
+
+    # ── Michigan Sentiment ────────────────────────────────────────────────
+    elif cfg["transform"] == "sentiment":
+        mom_chg  = last_val - prev1_val
+        mom_up   = mom_chg >= 0
+        mom_sign = "+" if mom_chg >= 0 else ""
+        mom_str  = f"{mom_sign}{mom_chg:.1f} vs {prev1['date'].strftime('%b %Y')}: {prev1_val:.1f}"
+
+        # YoY: same month last year
+        target_yoy = last["date"] - pd.DateOffset(months=12)
+        yoy_row    = df[df["date"] == target_yoy]
+        yoy_val    = yoy_row.iloc[0]["value"] if not yoy_row.empty else None
+        yoy_date   = yoy_row.iloc[0]["date"].strftime("%b %Y") if not yoy_row.empty else "—"
+
+        if yoy_val is not None:
+            yoy_diff   = last_val - yoy_val
+            yoy_sign   = "+" if yoy_diff >= 0 else ""
+            yoy_dlt_str= f"{yoy_sign}{yoy_diff:.1f} vs {yoy_date}: {yoy_val:.1f}"
+            yoy_dlt_up = yoy_diff >= 0
+        else:
+            yoy_dlt_str = "—"
+            yoy_dlt_up  = True
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown(stat_box_html(
+                "Latest Print", fmt_idx(last_val),
+                mom_str, mom_up, date_str
+            ), unsafe_allow_html=True)
+        with c2:
+            st.markdown(stat_box_html(
+                "Year-over-Year", fmt_idx(last_val),
+                yoy_dlt_str, yoy_dlt_up, date_str
+            ), unsafe_allow_html=True)
+
+    # ── Chart — actual prints, no MoM/YoY toggle ─────────────────────────
+    st.markdown("<div style='margin-top:16px'>", unsafe_allow_html=True)
+
+    # Build chart using raw value column
+    plot_df = df.tail(104 if cfg["freq"] == "Weekly" else 60)
+    r_c = int(color[1:3], 16)
+    g_c = int(color[3:5], 16)
+    b_c = int(color[5:7], 16)
+    fill_color = f"rgba({r_c},{g_c},{b_c},0.1)"
+
+    # ADP: bar chart (it's a change series, positive/negative)
+    if cfg["transform"] == "adp":
+        bar_colors  = ["rgba(15,214,138,.7)"  if v >= 0 else "rgba(240,72,90,.7)"  for v in plot_df["value"]]
+        bar_borders = ["rgba(15,214,138,.95)" if v >= 0 else "rgba(240,72,90,.95)" for v in plot_df["value"]]
+        fig = go.Figure(go.Bar(
+            x=plot_df["date"], y=plot_df["value"],
+            marker_color=bar_colors,
+            marker_line_color=bar_borders,
+            marker_line_width=1,
+            hovertemplate="%{x|%b %Y}<br><b>%{y:+.0f}K</b><extra></extra>",
+        ))
+        fig.add_hline(y=0, line_color="rgba(120,140,200,.2)", line_width=1)
+    else:
+        hover_fmt = "%{x|%d %b '%y}<br><b>%{y:.0f}K</b>" if cfg["freq"] == "Weekly" else "%{x|%b %Y}<br><b>%{y:.1f}</b>"
+        fig = go.Figure(go.Scatter(
+            x=plot_df["date"], y=plot_df["value"],
+            mode="lines",
+            line=dict(color=color, width=1.8),
+            fill="tozeroy",
+            fillcolor=fill_color,
+            hovertemplate=hover_fmt + "<extra></extra>",
+        ))
+        # Floor y-axis so movements are visible
+        y_min = max(0, plot_df["value"].min() * 0.9)
+        y_max = plot_df["value"].max() * 1.05
+        fig.update_yaxes(range=[y_min, y_max])
+
+    fig.update_layout(
+        height=200,
+        margin=dict(l=0, r=0, t=8, b=0),
+        paper_bgcolor="#0B1020", plot_bgcolor="#0B1020",
+        font=dict(family="IBM Plex Mono, monospace", color="#8898BB", size=10),
+        xaxis=dict(showgrid=False, zeroline=False,
+                   tickfont=dict(size=10, color="#FFFFFF"),
+                   tickformat="%b '%y", nticks=6),
+        yaxis=dict(showgrid=True, gridcolor="rgba(120,140,200,.06)", zeroline=False,
+                   tickfont=dict(size=10, color="#FFFFFF"), nticks=5),
+        hoverlabel=dict(bgcolor="#0E1428", bordercolor="rgba(91,141,239,.3)",
+                        font=dict(family="IBM Plex Mono, monospace", size=12, color="#FFFFFF")),
+        showlegend=False,
+    )
+
+    col_chart, col_btn = st.columns([10, 1])
+    with col_chart:
+        st.plotly_chart(fig, use_container_width=True,
+                        config={"displayModeBar": False}, key=f"plt_fred_{key}")
+    with col_btn:
+        if st.button("⛶", key=f"exp_fred_{key}", help="Expand chart"):
+            st.session_state["expanded"] = {
+                "key": key, "which": "value",
+                "title": cfg["name"],
+                "cfg": cfg, "df_c": df.assign(mom=df["value"], yoy=df["value"])
+            }
+            st.rerun()
+    st.caption(cfg["full"])
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
@@ -945,17 +1239,17 @@ def main():
         <div class="data-hover-bar">
           <div class="data-hover-item">
             <span class="data-hover-label">Source</span>
-            <span class="data-hover-val">Bureau of Labor Statistics</span>
+            <span class="data-hover-val">BLS (Official) · FRED (DOL/ADP/UMich)</span>
           </div>
           <div class="data-hover-divider"></div>
           <div class="data-hover-item">
             <span class="data-hover-label">Series</span>
-            <span class="data-hover-val">CPI · Core CPI · PPI · Unemployment · NFP</span>
+            <span class="data-hover-val">CPI · Core CPI · PPI · Unemp · NFP · Claims · ADP · Sentiment</span>
           </div>
           <div class="data-hover-divider"></div>
           <div class="data-hover-item">
             <span class="data-hover-label">Frequency</span>
-            <span class="data-hover-val">Monthly · 10yr History</span>
+            <span class="data-hover-val">Monthly · Weekly (Claims) · 10yr History</span>
           </div>
           <div class="data-hover-divider"></div>
           <div class="data-hover-item">
@@ -972,23 +1266,31 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Fetch data ─────────────────────────────────────────────────────────
-    with st.spinner("Fetching data from BLS…"):
+    # ── Fetch BLS data ─────────────────────────────────────────────────────
+    with st.spinner("Fetching data from BLS & FRED…"):
         try:
             all_data = fetch_bls_data()
         except Exception as e:
             st.error(f"❌ BLS API error: {e}")
             st.stop()
+        try:
+            fred_data = fetch_fred_data()
+        except Exception as e:
+            st.error(f"❌ FRED API error: {e}")
+            fred_data = {}
 
     # ── Status + refresh row ───────────────────────────────────────────────
-    loaded = len(all_data)
-    total  = len(SERIES)
+    bls_loaded  = len(all_data)
+    fred_loaded = len([v for v in fred_data.values() if not v.empty])
+    total_loaded = bls_loaded + fred_loaded
+    total_series = len(SERIES) + len(FRED_SERIES)
+
     c_status, c_spacer, c_btn = st.columns([4, 6, 1])
     with c_status:
-        color = "#0FD68A" if loaded == total else "#F59E0B"
-        cls   = "status-ok" if loaded == total else "status-warn"
+        cls = "status-ok" if total_loaded == total_series else "status-warn"
         st.markdown(
-            f"<span class='{cls}'>✓ {loaded}/{total} series loaded from BLS</span>",
+            f"<span class='{cls}'>✓ {total_loaded}/{total_series} series loaded "
+            f"(BLS: {bls_loaded}/{len(SERIES)} · FRED: {fred_loaded}/{len(FRED_SERIES)})</span>",
             unsafe_allow_html=True
         )
     with c_btn:
@@ -1011,23 +1313,45 @@ def main():
 
     st.markdown("<div style='margin-top:24px'></div>", unsafe_allow_html=True)
 
-    # ── LABOR: Unemployment · NFP ──────────────────────────────────────────
+    # ── LABOR: Unemployment · NFP · Initial Claims · ADP ──────────────────
     st.markdown(
         '<div class="section-header"><span class="section-icon">●</span>LABOR MARKET</div>',
         unsafe_allow_html=True
     )
+    # Row 1: Unemployment + NFP (BLS)
     cols_labor = st.columns(2, gap="medium")
     for col, key in zip(cols_labor, ["unemp", "nfp"]):
         with col:
             with st.container(border=True):
                 render_card(key, SERIES[key], all_data.get(key))
 
+    st.markdown("<div style='margin-top:10px'></div>", unsafe_allow_html=True)
+
+    # Row 2: Initial Claims + ADP (FRED)
+    cols_labor2 = st.columns(2, gap="medium")
+    for col, key in zip(cols_labor2, ["claims", "adp"]):
+        with col:
+            with st.container(border=True):
+                render_fred_card(key, FRED_SERIES[key], fred_data.get(key))
+
+    st.markdown("<div style='margin-top:24px'></div>", unsafe_allow_html=True)
+
+    # ── SENTIMENT: Michigan Consumer Sentiment ─────────────────────────────
+    st.markdown(
+        '<div class="section-header"><span class="section-icon">◐</span>SENTIMENT</div>',
+        unsafe_allow_html=True
+    )
+    cols_sent = st.columns(3, gap="medium")
+    with cols_sent[0]:
+        with st.container(border=True):
+            render_fred_card("umich", FRED_SERIES["umich"], fred_data.get("umich"))
+
     # ── Footer ─────────────────────────────────────────────────────────────
     st.markdown("<hr style='margin-top:32px'>", unsafe_allow_html=True)
     st.markdown(
         "<p style='font-size:11px;color:#4D6080;font-family:IBM Plex Mono,monospace;text-align:center'>"
-        "Data: <b style='color:#7BA4F5'>U.S. Bureau of Labor Statistics</b> · API v2 · "
-        "CUSR0000SA0 · CUSR0000SA0L1E · WPSFD4 · LNS14000000 · CES0000000001"
+        "BLS data: CUSR0000SA0 · CUSR0000SA0L1E · WPSFD4 · LNS14000000 · CES0000000001 &nbsp;·&nbsp; "
+        "FRED data: ICSA · ADPNFPCA · UMCSENT"
         "</p>",
         unsafe_allow_html=True
     )
