@@ -2044,7 +2044,7 @@ def render_screener() -> None:
             <div style="background:#0D1628;border:1px solid rgba(120,140,200,.1);
                 border-radius:8px;padding:12px 16px;text-align:center">
               <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;
-                   color:#4D6080;letter-spacing:.6px;text-transform:uppercase;
+                   color:#FFFFFF;letter-spacing:.6px;text-transform:uppercase;
                    margin-bottom:4px">{label}</div>
               <div style="font-family:'IBM Plex Mono',monospace;font-size:22px;
                    font-weight:700;color:{color}">{val}</div>
