@@ -1805,6 +1805,34 @@ def fmt_volume(v: int) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # MARKETS SCREENER — RENDERER
 # ─────────────────────────────────────────────────────────────────────────────
+def fmt_mktcap(v) -> str:
+    """Format market cap value into readable string."""
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return "—"
+    if v >= 1_000_000_000_000:
+        return f"${v/1_000_000_000_000:.2f}T"
+    if v >= 1_000_000_000:
+        return f"${v/1_000_000_000:.1f}B"
+    if v >= 1_000_000:
+        return f"${v/1_000_000:.0f}M"
+    return f"${v:,.0f}"
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_market_caps(tickers: tuple) -> dict:
+    """
+    Fetch live market cap for a small list of tickers (top 50 movers).
+    Uses yf.Ticker.fast_info.market_cap — one call per ticker.
+    Cached 1 hour since market cap changes slowly.
+    """
+    result = {}
+    for tk in tickers:
+        try:
+            result[tk] = yf.Ticker(tk).fast_info.market_cap
+        except Exception:
+            result[tk] = None
+    return result
+
+
 def render_screener() -> None:
     sgt = timezone(timedelta(hours=8))
     now = datetime.now(sgt)
@@ -1812,8 +1840,8 @@ def render_screener() -> None:
     st.markdown("""
     <div class="screener-header">
       <div>
-        <div class="screener-title">📈 Markets Screener</div>
-        <div class="screener-meta">END-OF-DAY · PHASE 1 · YAHOO FINANCE</div>
+        <div class="screener-title">📈 Markets Screener — Top 50 Movers</div>
+        <div class="screener-meta">END-OF-DAY · YAHOO FINANCE · LIVE MARKET CAP</div>
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -1852,7 +1880,7 @@ def render_screener() -> None:
         st.error("No matching price data found.")
         return
 
-    trade_date = df["trade_date"].iloc[0] if "trade_date" in df.columns else "—"
+    trade_date  = df["trade_date"].iloc[0] if "trade_date" in df.columns else "—"
     total_loaded = len(df)
 
     st.markdown(
@@ -1864,9 +1892,9 @@ def render_screener() -> None:
     )
 
     # ── Sector filter ─────────────────────────────────────────────────────
-    sectors     = ["All"] + sorted(df["sector"].dropna().unique().tolist())
-    sector_sel  = st.selectbox("Filter by Sector", sectors, key="sector_sel",
-                               label_visibility="collapsed")
+    sectors    = ["All"] + sorted(df["sector"].dropna().unique().tolist())
+    sector_sel = st.selectbox("Filter by Sector", sectors, key="sector_sel",
+                              label_visibility="collapsed")
     if sector_sel != "All":
         df = df[df["sector"] == sector_sel]
 
@@ -1882,8 +1910,14 @@ def render_screener() -> None:
     else:
         df = df.sort_values("chg_pct", ascending=False)
 
-    # Show top 50
+    # ── Slice top 50 BEFORE fetching market cap ───────────────────────────
     df = df.head(50).reset_index(drop=True)
+
+    # ── Fetch live market cap for top 50 only ─────────────────────────────
+    top50_tickers = tuple(df["ticker"].tolist())
+    with st.spinner("Fetching live market caps…"):
+        mktcap_map = fetch_market_caps(top50_tickers)
+    df["mkt_cap"] = df["ticker"].map(mktcap_map)
 
     # ── Summary stats row ─────────────────────────────────────────────────
     all_prices = constituents.merge(prices, on="ticker", how="inner")
@@ -1921,9 +1955,9 @@ def render_screener() -> None:
         chg_sign = "▲" if row["chg_pct"] >= 0 else "▼"
         rows_html += f"""
         <tr>
-          <td style="color:#4D6080;width:40px">{i+1}</td>
+          <td style="color:#4D6080;width:36px">{i+1}</td>
           <td><span class="ticker-badge">{row['ticker']}</span></td>
-          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;
               white-space:nowrap">{row['company']}</td>
           <td><span class="sector-tag">{row['sector']}</span></td>
           <td style="text-align:right">${row['price']:,.2f}</td>
@@ -1932,6 +1966,7 @@ def render_screener() -> None:
           <td class="{chg_cls}" style="text-align:right">
               {'+' if row['chg_abs']>=0 else ''}{row['chg_abs']:.2f}</td>
           <td style="text-align:right;color:#8898BB">{fmt_volume(row['volume'])}</td>
+          <td style="text-align:right;color:#8898BB">{fmt_mktcap(row.get('mkt_cap'))}</td>
         </tr>"""
 
     st.markdown(f"""
@@ -1945,6 +1980,7 @@ def render_screener() -> None:
             <th style="text-align:right">Chg %</th>
             <th style="text-align:right">Chg $</th>
             <th style="text-align:right">Volume</th>
+            <th style="text-align:right">Mkt Cap</th>
           </tr>
         </thead>
         <tbody>{rows_html}</tbody>
@@ -1952,7 +1988,7 @@ def render_screener() -> None:
     </div>
     <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#4D6080;
         margin-top:8px;text-align:right">
-      Data: Yahoo Finance · End-of-day prices · Showing top {len(df)} of {total_loaded}
+      Data: Yahoo Finance · End-of-day prices · Market cap live · Top {len(df)} of {total_loaded}
     </div>
     """, unsafe_allow_html=True)
 
