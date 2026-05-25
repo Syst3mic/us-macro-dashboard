@@ -46,8 +46,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 
 /* ── Hero banner ── */
 .hero-banner {
-    background:
-        linear-gradient(135deg, #080E20 0%, #0D1530 50%, #071018 100%)
+    background: linear-gradient(135deg, #2C2C2E 0%, #3A3A3C 25%, #48484A 50%, #3A3A3C 75%, #2C2C2E 100%);
     border-bottom: 1px solid rgba(91,141,239,.2);
     padding: 28px 32px 24px;
     margin: 0 -2rem 28px;
