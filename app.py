@@ -479,7 +479,7 @@ div[data-testid="stButton"]:has(button[kind="primaryFormSubmit"]) { display:none
     font-size: 9px; padding: 2px 7px; border-radius: 3px;
     background: rgba(255,255,255,.05);
     border: 1px solid rgba(120,140,200,.1);
-    color: #8898BB; white-space: nowrap;
+    color: #FFFFFF; white-space: nowrap;
 }
 .mkt-status-open  { color: #0FD68A; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 700; }
 .mkt-status-closed{ color: #F59E0B; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 700; }
@@ -2070,8 +2070,8 @@ def render_screener() -> None:
               {chg_sign} {abs(row['chg_pct']):.2f}%</td>
           <td class="{chg_cls}" style="text-align:right">
               {'+' if row['chg_abs']>=0 else ''}{row['chg_abs']:.2f}</td>
-          <td style="text-align:right;color:#8898BB">{fmt_volume(row['volume'])}</td>
-          <td style="text-align:right;color:#8898BB">{fmt_mktcap(row.get('mkt_cap'))}</td>
+          <td style="text-align:right;color:#FFFFFF">{fmt_volume(row['volume'])}</td>
+          <td style="text-align:right;color:#FFFFFF">{fmt_mktcap(row.get('mkt_cap'))}</td>
         </tr>"""
 
     st.markdown(f"""
