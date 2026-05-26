@@ -1,5 +1,3 @@
-I have created a macro dashboard for the US markets. It comprises of a macro dashboard + stock screener. Can you give me a summary as to your understanding of what I am doing? This is the source code:
-
 """
 US Macro Dashboard — Streamlit
 Data: BLS Official API v2 + FRED API
