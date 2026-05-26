@@ -1,7 +1,7 @@
 """
 US Macro Dashboard — Streamlit
 Data: BLS Official API v2 + FRED API
-Indicators: CPI · Core CPI · PPI · Unemployment · NFP · Initial Claims · ADP · Michigan Sentiment
+Indicators: CPI · Core CPI · PPI · Unemployment · NFP · Initial Claims
 """
 
 import streamlit as st
@@ -28,7 +28,6 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;600;700&display=swap');
 
-/* ── Global ── */
 html, body, [data-testid="stApp"] {
     background-color: #06080F;
     color: #FFFFFF;
@@ -38,14 +37,11 @@ html, body, [data-testid="stApp"] {
 [data-testid="stHeader"] { background: transparent; }
 section[data-testid="stSidebar"] { background: #080C16; }
 
-/* ── Hide Streamlit chrome ── */
 #MainMenu, footer, header { visibility: hidden; }
 .block-container { padding: 0 2rem 4rem; max-width: 1400px; }
 
-/* ── Divider ── */
 hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important; }
 
-/* ── Hero banner ── */
 .hero-banner {
     background: #06080F;
     border-bottom: 1px solid rgba(91,141,239,.2);
@@ -105,20 +101,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     border: 1px solid rgba(91,141,239,.3);
     color: #7BA4F5;
 }
-.refresh-icon-btn {
-    width: 34px; height: 34px; border-radius: 6px;
-    background: rgba(255,255,255,.04);
-    border: 1px solid rgba(120,140,200,.15);
-    color: #FFFFFF; font-size: 16px;
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer; transition: all .15s;
-}
-.refresh-icon-btn:hover {
-    background: rgba(91,141,239,.15);
-    border-color: rgba(91,141,239,.4);
-}
 
-/* ── Section headers ── */
 .section-header {
     font-size: 20px;
     font-weight: 700;
@@ -130,387 +113,144 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     margin-bottom: 16px;
     font-family: 'Sora', sans-serif;
 }
-.section-header .section-icon {
-    color: #5B8DEF;
-    margin-right: 8px;
-}
+.section-header .section-icon { color: #5B8DEF; margin-right: 8px; }
 
-/* ── Indicator name ── */
 .ind-name {
-    font-size: 20px !important;
-    font-weight: 700 !important;
-    letter-spacing: .3px !important;
-    text-transform: uppercase !important;
-    color: #FFFFFF !important;
-    font-family: 'Sora', sans-serif !important;
+    font-size: 20px !important; font-weight: 700 !important;
+    letter-spacing: .3px !important; text-transform: uppercase !important;
+    color: #FFFFFF !important; font-family: 'Sora', sans-serif !important;
 }
 .ind-src {
     font-size: 9px; font-weight: 700; letter-spacing: .5px;
     padding: 3px 8px; border-radius: 3px;
-    background: rgba(91,141,239,.07);
-    border: 1px solid rgba(91,141,239,.15);
-    color: #7BA4F5;
-    font-family: 'IBM Plex Mono', monospace;
+    background: rgba(91,141,239,.07); border: 1px solid rgba(91,141,239,.15);
+    color: #7BA4F5; font-family: 'IBM Plex Mono', monospace;
 }
 .ind-freq {
-    font-size: 9px; color: #FFFFFF;
-    padding: 3px 8px; border-radius: 3px;
-    background: rgba(255,255,255,.06);
-    border: 1px solid rgba(120,140,200,.12);
+    font-size: 9px; color: #FFFFFF; padding: 3px 8px; border-radius: 3px;
+    background: rgba(255,255,255,.06); border: 1px solid rgba(120,140,200,.12);
     font-family: 'IBM Plex Mono', monospace;
 }
 
-/* ── Stat boxes ── */
 .stat-box {
-    background: #0D1628;
-    border: 1px solid rgba(120,140,200,.12);
-    border-radius: 10px;
-    padding: 18px 20px 14px;
-    transition: border-color .2s;
+    background: #0D1628; border: 1px solid rgba(120,140,200,.12);
+    border-radius: 10px; padding: 18px 20px 14px; transition: border-color .2s;
 }
 .stat-box:hover { border-color: rgba(120,140,200,.25); }
 .stat-period {
     font-size: 14px; font-weight: 700; letter-spacing: .5px;
-    text-transform: uppercase; color: #FFFFFF;
-    margin-bottom: 10px;
+    text-transform: uppercase; color: #FFFFFF; margin-bottom: 10px;
     font-family: 'Sora', sans-serif;
 }
 .stat-val {
     font-size: 30px; font-weight: 700; color: #FFFFFF;
-    font-family: 'IBM Plex Mono', monospace;
-    letter-spacing: -1px; line-height: 1;
+    font-family: 'IBM Plex Mono', monospace; letter-spacing: -1px; line-height: 1;
 }
 .stat-delta {
-    font-size: 11px; font-weight: 600;
-    font-family: 'IBM Plex Mono', monospace;
-    margin-top: 8px; display: inline-block;
-    padding: 3px 9px; border-radius: 4px;
+    font-size: 11px; font-weight: 600; font-family: 'IBM Plex Mono', monospace;
+    margin-top: 8px; display: inline-block; padding: 3px 9px; border-radius: 4px;
 }
 .stat-up { color: #0FD68A; background: rgba(15,214,138,.08); border: 1px solid rgba(15,214,138,.22); }
 .stat-dn { color: #F0485A; background: rgba(240,72,90,.08);  border: 1px solid rgba(240,72,90,.22); }
 .stat-date {
-    font-size: 10px; color: #FFFFFF;
-    margin-top: 5px; font-family: 'IBM Plex Mono', monospace;
-    opacity: .7;
+    font-size: 10px; color: #FFFFFF; margin-top: 5px;
+    font-family: 'IBM Plex Mono', monospace; opacity: .7;
 }
 
-/* ── Release table ── */
 .rel-table { width: 100%; border-collapse: collapse; font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
 .rel-table th {
-    text-align: left; padding: 8px 12px;
-    font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
-    color: #FFFFFF; background: #111827;
-    border-bottom: 1px solid rgba(120,140,200,.1);
-    opacity: .7;
+    text-align: left; padding: 8px 12px; font-size: 10px; font-weight: 700;
+    letter-spacing: .6px; text-transform: uppercase; color: #FFFFFF;
+    background: #111827; border-bottom: 1px solid rgba(120,140,200,.1); opacity: .7;
 }
-.rel-table td {
-    padding: 8px 12px; color: #FFFFFF;
-    border-bottom: 1px solid rgba(120,140,200,.06);
-    opacity: .8;
-}
+.rel-table td { padding: 8px 12px; color: #FFFFFF; border-bottom: 1px solid rgba(120,140,200,.06); opacity: .8; }
 .rel-table tr:first-child td { opacity: 1; font-weight: 600; }
 .pos { color: #0FD68A !important; opacity: 1 !important; }
 .neg { color: #F0485A !important; opacity: 1 !important; }
 
-/* ── Chart expand button ── */
-.chart-expand-btn {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px; font-weight: 700; letter-spacing: .4px;
-    padding: 3px 9px; border-radius: 4px;
-    background: rgba(91,141,239,.08);
-    border: 1px solid rgba(91,141,239,.2);
-    color: #7BA4F5; cursor: pointer;
-    transition: all .15s;
-}
-.chart-expand-btn:hover {
-    background: rgba(91,141,239,.18);
-    border-color: rgba(91,141,239,.4);
-    color: #FFFFFF;
-}
-
-/* ── Modal overlay ── */
-.modal-overlay {
-    display: none;
-    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,.85);
-    z-index: 9999;
-    align-items: center; justify-content: center;
-    backdrop-filter: blur(4px);
-}
-.modal-overlay.open { display: flex; }
-.modal-box {
-    background: #0B1020;
-    border: 1px solid rgba(91,141,239,.25);
-    border-radius: 14px;
-    padding: 24px;
-    width: 90vw; max-width: 1100px;
-    position: relative;
-    box-shadow: 0 24px 80px rgba(0,0,0,.7);
-}
-.modal-close {
-    position: absolute; top: 16px; right: 16px;
-    background: rgba(255,255,255,.06);
-    border: 1px solid rgba(120,140,200,.15);
-    color: #FFFFFF; font-size: 18px;
-    width: 32px; height: 32px; border-radius: 6px;
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
-    transition: all .15s;
-}
-.modal-close:hover { background: rgba(240,72,90,.15); border-color: rgba(240,72,90,.3); }
-.modal-title {
-    font-family: 'Sora', sans-serif;
-    font-size: 16px; font-weight: 700; color: #FFFFFF;
-    margin-bottom: 16px; letter-spacing: -.2px;
-}
-
-/* ── Data hover bar ── */
 .data-hover-wrap {
-    margin-top: 16px;
-    padding-top: 14px;
+    margin-top: 16px; padding-top: 14px;
     border-top: 1px solid rgba(120,140,200,.08);
-    position: relative;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
+    position: relative; display: flex; flex-direction: row; align-items: center;
 }
 .data-hover-trigger {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: .8px;
-    color: #7BA4F5;
-    cursor: default;
-    user-select: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 4px 10px;
-    border-radius: 5px;
-    background: rgba(91,141,239,.08);
-    border: 1px solid rgba(91,141,239,.2);
-    transition: background .15s, border-color .15s;
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 700;
+    letter-spacing: .8px; color: #7BA4F5; cursor: default; user-select: none;
+    display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px;
+    border-radius: 5px; background: rgba(91,141,239,.08);
+    border: 1px solid rgba(91,141,239,.2); transition: background .15s, border-color .15s;
 }
 .data-hover-wrap:hover .data-hover-trigger {
-    background: rgba(91,141,239,.16);
-    border-color: rgba(91,141,239,.4);
+    background: rgba(91,141,239,.16); border-color: rgba(91,141,239,.4);
 }
 .data-q {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 14px; height: 14px;
-    border-radius: 50%;
-    background: rgba(91,141,239,.25);
-    border: 1px solid rgba(91,141,239,.4);
-    font-size: 9px;
-    color: #FFFFFF;
-    font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: rgba(91,141,239,.25); border: 1px solid rgba(91,141,239,.4);
+    font-size: 9px; color: #FFFFFF; font-weight: 700;
 }
 .data-hover-bar {
-    display: none;
-    position: relative;
-    z-index: 999;
-    background: rgba(13,22,40,.92);
-    border: 1px solid rgba(91,141,239,.2);
-    border-radius: 8px;
-    padding: 8px 18px;
-    white-space: nowrap;
-    flex-direction: row;
-    align-items: center;
-    gap: 0;
-    box-shadow: 0 4px 20px rgba(0,0,0,.4);
-    margin-left: 10px;
+    display: none; position: relative; z-index: 999;
+    background: rgba(13,22,40,.92); border: 1px solid rgba(91,141,239,.2);
+    border-radius: 8px; padding: 8px 18px; white-space: nowrap;
+    flex-direction: row; align-items: center; gap: 0;
+    box-shadow: 0 4px 20px rgba(0,0,0,.4); margin-left: 10px;
 }
-.data-hover-wrap:hover .data-hover-bar {
-    display: flex;
-}
-.data-hover-item {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    padding: 0 18px;
-}
+.data-hover-wrap:hover .data-hover-bar { display: flex; }
+.data-hover-item { display: flex; flex-direction: column; gap: 3px; padding: 0 18px; }
 .data-hover-item:first-child { padding-left: 0; }
 .data-hover-item:last-child  { padding-right: 0; }
 .data-hover-label {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 8px;
-    font-weight: 700;
-    letter-spacing: .7px;
-    text-transform: uppercase;
-    color: #4D6080;
+    font-family: 'IBM Plex Mono', monospace; font-size: 8px; font-weight: 700;
+    letter-spacing: .7px; text-transform: uppercase; color: #4D6080;
 }
-.data-hover-val {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    font-weight: 600;
-    color: #FFFFFF;
-}
-.data-hover-divider {
-    width: 1px;
-    height: 32px;
-    background: rgba(120,140,200,.12);
-    flex-shrink: 0;
-}
+.data-hover-val { font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; color: #FFFFFF; }
+.data-hover-divider { width: 1px; height: 32px; background: rgba(120,140,200,.12); flex-shrink: 0; }
 
-/* ── Streamlit button overrides (refresh) ── */
 [data-testid="stButton"] button {
     background: rgba(255,255,255,.04) !important;
     border: 1px solid rgba(120,140,200,.15) !important;
-    color: #FFFFFF !important;
-    font-size: 18px !important;
-    padding: 4px 10px !important;
-    border-radius: 6px !important;
-    font-family: 'Sora', sans-serif !important;
-    min-height: 34px !important;
-    line-height: 1 !important;
+    color: #FFFFFF !important; font-size: 18px !important;
+    padding: 4px 10px !important; border-radius: 6px !important;
+    font-family: 'Sora', sans-serif !important; min-height: 34px !important; line-height: 1 !important;
 }
 [data-testid="stButton"] button:hover {
-    background: rgba(91,141,239,.15) !important;
-    border-color: rgba(91,141,239,.4) !important;
+    background: rgba(91,141,239,.15) !important; border-color: rgba(91,141,239,.4) !important;
 }
 
-/* ── Status text ── */
-.status-ok  { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #0FD68A; }
-.status-warn{ font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #F59E0B; }
+.status-ok   { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #0FD68A; }
+.status-warn { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #F59E0B; }
 
-/* ── Index selector buttons ── */
-.idx-active button {
-    background: rgba(255,255,255,.12) !important;
-    border-color: rgba(255,255,255,.5) !important;
-    color: #FFFFFF !important;
-    font-weight: 700 !important;
-    box-shadow: 0 0 12px rgba(255,255,255,.08) !important;
-}
-.idx-inactive button {
-    background: transparent !important;
-    border-color: rgba(120,140,200,.2) !important;
-    color: rgba(255,255,255,.35) !important;
-    font-weight: 400 !important;
-}
-
-/* ── Screener view buttons ── */
-div[data-testid="stButton"]:has(button[kind="primaryFormSubmit"]) { display:none; }
-.gainers-active button  { color: #0FD68A !important; border-color: rgba(15,214,138,.4) !important; background: rgba(15,214,138,.1) !important; }
-.losers-active  button  { color: #F0485A !important; border-color: rgba(240,72,90,.4)  !important; background: rgba(240,72,90,.1)  !important; }
-.gainers-inactive button{ color: #0FD68A !important; opacity: .5; }
-.losers-inactive  button{ color: #F0485A !important; opacity: .5; }
-
-/* ── Page toggle (MACRO / MARKETS) ── */
-.page-toggle {
-    display: flex; gap: 4px;
-    background: #0D1628;
-    border: 1px solid rgba(120,140,200,.12);
-    border-radius: 8px; padding: 4px;
-    margin-bottom: 24px; width: fit-content;
-}
-.ptbtn {
-    padding: 8px 28px; border-radius: 5px;
-    font-size: 12px; font-weight: 700;
-    font-family: 'Sora', sans-serif;
-    letter-spacing: .5px; cursor: pointer;
-    border: none; transition: all .15s;
-    background: transparent; color: #4D6080;
-}
-.ptbtn.active {
-    background: linear-gradient(135deg, #5B8DEF, #22D3EE);
-    color: #FFFFFF;
-    box-shadow: 0 0 16px rgba(91,141,239,.35);
-}
-.ptbtn:hover:not(.active) { color: #FFFFFF; background: rgba(255,255,255,.05); }
-
-/* ── Screener ── */
-.screener-header {
-    display: flex; align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap; gap: 12px;
-    margin-bottom: 16px;
-}
 .screener-title {
-    font-family: 'Sora', sans-serif;
-    font-size: 20px; font-weight: 700;
+    font-family: 'Sora', sans-serif; font-size: 20px; font-weight: 700;
     color: #FFFFFF; letter-spacing: -.2px;
-}
-.screener-meta {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px; color: #4D6080; letter-spacing: .4px;
-}
-.pill-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
-.pill {
-    padding: 5px 14px; border-radius: 20px;
-    font-size: 10px; font-weight: 700;
-    font-family: 'IBM Plex Mono', monospace;
-    letter-spacing: .4px; cursor: pointer;
-    border: 1px solid rgba(120,140,200,.15);
-    background: rgba(255,255,255,.03); color: #8898BB;
-    transition: all .15s;
-}
-.pill.active {
-    background: rgba(91,141,239,.15);
-    border-color: rgba(91,141,239,.4); color: #FFFFFF;
 }
 .stock-table { width: 100%; border-collapse: collapse; }
 .stock-table th {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px; font-weight: 700; letter-spacing: .7px;
-    text-transform: uppercase; color: #FFFFFF;
+    font-family: 'IBM Plex Mono', monospace; font-size: 9px; font-weight: 700;
+    letter-spacing: .7px; text-transform: uppercase; color: #FFFFFF;
     padding: 8px 12px; border-bottom: 1px solid rgba(120,140,200,.1);
     text-align: left; background: #080C16;
 }
 .stock-table td {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 12px; padding: 9px 12px;
-    border-bottom: 1px solid rgba(120,140,200,.05);
-    color: #FFFFFF;
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 9px 12px;
+    border-bottom: 1px solid rgba(120,140,200,.05); color: #FFFFFF;
 }
 .stock-table tr:hover td { background: rgba(91,141,239,.04); }
 .chg-pos { color: #0FD68A !important; font-weight: 700; }
 .chg-neg { color: #F0485A !important; font-weight: 700; }
 .ticker-badge {
-    font-weight: 700; color: #7BA4F5;
-    background: rgba(91,141,239,.08);
-    padding: 2px 7px; border-radius: 4px;
-    font-size: 11px;
+    font-weight: 700; color: #7BA4F5; background: rgba(91,141,239,.08);
+    padding: 2px 7px; border-radius: 4px; font-size: 11px;
 }
 .sector-tag {
     font-size: 9px; padding: 2px 7px; border-radius: 3px;
-    background: rgba(255,255,255,.05);
-    border: 1px solid rgba(120,140,200,.1);
+    background: rgba(255,255,255,.05); border: 1px solid rgba(120,140,200,.1);
     color: #FFFFFF; white-space: nowrap;
 }
-.mkt-status-open  { color: #0FD68A; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 700; }
-.mkt-status-closed{ color: #F59E0B; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 700; }
 </style>
 
-<!-- Modal HTML (shared, one instance) -->
-<div class="modal-overlay" id="chartModal" onclick="if(event.target===this)closeModal()">
-  <div class="modal-box">
-    <button class="modal-close" onclick="closeModal()">✕</button>
-    <div class="modal-title" id="modalTitle"></div>
-    <div id="modalChart"></div>
-  </div>
-</div>
-
 <script>
-function openModal(title, chartDivId) {
-    document.getElementById('modalTitle').innerText = title;
-    var src = document.getElementById(chartDivId);
-    var dest = document.getElementById('modalChart');
-    if (src) {
-        dest.innerHTML = src.innerHTML;
-        var plots = dest.querySelectorAll('.js-plotly-plot');
-        plots.forEach(function(p) {
-            if (window.Plotly) Plotly.relayout(p, {height: 480});
-        });
-    }
-    document.getElementById('chartModal').classList.add('open');
-    document.body.style.overflow = 'hidden';
-}
-function closeModal() {
-    document.getElementById('chartModal').classList.remove('open');
-    document.body.style.overflow = '';
-    document.getElementById('modalChart').innerHTML = '';
-}
 document.addEventListener('keydown', function(e) { if(e.key==='Escape') closeModal(); });
 </script>
 """, unsafe_allow_html=True)
@@ -520,43 +260,33 @@ document.addEventListener('keydown', function(e) { if(e.key==='Escape') closeMod
 # ─────────────────────────────────────────────────────────────────────────────
 SERIES = {
     "cpi": {
-        "id": "CUSR0000SA0",
-        "name": "CPI",
+        "id": "CUSR0000SA0", "name": "CPI",
         "full": "Consumer Price Index — All Items SA",
-        "transform": "price_index",
-        "color": "#5B8DEF",
+        "transform": "price_index", "color": "#5B8DEF",
         "unit_mom": "%", "unit_yoy": "%", "dp": 2,
     },
     "corecpi": {
-        "id": "CUSR0000SA0L1E",
-        "name": "Core CPI",
+        "id": "CUSR0000SA0L1E", "name": "Core CPI",
         "full": "CPI ex Food & Energy SA",
-        "transform": "price_index",
-        "color": "#22D3EE",
+        "transform": "price_index", "color": "#22D3EE",
         "unit_mom": "%", "unit_yoy": "%", "dp": 2,
     },
     "ppi": {
-        "id": "WPSFD4",
-        "name": "PPI",
+        "id": "WPSFD4", "name": "PPI",
         "full": "PPI Final Demand",
-        "transform": "price_index",
-        "color": "#A78BFA",
+        "transform": "price_index", "color": "#A78BFA",
         "unit_mom": "%", "unit_yoy": "%", "dp": 2,
     },
     "unemp": {
-        "id": "LNS14000000",
-        "name": "Unemployment Rate",
+        "id": "LNS14000000", "name": "Unemployment Rate",
         "full": "Civilian Unemployment Rate (U-3) SA",
-        "transform": "rate",
-        "color": "#F59E0B",
+        "transform": "rate", "color": "#F59E0B",
         "unit_mom": "pp", "unit_yoy": "pp", "dp": 1,
     },
     "nfp": {
-        "id": "CES0000000001",
-        "name": "Nonfarm Payrolls",
+        "id": "CES0000000001", "name": "Nonfarm Payrolls",
         "full": "Total Nonfarm Payrolls SA",
-        "transform": "nfp",
-        "color": "#0FD68A",
+        "transform": "nfp", "color": "#0FD68A",
         "unit_mom": "K", "unit_yoy": "K", "dp": 0,
     },
 }
@@ -566,27 +296,17 @@ SERIES = {
 # ─────────────────────────────────────────────────────────────────────────────
 FRED_SERIES = {
     "corepce": {
-        "id":        "PCEPILFE",
-        "name":      "Core PCE",
-        "full":      "PCE Excluding Food & Energy — BEA",
-        "transform": "price_index",
-        "color":     "#F472B6",
-        "unit_mom":  "%",
-        "unit_yoy":  "%",
-        "dp":        2,
-        "freq":      "Monthly",
-        "source":    "BEA via FRED",
+        "id": "PCEPILFE", "name": "Core PCE",
+        "full": "PCE Excluding Food & Energy — BEA",
+        "transform": "price_index", "color": "#F472B6",
+        "unit_mom": "%", "unit_yoy": "%", "dp": 2,
+        "freq": "Monthly", "source": "BEA via FRED",
     },
     "claims": {
-        "id":        "ICSA",
-        "name":      "Initial Jobless Claims",
-        "full":      "Initial Unemployment Insurance Claims (Weekly SA)",
-        "transform": "claims",
-        "color":     "#F97316",
-        "unit":      "K",
-        "dp":        0,
-        "freq":      "Weekly",
-        "source":    "DOL via FRED",
+        "id": "ICSA", "name": "Initial Jobless Claims",
+        "full": "Initial Unemployment Insurance Claims (Weekly SA)",
+        "transform": "claims", "color": "#F97316",
+        "unit": "K", "dp": 0, "freq": "Weekly", "source": "DOL via FRED",
     },
 }
 
@@ -600,12 +320,9 @@ def fetch_bls_data() -> dict:
     id_to_key  = {cfg["id"]: k for k, cfg in SERIES.items()}
     end_year   = datetime.now().year
     start_year = end_year - 10
-
     payload = {
-        "seriesid":        series_ids,
-        "startyear":       str(start_year),
-        "endyear":         str(end_year),
-        "registrationkey": api_key,
+        "seriesid": series_ids, "startyear": str(start_year),
+        "endyear": str(end_year), "registrationkey": api_key,
     }
     resp = requests.post(
         "https://api.bls.gov/publicAPI/v2/timeseries/data/",
@@ -613,11 +330,9 @@ def fetch_bls_data() -> dict:
     )
     resp.raise_for_status()
     data = resp.json()
-
     if data.get("status") != "REQUEST_SUCCEEDED":
         msgs = data.get("message", ["Unknown BLS error"])
         raise ValueError("BLS API error: " + "; ".join(msgs))
-
     result = {}
     for series in data["Results"]["series"]:
         key = id_to_key.get(series["seriesID"])
@@ -643,16 +358,12 @@ def fetch_bls_data() -> dict:
 def fetch_fred_data() -> dict:
     fred_key = "bc1f32b397114934e95d879ec2646074"
     result   = {}
-
     for key, cfg in FRED_SERIES.items():
         limit = 156 if cfg["freq"] == "Weekly" else 120
-        url   = (
+        url = (
             f"https://api.stlouisfed.org/fred/series/observations"
-            f"?series_id={cfg['id']}"
-            f"&api_key={fred_key}"
-            f"&file_type=json"
-            f"&sort_order=desc"
-            f"&limit={limit}"
+            f"?series_id={cfg['id']}&api_key={fred_key}"
+            f"&file_type=json&sort_order=desc&limit={limit}"
         )
         try:
             resp = requests.get(url, timeout=20)
@@ -662,10 +373,7 @@ def fetch_fred_data() -> dict:
             for obs in data.get("observations", []):
                 if obs["value"] in (".", ""):
                     continue
-                rows.append({
-                    "date":  pd.Timestamp(obs["date"]),
-                    "value": float(obs["value"]),
-                })
+                rows.append({"date": pd.Timestamp(obs["date"]), "value": float(obs["value"])})
             df = pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
             if key == "claims":
                 df["value"] = df["value"] / 1000
@@ -673,11 +381,10 @@ def fetch_fred_data() -> dict:
         except Exception as e:
             print(f"FRED fetch failed [{key}]: {e}")
             result[key] = pd.DataFrame(columns=["date", "value"])
-
     return result
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TRANSFORMATIONS
+# TRANSFORMATIONS & FORMAT HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
 def compute_series(df: pd.DataFrame, transform: str) -> pd.DataFrame:
     df = df.copy()
@@ -689,9 +396,6 @@ def compute_series(df: pd.DataFrame, transform: str) -> pd.DataFrame:
         df["yoy"] = df["value"].diff(12)
     return df
 
-# ─────────────────────────────────────────────────────────────────────────────
-# FORMAT HELPERS
-# ─────────────────────────────────────────────────────────────────────────────
 def fmt_val(v: float, cfg: dict, which: str) -> str:
     sign = "+" if v >= 0 else ""
     dp   = cfg["dp"]
@@ -701,7 +405,7 @@ def fmt_val(v: float, cfg: dict, which: str) -> str:
     return f"{sign}{v:.{dp}f}{unit}"
 
 def is_positive_signal(v: float, key: str) -> bool:
-    if key == "nfp":   return v >= 0
+    if key == "nfp": return v >= 0
     return v <= 0
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -712,10 +416,9 @@ GRID_COL  = "rgba(120,140,200,.06)"
 AXIS_COL  = "#8898BB"
 FONT_MONO = "IBM Plex Mono, Courier New, monospace"
 
-def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy",
-               height: int = 200) -> go.Figure:
-    color      = cfg["color"]
-    fig        = go.Figure()
+def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy", height: int = 200) -> go.Figure:
+    color = cfg["color"]
+    fig   = go.Figure()
     yaxis_opts = {}
 
     def hex_fill(hex_col, alpha=0.1):
@@ -727,10 +430,8 @@ def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy",
     if cfg["transform"] == "rate":
         plot_df = df.dropna(subset=["value"]).tail(60)
         fig.add_trace(go.Scatter(
-            x=plot_df["date"], y=plot_df["value"],
-            mode="lines",
-            line=dict(color=color, width=1.8),
-            fill="tozeroy",
+            x=plot_df["date"], y=plot_df["value"], mode="lines",
+            line=dict(color=color, width=1.8), fill="tozeroy",
             fillcolor=hex_fill(color, 0.1),
             hovertemplate="%{x|%b %Y}<br><b>%{y:.1f}%</b><extra></extra>",
         ))
@@ -744,9 +445,7 @@ def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy",
         bar_borders= ["rgba(15,214,138,.95)" if v >= 0 else "rgba(240,72,90,.95)" for v in plot_df[which]]
         fig.add_trace(go.Bar(
             x=plot_df["date"], y=plot_df[which],
-            marker_color=bar_colors,
-            marker_line_color=bar_borders,
-            marker_line_width=1,
+            marker_color=bar_colors, marker_line_color=bar_borders, marker_line_width=1,
             hovertemplate="%{x|%b %Y}<br><b>%{y:+.0f}K</b><extra></extra>",
         ))
         fig.add_hline(y=0, line_color="rgba(120,140,200,.2)", line_width=1)
@@ -755,36 +454,20 @@ def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy",
         plot_df = df.dropna(subset=[which]).tail(60)
         unit    = cfg[f"unit_{which}"]
         fig.add_trace(go.Scatter(
-            x=plot_df["date"], y=plot_df[which],
-            mode="lines",
-            line=dict(color=color, width=1.8),
-            fill="tozeroy",
+            x=plot_df["date"], y=plot_df[which], mode="lines",
+            line=dict(color=color, width=1.8), fill="tozeroy",
             fillcolor=hex_fill(color, 0.1),
             hovertemplate=f"%{{x|%b %Y}}<br><b>%{{y:+.2f}}{unit}</b><extra></extra>",
         ))
         fig.add_hline(y=0, line_color="rgba(120,140,200,.2)", line_width=1)
 
     fig.update_layout(
-        height=height,
-        margin=dict(l=0, r=0, t=8, b=0),
-        paper_bgcolor=CHART_BG,
-        plot_bgcolor=CHART_BG,
+        height=height, margin=dict(l=0, r=0, t=8, b=0),
+        paper_bgcolor=CHART_BG, plot_bgcolor=CHART_BG,
         font=dict(family=FONT_MONO, color=AXIS_COL, size=10),
-        xaxis=dict(
-            showgrid=False, zeroline=False,
-            tickfont=dict(size=10, color="#FFFFFF"),
-            tickformat="%b '%y", nticks=6,
-        ),
-        yaxis=dict(
-            showgrid=True, gridcolor=GRID_COL, zeroline=False,
-            tickfont=dict(size=10, color="#FFFFFF"), nticks=5,
-            **yaxis_opts,
-        ),
-        hoverlabel=dict(
-            bgcolor="#0E1428",
-            bordercolor="rgba(91,141,239,.3)",
-            font=dict(family=FONT_MONO, size=12, color="#FFFFFF"),
-        ),
+        xaxis=dict(showgrid=False, zeroline=False, tickfont=dict(size=10, color="#FFFFFF"), tickformat="%b '%y", nticks=6),
+        yaxis=dict(showgrid=True, gridcolor=GRID_COL, zeroline=False, tickfont=dict(size=10, color="#FFFFFF"), nticks=5, **yaxis_opts),
+        hoverlabel=dict(bgcolor="#0E1428", bordercolor="rgba(91,141,239,.3)", font=dict(family=FONT_MONO, size=12, color="#FFFFFF")),
         showlegend=False,
     )
     return fig
@@ -792,8 +475,7 @@ def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy",
 # ─────────────────────────────────────────────────────────────────────────────
 # STAT BOX HTML
 # ─────────────────────────────────────────────────────────────────────────────
-def stat_box_html(label: str, value_str: str, delta_str: str,
-                  is_up: bool, date_str: str) -> str:
+def stat_box_html(label: str, value_str: str, delta_str: str, is_up: bool, date_str: str) -> str:
     arrow     = "▲" if is_up else "▼"
     delta_cls = "stat-up" if is_up else "stat-dn"
     return f"""
@@ -806,29 +488,7 @@ def stat_box_html(label: str, value_str: str, delta_str: str,
     """
 
 # ─────────────────────────────────────────────────────────────────────────────
-# NFP RELEASE TABLE
-# ─────────────────────────────────────────────────────────────────────────────
-def nfp_release_table(df: pd.DataFrame) -> str:
-    recent = df.dropna(subset=["mom"]).tail(6).iloc[::-1]
-    rows   = ""
-    for i, (_, row) in enumerate(recent.iterrows()):
-        mom  = row["mom"]
-        cls  = "pos" if mom >= 0 else "neg"
-        sign = "+" if mom >= 0 else ""
-        rows += f"""
-        <tr>
-          <td>{row['date'].strftime('%b %Y')}</td>
-          <td class="{cls}">{sign}{int(round(mom))}K</td>
-          <td style="color:#4D6080">—</td>
-        </tr>"""
-    return f"""
-    <table class="rel-table">
-      <thead><tr><th>Release</th><th>Actual</th><th>Consensus</th></tr></thead>
-      <tbody>{rows}</tbody>
-    </table>"""
-
-# ─────────────────────────────────────────────────────────────────────────────
-# RENDER ONE INDICATOR CARD
+# RENDER ONE BLS INDICATOR CARD
 # ─────────────────────────────────────────────────────────────────────────────
 def render_card(key: str, cfg: dict, df) -> None:
     st.markdown(f"""
@@ -858,24 +518,20 @@ def render_card(key: str, cfg: dict, df) -> None:
     last     = valid.iloc[-1]
     prev     = valid.iloc[-2]
     date_str = last["date"].strftime("%b %Y")
-
     mom_val  = last["mom"]
     yoy_val  = last["yoy"]
     level    = last["value"]
 
-    df_raw    = df.sort_values("date").reset_index(drop=True)
-    last_date = last["date"]
-
+    df_raw        = df.sort_values("date").reset_index(drop=True)
+    last_date     = last["date"]
     prev1_target  = last_date - pd.DateOffset(months=1)
     prev12_target = last_date - pd.DateOffset(months=12)
-
-    prev1_row  = df_raw[df_raw["date"] == prev1_target]
-    prev12_row = df_raw[df_raw["date"] == prev12_target]
-
-    prev1_val   = prev1_row.iloc[0]["value"]            if not prev1_row.empty  else None
-    prev12_val  = prev12_row.iloc[0]["value"]           if not prev12_row.empty else None
-    prev1_date  = prev1_row.iloc[0]["date"].strftime("%b %Y")  if not prev1_row.empty  else "—"
-    prev12_date = prev12_row.iloc[0]["date"].strftime("%b %Y") if not prev12_row.empty else "—"
+    prev1_row     = df_raw[df_raw["date"] == prev1_target]
+    prev12_row    = df_raw[df_raw["date"] == prev12_target]
+    prev1_val     = prev1_row.iloc[0]["value"]           if not prev1_row.empty  else None
+    prev12_val    = prev12_row.iloc[0]["value"]          if not prev12_row.empty else None
+    prev1_date    = prev1_row.iloc[0]["date"].strftime("%b %Y")  if not prev1_row.empty  else "—"
+    prev12_date   = prev12_row.iloc[0]["date"].strftime("%b %Y") if not prev12_row.empty else "—"
 
     if cfg["transform"] == "price_index":
         mom_headline = fmt_val(mom_val, cfg, "mom")
@@ -896,15 +552,12 @@ def render_card(key: str, cfg: dict, df) -> None:
     elif cfg["transform"] == "nfp":
         prev1_target_nfp  = last["date"] - pd.DateOffset(months=1)
         prev12_target_nfp = last["date"] - pd.DateOffset(months=12)
-
-        prev1_row_nfp  = df_c[df_c["date"] == prev1_target_nfp]
-        prev12_row_nfp = df_c[df_c["date"] == prev12_target_nfp]
-
-        prev1_mom  = prev1_row_nfp.iloc[0]["mom"]  if not prev1_row_nfp.empty  else None
-        prev12_mom = prev12_row_nfp.iloc[0]["mom"] if not prev12_row_nfp.empty else None
-
-        prev1_date_nfp  = prev1_row_nfp.iloc[0]["date"].strftime("%b %Y")  if not prev1_row_nfp.empty  else "—"
-        prev12_date_nfp = prev12_row_nfp.iloc[0]["date"].strftime("%b %Y") if not prev12_row_nfp.empty else "—"
+        prev1_row_nfp     = df_c[df_c["date"] == prev1_target_nfp]
+        prev12_row_nfp    = df_c[df_c["date"] == prev12_target_nfp]
+        prev1_mom         = prev1_row_nfp.iloc[0]["mom"]  if not prev1_row_nfp.empty  else None
+        prev12_mom        = prev12_row_nfp.iloc[0]["mom"] if not prev12_row_nfp.empty else None
+        prev1_date_nfp    = prev1_row_nfp.iloc[0]["date"].strftime("%b %Y")  if not prev1_row_nfp.empty  else "—"
+        prev12_date_nfp   = prev12_row_nfp.iloc[0]["date"].strftime("%b %Y") if not prev12_row_nfp.empty else "—"
 
         if prev1_mom is not None:
             s = "+" if prev1_mom >= 0 else ""
@@ -933,15 +586,9 @@ def render_card(key: str, cfg: dict, df) -> None:
 
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown(stat_box_html(
-            "Month-over-Month", mom_headline,
-            mom_dlt_str, delta_up, date_str
-        ), unsafe_allow_html=True)
+        st.markdown(stat_box_html("Month-over-Month", mom_headline, mom_dlt_str, delta_up, date_str), unsafe_allow_html=True)
     with c2:
-        st.markdown(stat_box_html(
-            "Year-over-Year", yoy_headline,
-            yoy_dlt_str, yoy_dlt_up, date_str
-        ), unsafe_allow_html=True)
+        st.markdown(stat_box_html("Year-over-Year",   yoy_headline, yoy_dlt_str, yoy_dlt_up, date_str), unsafe_allow_html=True)
 
     st.markdown("<div style='margin-top:16px'>", unsafe_allow_html=True)
 
@@ -949,59 +596,32 @@ def render_card(key: str, cfg: dict, df) -> None:
         fig_direct = make_chart(df_c, cfg, "mom", height=200)
         col_chart, col_btn = st.columns([10, 1])
         with col_chart:
-            st.plotly_chart(
-                fig_direct, use_container_width=True,
-                config={"displayModeBar": False},
-                key=f"plt_direct_{key}"
-            )
+            st.plotly_chart(fig_direct, use_container_width=True, config={"displayModeBar": False}, key=f"plt_direct_{key}")
         with col_btn:
             if st.button("⛶", key=f"exp_direct_{key}", help="Expand chart"):
-                st.session_state["expanded"] = {
-                    "key": key, "which": "mom",
-                    "title": f"{cfg['name']} — Actual Prints",
-                    "cfg": cfg, "df_c": df_c
-                }
+                st.session_state["expanded"] = {"key": key, "which": "mom", "title": f"{cfg['name']} — Actual Prints", "cfg": cfg, "df_c": df_c}
                 st.rerun()
         st.caption(cfg["full"])
-
     else:
         tab_mom, tab_yoy = st.tabs(["  MoM  ", "  YoY  "])
-
         with tab_mom:
             fig_mom = make_chart(df_c, cfg, "mom", height=200)
             col_chart, col_btn = st.columns([10, 1])
             with col_chart:
-                st.plotly_chart(
-                    fig_mom, use_container_width=True,
-                    config={"displayModeBar": False},
-                    key=f"plt_mom_{key}"
-                )
+                st.plotly_chart(fig_mom, use_container_width=True, config={"displayModeBar": False}, key=f"plt_mom_{key}")
             with col_btn:
                 if st.button("⛶", key=f"exp_mom_{key}", help="Expand chart"):
-                    st.session_state["expanded"] = {
-                        "key": key, "which": "mom",
-                        "title": f"{cfg['name']} — Month-over-Month",
-                        "cfg": cfg, "df_c": df_c
-                    }
+                    st.session_state["expanded"] = {"key": key, "which": "mom", "title": f"{cfg['name']} — Month-over-Month", "cfg": cfg, "df_c": df_c}
                     st.rerun()
             st.caption(cfg["full"])
-
         with tab_yoy:
             fig_yoy = make_chart(df_c, cfg, "yoy", height=200)
             col_chart2, col_btn2 = st.columns([10, 1])
             with col_chart2:
-                st.plotly_chart(
-                    fig_yoy, use_container_width=True,
-                    config={"displayModeBar": False},
-                    key=f"plt_yoy_{key}"
-                )
+                st.plotly_chart(fig_yoy, use_container_width=True, config={"displayModeBar": False}, key=f"plt_yoy_{key}")
             with col_btn2:
                 if st.button("⛶", key=f"exp_yoy_{key}", help="Expand chart"):
-                    st.session_state["expanded"] = {
-                        "key": key, "which": "yoy",
-                        "title": f"{cfg['name']} — Year-over-Year",
-                        "cfg": cfg, "df_c": df_c
-                    }
+                    st.session_state["expanded"] = {"key": key, "which": "yoy", "title": f"{cfg['name']} — Year-over-Year", "cfg": cfg, "df_c": df_c}
                     st.rerun()
             st.caption(cfg["full"])
 
@@ -1035,22 +655,22 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
         if len(valid) < 2:
             st.warning("Insufficient data", icon="⚠️")
             return
-        last     = valid.iloc[-1]
-        prev     = valid.iloc[-2]
-        date_str = last["date"].strftime("%b %Y")
-        mom_val  = last["mom"]
-        yoy_val  = last["yoy"]
-        mom_delta  = mom_val - prev["mom"]
-        yoy_delta  = yoy_val - prev["yoy"]
-        delta_up   = is_positive_signal(mom_delta, key)
-        yoy_dlt_up = is_positive_signal(yoy_delta, key)
+        last        = valid.iloc[-1]
+        prev        = valid.iloc[-2]
+        date_str    = last["date"].strftime("%b %Y")
+        mom_val     = last["mom"]
+        yoy_val     = last["yoy"]
+        mom_delta   = mom_val - prev["mom"]
+        yoy_delta   = yoy_val - prev["yoy"]
+        delta_up    = is_positive_signal(mom_delta, key)
+        yoy_dlt_up  = is_positive_signal(yoy_delta, key)
         mom_str     = fmt_val(mom_val,   cfg, "mom")
         yoy_str     = fmt_val(yoy_val,   cfg, "yoy")
         mom_dlt_str = fmt_val(mom_delta, cfg, "mom") + " vs prior"
         yoy_dlt_str = fmt_val(yoy_delta, cfg, "yoy") + " vs prior"
         c1, c2 = st.columns(2)
         with c1:
-            st.markdown(stat_box_html("Month-over-Month", mom_str, mom_dlt_str, delta_up, date_str), unsafe_allow_html=True)
+            st.markdown(stat_box_html("Month-over-Month", mom_str, mom_dlt_str, delta_up,   date_str), unsafe_allow_html=True)
         with c2:
             st.markdown(stat_box_html("Year-over-Year",   yoy_str, yoy_dlt_str, yoy_dlt_up, date_str), unsafe_allow_html=True)
         st.markdown("<div style='margin-top:16px'>", unsafe_allow_html=True)
@@ -1078,7 +698,6 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
         st.markdown("</div>", unsafe_allow_html=True)
         return
 
-    src_label = cfg.get("source", "FRED")
     st.markdown(f"""
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:10px">
@@ -1097,32 +716,25 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
         st.warning("Data unavailable", icon="⚠️")
         return
 
-    df = df.sort_values("date").reset_index(drop=True)
-    last      = df.iloc[-1]
-    prev1     = df.iloc[-2]
-    last_val  = last["value"]
-    prev1_val = prev1["value"]
-    date_str  = last["date"].strftime("%d %b %Y") if cfg["freq"] == "Weekly" else last["date"].strftime("%b %Y")
+    df       = df.sort_values("date").reset_index(drop=True)
+    last     = df.iloc[-1]
+    prev1    = df.iloc[-2]
+    last_val = last["value"]
+    prev1_val= prev1["value"]
+    date_str = last["date"].strftime("%d %b %Y") if cfg["freq"] == "Weekly" else last["date"].strftime("%b %Y")
 
     def fmt_k(v, sign=True):
-        s = "+" if (v >= 0 and sign) else ("" if not sign else "")
+        s = "+" if (v >= 0 and sign) else ""
         return f"{s}{int(round(v))}K"
 
-    def fmt_idx(v):
-        return f"{v:.1f}"
-
     if cfg["transform"] == "claims":
-        wow        = last_val - prev1_val
-        wow_up     = wow <= 0
-        wow_sign   = "+" if wow >= 0 else ""
-        wow_str    = f"{wow_sign}{int(round(wow))}K vs prior week"
-
+        wow      = last_val - prev1_val
+        wow_up   = wow <= 0
+        wow_sign = "+" if wow >= 0 else ""
+        wow_str  = f"{wow_sign}{int(round(wow))}K vs prior week"
         c1, c2 = st.columns(2)
         with c1:
-            st.markdown(stat_box_html(
-                "Latest Print", fmt_k(last_val, sign=False),
-                wow_str, wow_up, date_str
-            ), unsafe_allow_html=True)
+            st.markdown(stat_box_html("Latest Print", fmt_k(last_val, sign=False), wow_str, wow_up, date_str), unsafe_allow_html=True)
         with c2:
             st.markdown(f"""
             <div class="stat-box">
@@ -1132,515 +744,237 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
             </div>
             """, unsafe_allow_html=True)
 
-    elif cfg["transform"] == "adp":
-        target_yoy = last["date"] - pd.DateOffset(months=12)
-        yoy_row    = df[df["date"] == target_yoy]
-        yoy_val    = yoy_row.iloc[0]["value"] if not yoy_row.empty else None
-        yoy_date   = yoy_row.iloc[0]["date"].strftime("%b %Y") if not yoy_row.empty else "—"
-
-        if yoy_val is not None:
-            yoy_diff     = last_val - yoy_val
-            yoy_diff_s   = "+" if yoy_diff >= 0 else ""
-            yoy_prev_s   = "+" if yoy_val  >= 0 else ""
-            yoy_dlt_str  = f"{yoy_diff_s}{int(round(yoy_diff))}K vs {yoy_date}: {yoy_prev_s}{int(round(yoy_val))}K"
-            yoy_dlt_up   = yoy_diff >= 0
-        else:
-            yoy_dlt_str = "—"
-            yoy_dlt_up  = True
-
-        prev_s   = "+" if prev1_val >= 0 else ""
-        mom_str  = f"vs {prev1['date'].strftime('%b %Y')}: {prev_s}{int(round(prev1_val))}K"
-        mom_up   = last_val >= prev1_val
-
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown(stat_box_html(
-                "Month-over-Month", fmt_k(last_val),
-                mom_str, mom_up, date_str
-            ), unsafe_allow_html=True)
-        with c2:
-            st.markdown(stat_box_html(
-                "Year-over-Year", fmt_k(last_val),
-                yoy_dlt_str, yoy_dlt_up, date_str
-            ), unsafe_allow_html=True)
-
-    elif cfg["transform"] == "sentiment":
-        mom_chg  = last_val - prev1_val
-        mom_up   = mom_chg >= 0
-        mom_sign = "+" if mom_chg >= 0 else ""
-        mom_str  = f"{mom_sign}{mom_chg:.1f} vs {prev1['date'].strftime('%b %Y')}: {prev1_val:.1f}"
-        prev_date_str = prev1["date"].strftime("%b %Y")
-
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown(stat_box_html(
-                "Latest Print", fmt_idx(last_val),
-                mom_str, mom_up, date_str
-            ), unsafe_allow_html=True)
-        with c2:
-            st.markdown(f"""
-            <div class="stat-box">
-              <div class="stat-period">Previous</div>
-              <div class="stat-val">{fmt_idx(prev1_val)}</div>
-              <div class="stat-date">{prev_date_str}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
     st.markdown("<div style='margin-top:16px'>", unsafe_allow_html=True)
-
     plot_df = df.tail(104 if cfg["freq"] == "Weekly" else 60)
-    r_c = int(color[1:3], 16)
-    g_c = int(color[3:5], 16)
-    b_c = int(color[5:7], 16)
+    r_c = int(color[1:3], 16); g_c = int(color[3:5], 16); b_c = int(color[5:7], 16)
     fill_color = f"rgba({r_c},{g_c},{b_c},0.1)"
-
-    if cfg["transform"] == "adp":
-        bar_colors  = ["rgba(15,214,138,.7)"  if v >= 0 else "rgba(240,72,90,.7)"  for v in plot_df["value"]]
-        bar_borders = ["rgba(15,214,138,.95)" if v >= 0 else "rgba(240,72,90,.95)" for v in plot_df["value"]]
-        fig = go.Figure(go.Bar(
-            x=plot_df["date"], y=plot_df["value"],
-            marker_color=bar_colors,
-            marker_line_color=bar_borders,
-            marker_line_width=1,
-            hovertemplate="%{x|%b %Y}<br><b>%{y:+.0f}K</b><extra></extra>",
-        ))
-        fig.add_hline(y=0, line_color="rgba(120,140,200,.2)", line_width=1)
-    else:
-        hover_fmt = "%{x|%d %b '%y}<br><b>%{y:.0f}K</b>" if cfg["freq"] == "Weekly" else "%{x|%b %Y}<br><b>%{y:.1f}</b>"
-        fig = go.Figure(go.Scatter(
-            x=plot_df["date"], y=plot_df["value"],
-            mode="lines",
-            line=dict(color=color, width=1.8),
-            fill="tozeroy",
-            fillcolor=fill_color,
-            hovertemplate=hover_fmt + "<extra></extra>",
-        ))
-        y_min = max(0, plot_df["value"].min() * 0.9)
-        y_max = plot_df["value"].max() * 1.05
-        fig.update_yaxes(range=[y_min, y_max])
-
+    hover_fmt = "%{x|%d %b '%y}<br><b>%{y:.0f}K</b>" if cfg["freq"] == "Weekly" else "%{x|%b %Y}<br><b>%{y:.1f}</b>"
+    fig = go.Figure(go.Scatter(
+        x=plot_df["date"], y=plot_df["value"], mode="lines",
+        line=dict(color=color, width=1.8), fill="tozeroy", fillcolor=fill_color,
+        hovertemplate=hover_fmt + "<extra></extra>",
+    ))
+    y_min = max(0, plot_df["value"].min() * 0.9)
+    y_max = plot_df["value"].max() * 1.05
+    fig.update_yaxes(range=[y_min, y_max])
     fig.update_layout(
-        height=200,
-        margin=dict(l=0, r=0, t=8, b=0),
+        height=200, margin=dict(l=0, r=0, t=8, b=0),
         paper_bgcolor="#0B1020", plot_bgcolor="#0B1020",
         font=dict(family="IBM Plex Mono, monospace", color="#8898BB", size=10),
-        xaxis=dict(showgrid=False, zeroline=False,
-                   tickfont=dict(size=10, color="#FFFFFF"),
-                   tickformat="%b '%y", nticks=6),
-        yaxis=dict(showgrid=True, gridcolor="rgba(120,140,200,.06)", zeroline=False,
-                   tickfont=dict(size=10, color="#FFFFFF"), nticks=5),
-        hoverlabel=dict(bgcolor="#0E1428", bordercolor="rgba(91,141,239,.3)",
-                        font=dict(family="IBM Plex Mono, monospace", size=12, color="#FFFFFF")),
+        xaxis=dict(showgrid=False, zeroline=False, tickfont=dict(size=10, color="#FFFFFF"), tickformat="%b '%y", nticks=6),
+        yaxis=dict(showgrid=True, gridcolor="rgba(120,140,200,.06)", zeroline=False, tickfont=dict(size=10, color="#FFFFFF"), nticks=5),
+        hoverlabel=dict(bgcolor="#0E1428", bordercolor="rgba(91,141,239,.3)", font=dict(family="IBM Plex Mono, monospace", size=12, color="#FFFFFF")),
         showlegend=False,
     )
-
     col_chart, col_btn = st.columns([10, 1])
     with col_chart:
-        st.plotly_chart(fig, use_container_width=True,
-                        config={"displayModeBar": False}, key=f"plt_fred_{key}")
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=f"plt_fred_{key}")
     with col_btn:
         if st.button("⛶", key=f"exp_fred_{key}", help="Expand chart"):
-            st.session_state["expanded"] = {
-                "key": key, "which": "value",
-                "title": cfg["name"],
-                "cfg": cfg, "df_c": df.assign(mom=df["value"], yoy=df["value"])
-            }
+            st.session_state["expanded"] = {"key": key, "which": "value", "title": cfg["name"], "cfg": cfg, "df_c": df.assign(mom=df["value"], yoy=df["value"])}
             st.rerun()
     st.caption(cfg["full"])
     st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MARKETS SCREENER — DATA
+# S&P 500 FALLBACK DATA
 # ─────────────────────────────────────────────────────────────────────────────
-
 _SP500_FALLBACK_DATA = [
-    ("AAPL","Apple Inc.","Information Technology"),
-    ("MSFT","Microsoft Corp.","Information Technology"),
-    ("NVDA","NVIDIA Corp.","Information Technology"),
-    ("AVGO","Broadcom Inc.","Information Technology"),
-    ("ORCL","Oracle Corp.","Information Technology"),
-    ("CRM","Salesforce Inc.","Information Technology"),
-    ("ACN","Accenture plc","Information Technology"),
-    ("CSCO","Cisco Systems","Information Technology"),
-    ("IBM","IBM Corp.","Information Technology"),
-    ("AMD","Advanced Micro Devices","Information Technology"),
-    ("QCOM","Qualcomm Inc.","Information Technology"),
-    ("TXN","Texas Instruments","Information Technology"),
-    ("INTC","Intel Corp.","Information Technology"),
-    ("AMAT","Applied Materials","Information Technology"),
-    ("MU","Micron Technology","Information Technology"),
-    ("ADI","Analog Devices","Information Technology"),
-    ("KLAC","KLA Corp.","Information Technology"),
-    ("LRCX","Lam Research","Information Technology"),
-    ("NOW","ServiceNow Inc.","Information Technology"),
-    ("PANW","Palo Alto Networks","Information Technology"),
-    ("CDNS","Cadence Design Systems","Information Technology"),
-    ("SNPS","Synopsys Inc.","Information Technology"),
-    ("MSI","Motorola Solutions","Information Technology"),
-    ("APH","Amphenol Corp.","Information Technology"),
-    ("TEL","TE Connectivity","Information Technology"),
-    ("FTNT","Fortinet Inc.","Information Technology"),
-    ("HPQ","HP Inc.","Information Technology"),
-    ("HPE","Hewlett Packard Enterprise","Information Technology"),
-    ("KEYS","Keysight Technologies","Information Technology"),
-    ("INTU","Intuit Inc.","Information Technology"),
-    ("ADSK","Autodesk Inc.","Information Technology"),
-    ("ANSS","ANSYS Inc.","Information Technology"),
-    ("PTC","PTC Inc.","Information Technology"),
-    ("GEN","Gen Digital","Information Technology"),
-    ("FFIV","F5 Inc.","Information Technology"),
-    ("JNPR","Juniper Networks","Information Technology"),
-    ("WDC","Western Digital","Information Technology"),
-    ("STX","Seagate Technology","Information Technology"),
-    ("NTAP","NetApp Inc.","Information Technology"),
-    ("ENPH","Enphase Energy","Information Technology"),
-    ("JPM","JPMorgan Chase","Financials"),
-    ("BAC","Bank of America","Financials"),
-    ("WFC","Wells Fargo","Financials"),
-    ("GS","Goldman Sachs","Financials"),
-    ("MS","Morgan Stanley","Financials"),
-    ("BLK","BlackRock Inc.","Financials"),
-    ("SCHW","Charles Schwab","Financials"),
-    ("AXP","American Express","Financials"),
-    ("CB","Chubb Ltd.","Financials"),
-    ("MMC","Marsh & McLennan","Financials"),
-    ("PGR","Progressive Corp.","Financials"),
-    ("USB","U.S. Bancorp","Financials"),
-    ("TFC","Truist Financial","Financials"),
-    ("COF","Capital One Financial","Financials"),
-    ("PNC","PNC Financial Services","Financials"),
-    ("ICE","Intercontinental Exchange","Financials"),
-    ("CME","CME Group","Financials"),
-    ("SPGI","S&P Global Inc.","Financials"),
-    ("MCO","Moody's Corp.","Financials"),
-    ("AON","Aon plc","Financials"),
-    ("MET","MetLife Inc.","Financials"),
-    ("PRU","Prudential Financial","Financials"),
-    ("ALL","Allstate Corp.","Financials"),
-    ("AFL","Aflac Inc.","Financials"),
-    ("AIG","American International Group","Financials"),
-    ("BK","Bank of New York Mellon","Financials"),
-    ("STT","State Street Corp.","Financials"),
-    ("MTB","M&T Bank Corp.","Financials"),
-    ("FITB","Fifth Third Bancorp","Financials"),
-    ("RF","Regions Financial","Financials"),
-    ("HBAN","Huntington Bancshares","Financials"),
-    ("CFG","Citizens Financial","Financials"),
-    ("KEY","KeyCorp","Financials"),
-    ("PYPL","PayPal Holdings","Financials"),
-    ("V","Visa Inc.","Financials"),
-    ("MA","Mastercard Inc.","Financials"),
-    ("LLY","Eli Lilly and Co.","Health Care"),
-    ("UNH","UnitedHealth Group","Health Care"),
-    ("JNJ","Johnson & Johnson","Health Care"),
-    ("ABBV","AbbVie Inc.","Health Care"),
-    ("MRK","Merck & Co.","Health Care"),
-    ("TMO","Thermo Fisher Scientific","Health Care"),
-    ("ABT","Abbott Laboratories","Health Care"),
-    ("DHR","Danaher Corp.","Health Care"),
-    ("BMY","Bristol-Myers Squibb","Health Care"),
-    ("AMGN","Amgen Inc.","Health Care"),
-    ("PFE","Pfizer Inc.","Health Care"),
-    ("GILD","Gilead Sciences","Health Care"),
-    ("SYK","Stryker Corp.","Health Care"),
-    ("MDT","Medtronic plc","Health Care"),
-    ("ELV","Elevance Health","Health Care"),
-    ("CI","Cigna Group","Health Care"),
-    ("CVS","CVS Health Corp.","Health Care"),
-    ("HUM","Humana Inc.","Health Care"),
-    ("ISRG","Intuitive Surgical","Health Care"),
-    ("BSX","Boston Scientific","Health Care"),
-    ("BDX","Becton Dickinson","Health Care"),
-    ("IQV","IQVIA Holdings","Health Care"),
-    ("VRTX","Vertex Pharmaceuticals","Health Care"),
-    ("REGN","Regeneron Pharmaceuticals","Health Care"),
-    ("BIIB","Biogen Inc.","Health Care"),
-    ("MRNA","Moderna Inc.","Health Care"),
-    ("HCA","HCA Healthcare","Health Care"),
-    ("MCK","McKesson Corp.","Health Care"),
-    ("GEHC","GE HealthCare","Health Care"),
-    ("IDXX","IDEXX Laboratories","Health Care"),
-    ("ALGN","Align Technology","Health Care"),
-    ("DXCM","DexCom Inc.","Health Care"),
-    ("AMZN","Amazon.com Inc.","Consumer Discretionary"),
-    ("TSLA","Tesla Inc.","Consumer Discretionary"),
-    ("HD","Home Depot","Consumer Discretionary"),
-    ("MCD","McDonald's Corp.","Consumer Discretionary"),
-    ("NKE","Nike Inc.","Consumer Discretionary"),
-    ("LOW","Lowe's Companies","Consumer Discretionary"),
-    ("SBUX","Starbucks Corp.","Consumer Discretionary"),
-    ("TJX","TJX Companies","Consumer Discretionary"),
-    ("BKNG","Booking Holdings","Consumer Discretionary"),
-    ("GM","General Motors","Consumer Discretionary"),
-    ("F","Ford Motor Co.","Consumer Discretionary"),
-    ("ORLY","O'Reilly Automotive","Consumer Discretionary"),
-    ("AZO","AutoZone Inc.","Consumer Discretionary"),
-    ("MAR","Marriott International","Consumer Discretionary"),
-    ("HLT","Hilton Worldwide","Consumer Discretionary"),
-    ("EXPE","Expedia Group","Consumer Discretionary"),
-    ("RCL","Royal Caribbean","Consumer Discretionary"),
-    ("CCL","Carnival Corp.","Consumer Discretionary"),
-    ("DHI","D.R. Horton","Consumer Discretionary"),
-    ("LEN","Lennar Corp.","Consumer Discretionary"),
-    ("PHM","PulteGroup Inc.","Consumer Discretionary"),
-    ("ROST","Ross Stores","Consumer Discretionary"),
-    ("BBY","Best Buy Co.","Consumer Discretionary"),
-    ("DRI","Darden Restaurants","Consumer Discretionary"),
-    ("YUM","Yum! Brands","Consumer Discretionary"),
-    ("CMG","Chipotle Mexican Grill","Consumer Discretionary"),
-    ("EBAY","eBay Inc.","Consumer Discretionary"),
-    ("ETSY","Etsy Inc.","Consumer Discretionary"),
-    ("MELI","MercadoLibre","Consumer Discretionary"),
-    ("LULU","Lululemon Athletica","Consumer Discretionary"),
-    ("DASH","DoorDash Inc.","Consumer Discretionary"),
-    ("ABNB","Airbnb Inc.","Consumer Discretionary"),
+    ("AAPL","Apple Inc.","Information Technology"),("MSFT","Microsoft Corp.","Information Technology"),
+    ("NVDA","NVIDIA Corp.","Information Technology"),("AVGO","Broadcom Inc.","Information Technology"),
+    ("ORCL","Oracle Corp.","Information Technology"),("CRM","Salesforce Inc.","Information Technology"),
+    ("ACN","Accenture plc","Information Technology"),("CSCO","Cisco Systems","Information Technology"),
+    ("IBM","IBM Corp.","Information Technology"),("AMD","Advanced Micro Devices","Information Technology"),
+    ("QCOM","Qualcomm Inc.","Information Technology"),("TXN","Texas Instruments","Information Technology"),
+    ("INTC","Intel Corp.","Information Technology"),("AMAT","Applied Materials","Information Technology"),
+    ("MU","Micron Technology","Information Technology"),("ADI","Analog Devices","Information Technology"),
+    ("KLAC","KLA Corp.","Information Technology"),("LRCX","Lam Research","Information Technology"),
+    ("NOW","ServiceNow Inc.","Information Technology"),("PANW","Palo Alto Networks","Information Technology"),
+    ("CDNS","Cadence Design Systems","Information Technology"),("SNPS","Synopsys Inc.","Information Technology"),
+    ("MSI","Motorola Solutions","Information Technology"),("APH","Amphenol Corp.","Information Technology"),
+    ("TEL","TE Connectivity","Information Technology"),("FTNT","Fortinet Inc.","Information Technology"),
+    ("HPQ","HP Inc.","Information Technology"),("HPE","Hewlett Packard Enterprise","Information Technology"),
+    ("KEYS","Keysight Technologies","Information Technology"),("INTU","Intuit Inc.","Information Technology"),
+    ("ADSK","Autodesk Inc.","Information Technology"),("ANSS","ANSYS Inc.","Information Technology"),
+    ("PTC","PTC Inc.","Information Technology"),("GEN","Gen Digital","Information Technology"),
+    ("FFIV","F5 Inc.","Information Technology"),("JNPR","Juniper Networks","Information Technology"),
+    ("WDC","Western Digital","Information Technology"),("STX","Seagate Technology","Information Technology"),
+    ("NTAP","NetApp Inc.","Information Technology"),("ENPH","Enphase Energy","Information Technology"),
+    ("JPM","JPMorgan Chase","Financials"),("BAC","Bank of America","Financials"),
+    ("WFC","Wells Fargo","Financials"),("GS","Goldman Sachs","Financials"),
+    ("MS","Morgan Stanley","Financials"),("BLK","BlackRock Inc.","Financials"),
+    ("SCHW","Charles Schwab","Financials"),("AXP","American Express","Financials"),
+    ("CB","Chubb Ltd.","Financials"),("MMC","Marsh & McLennan","Financials"),
+    ("PGR","Progressive Corp.","Financials"),("USB","U.S. Bancorp","Financials"),
+    ("TFC","Truist Financial","Financials"),("COF","Capital One Financial","Financials"),
+    ("PNC","PNC Financial Services","Financials"),("ICE","Intercontinental Exchange","Financials"),
+    ("CME","CME Group","Financials"),("SPGI","S&P Global Inc.","Financials"),
+    ("MCO","Moody's Corp.","Financials"),("AON","Aon plc","Financials"),
+    ("MET","MetLife Inc.","Financials"),("PRU","Prudential Financial","Financials"),
+    ("ALL","Allstate Corp.","Financials"),("AFL","Aflac Inc.","Financials"),
+    ("AIG","American International Group","Financials"),("BK","Bank of New York Mellon","Financials"),
+    ("STT","State Street Corp.","Financials"),("MTB","M&T Bank Corp.","Financials"),
+    ("FITB","Fifth Third Bancorp","Financials"),("RF","Regions Financial","Financials"),
+    ("HBAN","Huntington Bancshares","Financials"),("CFG","Citizens Financial","Financials"),
+    ("KEY","KeyCorp","Financials"),("PYPL","PayPal Holdings","Financials"),
+    ("V","Visa Inc.","Financials"),("MA","Mastercard Inc.","Financials"),
+    ("LLY","Eli Lilly and Co.","Health Care"),("UNH","UnitedHealth Group","Health Care"),
+    ("JNJ","Johnson & Johnson","Health Care"),("ABBV","AbbVie Inc.","Health Care"),
+    ("MRK","Merck & Co.","Health Care"),("TMO","Thermo Fisher Scientific","Health Care"),
+    ("ABT","Abbott Laboratories","Health Care"),("DHR","Danaher Corp.","Health Care"),
+    ("BMY","Bristol-Myers Squibb","Health Care"),("AMGN","Amgen Inc.","Health Care"),
+    ("PFE","Pfizer Inc.","Health Care"),("GILD","Gilead Sciences","Health Care"),
+    ("SYK","Stryker Corp.","Health Care"),("MDT","Medtronic plc","Health Care"),
+    ("ELV","Elevance Health","Health Care"),("CI","Cigna Group","Health Care"),
+    ("CVS","CVS Health Corp.","Health Care"),("HUM","Humana Inc.","Health Care"),
+    ("ISRG","Intuitive Surgical","Health Care"),("BSX","Boston Scientific","Health Care"),
+    ("BDX","Becton Dickinson","Health Care"),("IQV","IQVIA Holdings","Health Care"),
+    ("VRTX","Vertex Pharmaceuticals","Health Care"),("REGN","Regeneron Pharmaceuticals","Health Care"),
+    ("BIIB","Biogen Inc.","Health Care"),("MRNA","Moderna Inc.","Health Care"),
+    ("HCA","HCA Healthcare","Health Care"),("MCK","McKesson Corp.","Health Care"),
+    ("GEHC","GE HealthCare","Health Care"),("IDXX","IDEXX Laboratories","Health Care"),
+    ("ALGN","Align Technology","Health Care"),("DXCM","DexCom Inc.","Health Care"),
+    ("AMZN","Amazon.com Inc.","Consumer Discretionary"),("TSLA","Tesla Inc.","Consumer Discretionary"),
+    ("HD","Home Depot","Consumer Discretionary"),("MCD","McDonald's Corp.","Consumer Discretionary"),
+    ("NKE","Nike Inc.","Consumer Discretionary"),("LOW","Lowe's Companies","Consumer Discretionary"),
+    ("SBUX","Starbucks Corp.","Consumer Discretionary"),("TJX","TJX Companies","Consumer Discretionary"),
+    ("BKNG","Booking Holdings","Consumer Discretionary"),("GM","General Motors","Consumer Discretionary"),
+    ("F","Ford Motor Co.","Consumer Discretionary"),("ORLY","O'Reilly Automotive","Consumer Discretionary"),
+    ("AZO","AutoZone Inc.","Consumer Discretionary"),("MAR","Marriott International","Consumer Discretionary"),
+    ("HLT","Hilton Worldwide","Consumer Discretionary"),("EXPE","Expedia Group","Consumer Discretionary"),
+    ("RCL","Royal Caribbean","Consumer Discretionary"),("CCL","Carnival Corp.","Consumer Discretionary"),
+    ("DHI","D.R. Horton","Consumer Discretionary"),("LEN","Lennar Corp.","Consumer Discretionary"),
+    ("PHM","PulteGroup Inc.","Consumer Discretionary"),("ROST","Ross Stores","Consumer Discretionary"),
+    ("BBY","Best Buy Co.","Consumer Discretionary"),("DRI","Darden Restaurants","Consumer Discretionary"),
+    ("YUM","Yum! Brands","Consumer Discretionary"),("CMG","Chipotle Mexican Grill","Consumer Discretionary"),
+    ("EBAY","eBay Inc.","Consumer Discretionary"),("ETSY","Etsy Inc.","Consumer Discretionary"),
+    ("MELI","MercadoLibre","Consumer Discretionary"),("LULU","Lululemon Athletica","Consumer Discretionary"),
+    ("DASH","DoorDash Inc.","Consumer Discretionary"),("ABNB","Airbnb Inc.","Consumer Discretionary"),
     ("DLTR","Dollar Tree","Consumer Discretionary"),
-    ("META","Meta Platforms","Communication Services"),
-    ("GOOGL","Alphabet Inc. Class A","Communication Services"),
-    ("GOOG","Alphabet Inc. Class C","Communication Services"),
-    ("NFLX","Netflix Inc.","Communication Services"),
-    ("DIS","Walt Disney Co.","Communication Services"),
-    ("CMCSA","Comcast Corp.","Communication Services"),
-    ("T","AT&T Inc.","Communication Services"),
-    ("VZ","Verizon Communications","Communication Services"),
-    ("TMUS","T-Mobile US","Communication Services"),
-    ("CHTR","Charter Communications","Communication Services"),
-    ("EA","Electronic Arts","Communication Services"),
-    ("TTWO","Take-Two Interactive","Communication Services"),
-    ("OMC","Omnicom Group","Communication Services"),
-    ("WBD","Warner Bros. Discovery","Communication Services"),
-    ("PARA","Paramount Global","Communication Services"),
-    ("FOX","Fox Corp. Class B","Communication Services"),
+    ("META","Meta Platforms","Communication Services"),("GOOGL","Alphabet Inc. Class A","Communication Services"),
+    ("GOOG","Alphabet Inc. Class C","Communication Services"),("NFLX","Netflix Inc.","Communication Services"),
+    ("DIS","Walt Disney Co.","Communication Services"),("CMCSA","Comcast Corp.","Communication Services"),
+    ("T","AT&T Inc.","Communication Services"),("VZ","Verizon Communications","Communication Services"),
+    ("TMUS","T-Mobile US","Communication Services"),("CHTR","Charter Communications","Communication Services"),
+    ("EA","Electronic Arts","Communication Services"),("TTWO","Take-Two Interactive","Communication Services"),
+    ("OMC","Omnicom Group","Communication Services"),("WBD","Warner Bros. Discovery","Communication Services"),
+    ("PARA","Paramount Global","Communication Services"),("FOX","Fox Corp. Class B","Communication Services"),
     ("FOXA","Fox Corp. Class A","Communication Services"),
-    ("CAT","Caterpillar Inc.","Industrials"),
-    ("RTX","RTX Corp.","Industrials"),
-    ("HON","Honeywell International","Industrials"),
-    ("UPS","United Parcel Service","Industrials"),
-    ("BA","Boeing Co.","Industrials"),
-    ("GE","GE Aerospace","Industrials"),
-    ("LMT","Lockheed Martin","Industrials"),
-    ("DE","Deere & Co.","Industrials"),
-    ("MMM","3M Co.","Industrials"),
-    ("EMR","Emerson Electric","Industrials"),
-    ("ETN","Eaton Corp.","Industrials"),
-    ("ITW","Illinois Tool Works","Industrials"),
-    ("PH","Parker Hannifin","Industrials"),
-    ("GD","General Dynamics","Industrials"),
-    ("NOC","Northrop Grumman","Industrials"),
-    ("TDG","TransDigm Group","Industrials"),
-    ("FDX","FedEx Corp.","Industrials"),
-    ("CSX","CSX Corp.","Industrials"),
-    ("UNP","Union Pacific Corp.","Industrials"),
-    ("NSC","Norfolk Southern","Industrials"),
-    ("WM","Waste Management","Industrials"),
-    ("RSG","Republic Services","Industrials"),
-    ("CTAS","Cintas Corp.","Industrials"),
-    ("FAST","Fastenal Co.","Industrials"),
-    ("PWR","Quanta Services","Industrials"),
-    ("VRSK","Verisk Analytics","Industrials"),
-    ("DAL","Delta Air Lines","Industrials"),
-    ("UAL","United Airlines","Industrials"),
-    ("LUV","Southwest Airlines","Industrials"),
-    ("AAL","American Airlines","Industrials"),
-    ("PCAR","PACCAR Inc.","Industrials"),
-    ("ODFL","Old Dominion Freight","Industrials"),
-    ("CPRT","Copart Inc.","Industrials"),
-    ("PAYX","Paychex Inc.","Industrials"),
-    ("WMT","Walmart Inc.","Consumer Staples"),
-    ("PG","Procter & Gamble","Consumer Staples"),
-    ("COST","Costco Wholesale","Consumer Staples"),
-    ("KO","Coca-Cola Co.","Consumer Staples"),
-    ("PEP","PepsiCo Inc.","Consumer Staples"),
-    ("PM","Philip Morris","Consumer Staples"),
-    ("MO","Altria Group","Consumer Staples"),
-    ("MDLZ","Mondelez International","Consumer Staples"),
-    ("CL","Colgate-Palmolive","Consumer Staples"),
-    ("KMB","Kimberly-Clark","Consumer Staples"),
-    ("GIS","General Mills","Consumer Staples"),
-    ("KR","Kroger Co.","Consumer Staples"),
-    ("SYY","Sysco Corp.","Consumer Staples"),
-    ("ADM","Archer-Daniels-Midland","Consumer Staples"),
-    ("TSN","Tyson Foods","Consumer Staples"),
-    ("MNST","Monster Beverage","Consumer Staples"),
-    ("KDP","Keurig Dr Pepper","Consumer Staples"),
-    ("WBA","Walgreens Boots Alliance","Consumer Staples"),
-    ("XOM","ExxonMobil Corp.","Energy"),
-    ("CVX","Chevron Corp.","Energy"),
-    ("COP","ConocoPhillips","Energy"),
-    ("EOG","EOG Resources","Energy"),
-    ("SLB","SLB (Schlumberger)","Energy"),
-    ("MPC","Marathon Petroleum","Energy"),
-    ("PSX","Phillips 66","Energy"),
-    ("VLO","Valero Energy","Energy"),
-    ("DVN","Devon Energy","Energy"),
-    ("HAL","Halliburton Co.","Energy"),
-    ("BKR","Baker Hughes","Energy"),
-    ("OXY","Occidental Petroleum","Energy"),
-    ("HES","Hess Corp.","Energy"),
-    ("FANG","Diamondback Energy","Energy"),
-    ("MRO","Marathon Oil","Energy"),
-    ("APA","APA Corp.","Energy"),
-    ("CTRA","Coterra Energy","Energy"),
-    ("EQT","EQT Corp.","Energy"),
-    ("KMI","Kinder Morgan","Energy"),
-    ("NEE","NextEra Energy","Utilities"),
-    ("SO","Southern Co.","Utilities"),
-    ("DUK","Duke Energy","Utilities"),
-    ("SRE","Sempra","Utilities"),
-    ("AEP","American Electric Power","Utilities"),
-    ("D","Dominion Energy","Utilities"),
-    ("EXC","Exelon Corp.","Utilities"),
-    ("XEL","Xcel Energy","Utilities"),
-    ("PCG","PG&E Corp.","Utilities"),
-    ("ED","Consolidated Edison","Utilities"),
-    ("ETR","Entergy Corp.","Utilities"),
-    ("FE","FirstEnergy Corp.","Utilities"),
-    ("PPL","PPL Corp.","Utilities"),
-    ("AES","AES Corp.","Utilities"),
-    ("AWK","American Water Works","Utilities"),
-    ("WEC","WEC Energy Group","Utilities"),
-    ("CMS","CMS Energy","Utilities"),
-    ("CNP","CenterPoint Energy","Utilities"),
-    ("CEG","Constellation Energy","Utilities"),
-    ("PLD","Prologis Inc.","Real Estate"),
-    ("AMT","American Tower","Real Estate"),
-    ("EQIX","Equinix Inc.","Real Estate"),
-    ("CCI","Crown Castle","Real Estate"),
-    ("SPG","Simon Property Group","Real Estate"),
-    ("O","Realty Income","Real Estate"),
-    ("VICI","VICI Properties","Real Estate"),
-    ("WELL","Welltower Inc.","Real Estate"),
-    ("DLR","Digital Realty Trust","Real Estate"),
-    ("PSA","Public Storage","Real Estate"),
-    ("AVB","AvalonBay Communities","Real Estate"),
-    ("EQR","Equity Residential","Real Estate"),
-    ("INVH","Invitation Homes","Real Estate"),
-    ("VTR","Ventas Inc.","Real Estate"),
-    ("ARE","Alexandria Real Estate","Real Estate"),
-    ("BXP","BXP Inc.","Real Estate"),
-    ("KIM","Kimco Realty","Real Estate"),
-    ("WY","Weyerhaeuser Co.","Real Estate"),
-    ("HST","Host Hotels","Real Estate"),
-    ("LIN","Linde plc","Materials"),
-    ("APD","Air Products","Materials"),
-    ("SHW","Sherwin-Williams","Materials"),
-    ("FCX","Freeport-McMoRan","Materials"),
-    ("NEM","Newmont Corp.","Materials"),
-    ("ECL","Ecolab Inc.","Materials"),
-    ("DD","DuPont de Nemours","Materials"),
-    ("DOW","Dow Inc.","Materials"),
-    ("LYB","LyondellBasell","Materials"),
-    ("NUE","Nucor Corp.","Materials"),
-    ("STLD","Steel Dynamics","Materials"),
-    ("CF","CF Industries","Materials"),
-    ("MOS","Mosaic Co.","Materials"),
-    ("IP","International Paper","Materials"),
-    ("PKG","Packaging Corp.","Materials"),
-    ("ALB","Albemarle Corp.","Materials"),
-    ("EMN","Eastman Chemical","Materials"),
-    ("RPM","RPM International","Materials"),
+    ("CAT","Caterpillar Inc.","Industrials"),("RTX","RTX Corp.","Industrials"),
+    ("HON","Honeywell International","Industrials"),("UPS","United Parcel Service","Industrials"),
+    ("BA","Boeing Co.","Industrials"),("GE","GE Aerospace","Industrials"),
+    ("LMT","Lockheed Martin","Industrials"),("DE","Deere & Co.","Industrials"),
+    ("MMM","3M Co.","Industrials"),("EMR","Emerson Electric","Industrials"),
+    ("ETN","Eaton Corp.","Industrials"),("ITW","Illinois Tool Works","Industrials"),
+    ("PH","Parker Hannifin","Industrials"),("GD","General Dynamics","Industrials"),
+    ("NOC","Northrop Grumman","Industrials"),("TDG","TransDigm Group","Industrials"),
+    ("FDX","FedEx Corp.","Industrials"),("CSX","CSX Corp.","Industrials"),
+    ("UNP","Union Pacific Corp.","Industrials"),("NSC","Norfolk Southern","Industrials"),
+    ("WM","Waste Management","Industrials"),("RSG","Republic Services","Industrials"),
+    ("CTAS","Cintas Corp.","Industrials"),("FAST","Fastenal Co.","Industrials"),
+    ("PWR","Quanta Services","Industrials"),("VRSK","Verisk Analytics","Industrials"),
+    ("DAL","Delta Air Lines","Industrials"),("UAL","United Airlines","Industrials"),
+    ("LUV","Southwest Airlines","Industrials"),("AAL","American Airlines","Industrials"),
+    ("PCAR","PACCAR Inc.","Industrials"),("ODFL","Old Dominion Freight","Industrials"),
+    ("CPRT","Copart Inc.","Industrials"),("PAYX","Paychex Inc.","Industrials"),
+    ("WMT","Walmart Inc.","Consumer Staples"),("PG","Procter & Gamble","Consumer Staples"),
+    ("COST","Costco Wholesale","Consumer Staples"),("KO","Coca-Cola Co.","Consumer Staples"),
+    ("PEP","PepsiCo Inc.","Consumer Staples"),("PM","Philip Morris","Consumer Staples"),
+    ("MO","Altria Group","Consumer Staples"),("MDLZ","Mondelez International","Consumer Staples"),
+    ("CL","Colgate-Palmolive","Consumer Staples"),("KMB","Kimberly-Clark","Consumer Staples"),
+    ("GIS","General Mills","Consumer Staples"),("KR","Kroger Co.","Consumer Staples"),
+    ("SYY","Sysco Corp.","Consumer Staples"),("ADM","Archer-Daniels-Midland","Consumer Staples"),
+    ("TSN","Tyson Foods","Consumer Staples"),("MNST","Monster Beverage","Consumer Staples"),
+    ("KDP","Keurig Dr Pepper","Consumer Staples"),("WBA","Walgreens Boots Alliance","Consumer Staples"),
+    ("XOM","ExxonMobil Corp.","Energy"),("CVX","Chevron Corp.","Energy"),
+    ("COP","ConocoPhillips","Energy"),("EOG","EOG Resources","Energy"),
+    ("SLB","SLB (Schlumberger)","Energy"),("MPC","Marathon Petroleum","Energy"),
+    ("PSX","Phillips 66","Energy"),("VLO","Valero Energy","Energy"),
+    ("DVN","Devon Energy","Energy"),("HAL","Halliburton Co.","Energy"),
+    ("BKR","Baker Hughes","Energy"),("OXY","Occidental Petroleum","Energy"),
+    ("HES","Hess Corp.","Energy"),("FANG","Diamondback Energy","Energy"),
+    ("MRO","Marathon Oil","Energy"),("APA","APA Corp.","Energy"),
+    ("CTRA","Coterra Energy","Energy"),("EQT","EQT Corp.","Energy"),("KMI","Kinder Morgan","Energy"),
+    ("NEE","NextEra Energy","Utilities"),("SO","Southern Co.","Utilities"),
+    ("DUK","Duke Energy","Utilities"),("SRE","Sempra","Utilities"),
+    ("AEP","American Electric Power","Utilities"),("D","Dominion Energy","Utilities"),
+    ("EXC","Exelon Corp.","Utilities"),("XEL","Xcel Energy","Utilities"),
+    ("PCG","PG&E Corp.","Utilities"),("ED","Consolidated Edison","Utilities"),
+    ("ETR","Entergy Corp.","Utilities"),("FE","FirstEnergy Corp.","Utilities"),
+    ("PPL","PPL Corp.","Utilities"),("AES","AES Corp.","Utilities"),
+    ("AWK","American Water Works","Utilities"),("WEC","WEC Energy Group","Utilities"),
+    ("CMS","CMS Energy","Utilities"),("CNP","CenterPoint Energy","Utilities"),("CEG","Constellation Energy","Utilities"),
+    ("PLD","Prologis Inc.","Real Estate"),("AMT","American Tower","Real Estate"),
+    ("EQIX","Equinix Inc.","Real Estate"),("CCI","Crown Castle","Real Estate"),
+    ("SPG","Simon Property Group","Real Estate"),("O","Realty Income","Real Estate"),
+    ("VICI","VICI Properties","Real Estate"),("WELL","Welltower Inc.","Real Estate"),
+    ("DLR","Digital Realty Trust","Real Estate"),("PSA","Public Storage","Real Estate"),
+    ("AVB","AvalonBay Communities","Real Estate"),("EQR","Equity Residential","Real Estate"),
+    ("INVH","Invitation Homes","Real Estate"),("VTR","Ventas Inc.","Real Estate"),
+    ("ARE","Alexandria Real Estate","Real Estate"),("BXP","BXP Inc.","Real Estate"),
+    ("KIM","Kimco Realty","Real Estate"),("WY","Weyerhaeuser Co.","Real Estate"),("HST","Host Hotels","Real Estate"),
+    ("LIN","Linde plc","Materials"),("APD","Air Products","Materials"),
+    ("SHW","Sherwin-Williams","Materials"),("FCX","Freeport-McMoRan","Materials"),
+    ("NEM","Newmont Corp.","Materials"),("ECL","Ecolab Inc.","Materials"),
+    ("DD","DuPont de Nemours","Materials"),("DOW","Dow Inc.","Materials"),
+    ("LYB","LyondellBasell","Materials"),("NUE","Nucor Corp.","Materials"),
+    ("STLD","Steel Dynamics","Materials"),("CF","CF Industries","Materials"),
+    ("MOS","Mosaic Co.","Materials"),("IP","International Paper","Materials"),
+    ("PKG","Packaging Corp.","Materials"),("ALB","Albemarle Corp.","Materials"),
+    ("EMN","Eastman Chemical","Materials"),("RPM","RPM International","Materials"),
 ]
 
 _NDX100_DATA = [
-    ("AAPL","Apple Inc.","Information Technology"),
-    ("MSFT","Microsoft Corp.","Information Technology"),
-    ("NVDA","NVIDIA Corp.","Information Technology"),
-    ("AMZN","Amazon.com Inc.","Consumer Discretionary"),
-    ("META","Meta Platforms","Communication Services"),
-    ("GOOGL","Alphabet Inc. Class A","Communication Services"),
-    ("GOOG","Alphabet Inc. Class C","Communication Services"),
-    ("TSLA","Tesla Inc.","Consumer Discretionary"),
-    ("AVGO","Broadcom Inc.","Information Technology"),
-    ("COST","Costco Wholesale","Consumer Staples"),
-    ("NFLX","Netflix Inc.","Communication Services"),
-    ("AMD","Advanced Micro Devices","Information Technology"),
-    ("QCOM","Qualcomm Inc.","Information Technology"),
-    ("TMUS","T-Mobile US","Communication Services"),
-    ("LIN","Linde plc","Materials"),
-    ("AMAT","Applied Materials","Information Technology"),
-    ("INTU","Intuit Inc.","Information Technology"),
-    ("ISRG","Intuitive Surgical","Health Care"),
-    ("TXN","Texas Instruments","Information Technology"),
-    ("BKNG","Booking Holdings","Consumer Discretionary"),
-    ("AMGN","Amgen Inc.","Health Care"),
-    ("CMCSA","Comcast Corp.","Communication Services"),
-    ("HON","Honeywell International","Industrials"),
-    ("VRTX","Vertex Pharmaceuticals","Health Care"),
-    ("REGN","Regeneron Pharmaceuticals","Health Care"),
-    ("MU","Micron Technology","Information Technology"),
-    ("PANW","Palo Alto Networks","Information Technology"),
-    ("KLAC","KLA Corp.","Information Technology"),
-    ("LRCX","Lam Research","Information Technology"),
-    ("ADI","Analog Devices","Information Technology"),
-    ("CDNS","Cadence Design Systems","Information Technology"),
-    ("SNPS","Synopsys Inc.","Information Technology"),
-    ("MELI","MercadoLibre","Consumer Discretionary"),
-    ("CRWD","CrowdStrike Holdings","Information Technology"),
-    ("CSX","CSX Corp.","Industrials"),
-    ("ORLY","O'Reilly Automotive","Consumer Discretionary"),
-    ("MAR","Marriott International","Consumer Discretionary"),
-    ("MNST","Monster Beverage","Consumer Staples"),
-    ("FTNT","Fortinet Inc.","Information Technology"),
-    ("PCAR","PACCAR Inc.","Industrials"),
-    ("ADSK","Autodesk Inc.","Information Technology"),
-    ("MRVL","Marvell Technology","Information Technology"),
-    ("ASML","ASML Holding","Information Technology"),
-    ("AZN","AstraZeneca","Health Care"),
-    ("TTD","The Trade Desk","Communication Services"),
-    ("DXCM","DexCom Inc.","Health Care"),
-    ("ON","ON Semiconductor","Information Technology"),
-    ("NXPI","NXP Semiconductors","Information Technology"),
-    ("WDAY","Workday Inc.","Information Technology"),
-    ("FAST","Fastenal Co.","Industrials"),
-    ("BIIB","Biogen Inc.","Health Care"),
-    ("IDXX","IDEXX Laboratories","Health Care"),
-    ("ROST","Ross Stores","Consumer Discretionary"),
-    ("ODFL","Old Dominion Freight","Industrials"),
-    ("CPRT","Copart Inc.","Industrials"),
-    ("CTAS","Cintas Corp.","Industrials"),
-    ("EA","Electronic Arts","Communication Services"),
-    ("GEHC","GE HealthCare","Health Care"),
-    ("AEP","American Electric Power","Utilities"),
-    ("XEL","Xcel Energy","Utilities"),
-    ("KDP","Keurig Dr Pepper","Consumer Staples"),
-    ("PAYX","Paychex Inc.","Industrials"),
-    ("VRSK","Verisk Analytics","Industrials"),
-    ("EXC","Exelon Corp.","Utilities"),
-    ("FANG","Diamondback Energy","Energy"),
-    ("CTSH","Cognizant Technology","Information Technology"),
-    ("TEAM","Atlassian Corp.","Information Technology"),
-    ("ZS","Zscaler Inc.","Information Technology"),
-    ("DASH","DoorDash Inc.","Consumer Discretionary"),
-    ("ABNB","Airbnb Inc.","Consumer Discretionary"),
-    ("CEG","Constellation Energy","Utilities"),
-    ("ILMN","Illumina Inc.","Health Care"),
-    ("MRNA","Moderna Inc.","Health Care"),
-    ("DLTR","Dollar Tree","Consumer Discretionary"),
-    ("SBUX","Starbucks Corp.","Consumer Discretionary"),
-    ("PYPL","PayPal Holdings","Financials"),
-    ("MCHP","Microchip Technology","Information Technology"),
-    ("LULU","Lululemon Athletica","Consumer Discretionary"),
-    ("TTWO","Take-Two Interactive","Communication Services"),
-    ("DDOG","Datadog Inc.","Information Technology"),
-    ("EBAY","eBay Inc.","Consumer Discretionary"),
-    ("PDD","PDD Holdings","Consumer Discretionary"),
-    ("ANSS","ANSYS Inc.","Information Technology"),
-    ("ENPH","Enphase Energy","Information Technology"),
-    ("SMCI","Super Micro Computer","Information Technology"),
-    ("ALGN","Align Technology","Health Care"),
-    ("ARM","Arm Holdings","Information Technology"),
-    ("APP","Applovin Corp.","Information Technology"),
-    ("V","Visa Inc.","Financials"),
-    ("MA","Mastercard Inc.","Financials"),
-    ("WBA","Walgreens Boots Alliance","Consumer Staples"),
-    ("NTES","NetEase Inc.","Communication Services"),
-    ("WBD","Warner Bros. Discovery","Communication Services"),
-    ("NOW","ServiceNow Inc.","Information Technology"),
-    ("GFS","GlobalFoundries","Information Technology"),
-    ("SIRI","Sirius XM","Communication Services"),
-    ("MDLZ","Mondelez International","Consumer Staples"),
-    ("RIVN","Rivian Automotive","Consumer Discretionary"),
+    ("AAPL","Apple Inc.","Information Technology"),("MSFT","Microsoft Corp.","Information Technology"),
+    ("NVDA","NVIDIA Corp.","Information Technology"),("AMZN","Amazon.com Inc.","Consumer Discretionary"),
+    ("META","Meta Platforms","Communication Services"),("GOOGL","Alphabet Inc. Class A","Communication Services"),
+    ("GOOG","Alphabet Inc. Class C","Communication Services"),("TSLA","Tesla Inc.","Consumer Discretionary"),
+    ("AVGO","Broadcom Inc.","Information Technology"),("COST","Costco Wholesale","Consumer Staples"),
+    ("NFLX","Netflix Inc.","Communication Services"),("AMD","Advanced Micro Devices","Information Technology"),
+    ("QCOM","Qualcomm Inc.","Information Technology"),("TMUS","T-Mobile US","Communication Services"),
+    ("LIN","Linde plc","Materials"),("AMAT","Applied Materials","Information Technology"),
+    ("INTU","Intuit Inc.","Information Technology"),("ISRG","Intuitive Surgical","Health Care"),
+    ("TXN","Texas Instruments","Information Technology"),("BKNG","Booking Holdings","Consumer Discretionary"),
+    ("AMGN","Amgen Inc.","Health Care"),("CMCSA","Comcast Corp.","Communication Services"),
+    ("HON","Honeywell International","Industrials"),("VRTX","Vertex Pharmaceuticals","Health Care"),
+    ("REGN","Regeneron Pharmaceuticals","Health Care"),("MU","Micron Technology","Information Technology"),
+    ("PANW","Palo Alto Networks","Information Technology"),("KLAC","KLA Corp.","Information Technology"),
+    ("LRCX","Lam Research","Information Technology"),("ADI","Analog Devices","Information Technology"),
+    ("CDNS","Cadence Design Systems","Information Technology"),("SNPS","Synopsys Inc.","Information Technology"),
+    ("MELI","MercadoLibre","Consumer Discretionary"),("CRWD","CrowdStrike Holdings","Information Technology"),
+    ("CSX","CSX Corp.","Industrials"),("ORLY","O'Reilly Automotive","Consumer Discretionary"),
+    ("MAR","Marriott International","Consumer Discretionary"),("MNST","Monster Beverage","Consumer Staples"),
+    ("FTNT","Fortinet Inc.","Information Technology"),("PCAR","PACCAR Inc.","Industrials"),
+    ("ADSK","Autodesk Inc.","Information Technology"),("MRVL","Marvell Technology","Information Technology"),
+    ("ASML","ASML Holding","Information Technology"),("AZN","AstraZeneca","Health Care"),
+    ("TTD","The Trade Desk","Communication Services"),("DXCM","DexCom Inc.","Health Care"),
+    ("ON","ON Semiconductor","Information Technology"),("NXPI","NXP Semiconductors","Information Technology"),
+    ("WDAY","Workday Inc.","Information Technology"),("FAST","Fastenal Co.","Industrials"),
+    ("BIIB","Biogen Inc.","Health Care"),("IDXX","IDEXX Laboratories","Health Care"),
+    ("ROST","Ross Stores","Consumer Discretionary"),("ODFL","Old Dominion Freight","Industrials"),
+    ("CPRT","Copart Inc.","Industrials"),("CTAS","Cintas Corp.","Industrials"),
+    ("EA","Electronic Arts","Communication Services"),("GEHC","GE HealthCare","Health Care"),
+    ("AEP","American Electric Power","Utilities"),("XEL","Xcel Energy","Utilities"),
+    ("KDP","Keurig Dr Pepper","Consumer Staples"),("PAYX","Paychex Inc.","Industrials"),
+    ("VRSK","Verisk Analytics","Industrials"),("EXC","Exelon Corp.","Utilities"),
+    ("FANG","Diamondback Energy","Energy"),("CTSH","Cognizant Technology","Information Technology"),
+    ("TEAM","Atlassian Corp.","Information Technology"),("ZS","Zscaler Inc.","Information Technology"),
+    ("DASH","DoorDash Inc.","Consumer Discretionary"),("ABNB","Airbnb Inc.","Consumer Discretionary"),
+    ("CEG","Constellation Energy","Utilities"),("ILMN","Illumina Inc.","Health Care"),
+    ("MRNA","Moderna Inc.","Health Care"),("DLTR","Dollar Tree","Consumer Discretionary"),
+    ("SBUX","Starbucks Corp.","Consumer Discretionary"),("PYPL","PayPal Holdings","Financials"),
+    ("MCHP","Microchip Technology","Information Technology"),("LULU","Lululemon Athletica","Consumer Discretionary"),
+    ("TTWO","Take-Two Interactive","Communication Services"),("DDOG","Datadog Inc.","Information Technology"),
+    ("EBAY","eBay Inc.","Consumer Discretionary"),("PDD","PDD Holdings","Consumer Discretionary"),
+    ("ANSS","ANSYS Inc.","Information Technology"),("ENPH","Enphase Energy","Information Technology"),
+    ("SMCI","Super Micro Computer","Information Technology"),("ALGN","Align Technology","Health Care"),
+    ("ARM","Arm Holdings","Information Technology"),("APP","Applovin Corp.","Information Technology"),
+    ("V","Visa Inc.","Financials"),("MA","Mastercard Inc.","Financials"),
+    ("WBA","Walgreens Boots Alliance","Consumer Staples"),("NTES","NetEase Inc.","Communication Services"),
+    ("WBD","Warner Bros. Discovery","Communication Services"),("NOW","ServiceNow Inc.","Information Technology"),
+    ("GFS","GlobalFoundries","Information Technology"),("SIRI","Sirius XM","Communication Services"),
+    ("MDLZ","Mondelez International","Consumer Staples"),("RIVN","Rivian Automotive","Consumer Discretionary"),
 ]
 
 _SP500_CSV = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
@@ -1648,17 +982,16 @@ _SP500_CSV = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/m
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_sp500_constituents() -> pd.DataFrame:
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get(_SP500_CSV, headers=headers, timeout=15)
+        r = requests.get(_SP500_CSV, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
         r.raise_for_status()
         df = pd.read_csv(pd.io.common.StringIO(r.text))
         df = df[["Symbol", "Security", "GICS Sector"]].copy()
         df.columns = ["ticker", "company", "sector"]
         df["ticker"] = df["ticker"].str.replace(".", "-", regex=False)
-        df["index"] = "S&P 500"
+        df["index"]  = "S&P 500"
         return df.reset_index(drop=True)
     except Exception as e:
-        print(f"SP500 CSV fetch failed: {e} — falling back to hardcoded list")
+        print(f"SP500 CSV fetch failed: {e} — using fallback")
         return _sp500_fallback()
 
 def _sp500_fallback() -> pd.DataFrame:
@@ -1671,10 +1004,13 @@ def fetch_ndx_constituents() -> pd.DataFrame:
     df["index"] = "Nasdaq 100"
     return df
 
+# ─────────────────────────────────────────────────────────────────────────────
+# MARKET STATE
+# ─────────────────────────────────────────────────────────────────────────────
 def get_market_state() -> str:
     """
-    SGT (UTC+8) schedule — weekdays only:
-      00:00–04:00  open        (NYSE 9:30am–4:00pm ET, continued from prior SGT day)
+    SGT (UTC+8) windows — weekdays only:
+      00:00–04:00  open        (NYSE 9:30am–4:00pm ET continued)
       04:00–08:00  after_hours (NYSE 4:00pm–8:00pm ET)
       08:00–16:00  closed
       16:00–21:30  pre         (NYSE 4:00am–9:30am ET pre-market)
@@ -1684,47 +1020,34 @@ def get_market_state() -> str:
     now  = datetime.now(sgt)
     if now.weekday() >= 5:
         return "closed"
-    h, m = now.hour, now.minute
-    mins = h * 60 + m
-    if mins < 240:
-        return "open"
-    elif mins < 480:
-        return "after_hours"
-    elif mins < 960:
-        return "closed"
-    elif mins < 1290:
-        return "pre"
-    else:
-        return "open"
-
+    mins = now.hour * 60 + now.minute
+    if   mins < 240:  return "open"
+    elif mins < 480:  return "after_hours"
+    elif mins < 960:  return "closed"
+    elif mins < 1290: return "pre"
+    else:             return "open"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PRICE FETCH HELPERS  ← ALL THREE BUGS FIXED HERE
+# PRICE FETCH — HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
-
 def _fetch_prev_close(tickers: list, use_completed: bool = False) -> dict:
     """
-    Fetch the baseline close used to compute Chg % and Chg $.
+    Fetch the baseline close price for Chg % / Chg $ calculations.
 
     use_completed=True  → iloc[-2]: last *completed* session close.
-                          Required for live hours: yfinance includes today's
-                          partial bar as iloc[-1], which has NaN for ~100
-                          tickers and a near-current price for the rest —
-                          both causing wrong % change calculations.
+                          Needed for live hours: yfinance includes today's
+                          partial bar as iloc[-1], giving NaN for ~100 tickers
+                          and a near-current price for the rest, making all
+                          Chg % values collapse to ~0%.
 
     use_completed=False → iloc[-1]: most-recent available close.
-                          Correct for pre-market (today hasn't opened, so
-                          iloc[-1] = yesterday's close) and after-hours
-                          (session just ended, iloc[-1] = today's close).
+                          Pre-market:  today hasn't opened → iloc[-1] = yesterday's close ✓
+                          After-hours: session just ended  → iloc[-1] = today's close    ✓
     """
     try:
         raw = yf.download(
-            tickers,
-            period="5d",
-            interval="1d",
-            auto_adjust=True,
-            progress=False,
-            threads=True,
+            tickers, period="5d", interval="1d",
+            auto_adjust=True, progress=False, threads=True,
         )
         if raw.empty or len(raw["Close"]) < 2:
             return {}
@@ -1743,39 +1066,30 @@ def _fetch_prev_close(tickers: list, use_completed: bool = False) -> dict:
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_price_data_live(tickers: tuple) -> pd.DataFrame:
     """
-    Market hours: 2-min intraday bars (~15min delayed).
+    Live market hours — 2-min intraday bars (~15min delayed).
     Chg % = (current price / previous session's official close − 1) × 100
-    Chg $ = current price − previous session's official close
-    Volume = cumulative intraday volume from open to current bar.
+    Volume = cumulative intraday from open to current bar.
     """
     try:
         raw = yf.download(
-            list(tickers),
-            period="1d",
-            interval="2m",
-            auto_adjust=True,
-            progress=False,
-            threads=True,
+            list(tickers), period="1d", interval="2m",
+            auto_adjust=True, progress=False, threads=True,
         )
         if raw.empty or raw["Close"].empty:
             return fetch_price_data_eod(tickers)
 
         close  = raw["Close"]
         volume = raw["Volume"]
-
         if len(close) == 0:
             return fetch_price_data_eod(tickers)
 
-        # FIX 1: forward-fill before taking the last bar.
-        # The most recent 2-min bar is often still forming and returns NaN
-        # for many tickers. ffill() substitutes the last valid price instead.
+        # ffill: in-progress last bar is often NaN; use last valid tick instead.
         close_filled = close.ffill()
         last_price   = close_filled.iloc[-1]
 
-        # FIX 2: use_completed=True → iloc[-2] = yesterday's confirmed close.
-        # Without this, iloc[-1] of the 5-day daily download is today's
-        # partial bar: NaN for ~100 tickers (drops them from active count)
-        # and near-current price for others (makes Chg % ≈ 0 for all).
+        # use_completed=True → iloc[-2] = yesterday's confirmed close.
+        # iloc[-1] during live hours = today's partial bar with NaN for many
+        # tickers, causing them to drop from the active count entirely.
         prev_close_map = _fetch_prev_close(list(tickers), use_completed=True)
         if not prev_close_map:
             return fetch_price_data_eod(tickers)
@@ -1791,15 +1105,12 @@ def fetch_price_data_live(tickers: tuple) -> pd.DataFrame:
             pc = prev_close_map.get(ticker)
             if lp is None or pd.isna(lp) or pc is None or pc == 0:
                 continue
-            chg_pct = (float(lp) / pc - 1) * 100
-            chg_abs = float(lp) - pc
-            vol     = cum_volume[ticker] if ticker in cum_volume.index else 0
             rows.append({
                 "ticker":     ticker,
                 "price":      round(float(lp), 2),
-                "chg_pct":    round(chg_pct, 2),
-                "chg_abs":    round(chg_abs, 2),
-                "volume":     int(vol) if not pd.isna(vol) else 0,
+                "chg_pct":    round((float(lp) / pc - 1) * 100, 2),
+                "chg_abs":    round(float(lp) - pc, 2),
+                "volume":     int(cum_volume[ticker]) if ticker in cum_volume.index and not pd.isna(cum_volume[ticker]) else 0,
                 "trade_date": str(trade_date),
             })
         if not rows:
@@ -1813,28 +1124,21 @@ def fetch_price_data_live(tickers: tuple) -> pd.DataFrame:
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
     """
-    Pre-market and after-hours: 1-min bars with prepost=True (~15min delayed).
+    Pre-market / after-hours — 1-min bars with prepost=True (~15min delayed).
 
     Pre-market:
-      Chg % = (current pre-market price / previous session's close − 1) × 100
-      Volume = pre-market bars only; shown as — if zero/unavailable.
+      Baseline = previous session's official close  (iloc[-1] before market opens)
+      Volume   = pre-market bars only; shown as — if zero/unavailable
 
     After-hours:
-      Chg % = (current after-hours price / that day's official close − 1) × 100
-      Volume = cumulative from regular open (9:30am ET) through current bar.
-               FIX 3: previously only summed after-hours bars, missing the
-               regular-session volume entirely.
+      Baseline = that day's official close  (iloc[-1] after session ends)
+      Volume   = cumulative from regular open (9:30am ET) through current bar
     """
     try:
         raw = yf.download(
-            list(tickers),
-            period="1d",
-            interval="1m",
-            auto_adjust=True,
-            prepost=True,
-            progress=False,
-            threads=True,
-            group_by="ticker",
+            list(tickers), period="1d", interval="1m",
+            auto_adjust=True, prepost=True,
+            progress=False, threads=True, group_by="ticker",
         )
         if raw.empty:
             return fetch_price_data_eod(tickers)
@@ -1857,8 +1161,7 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
         today_et = now_et.date()
         utc      = timezone.utc
 
-        # from_regular_open is only defined for after_hours; None for pre.
-        from_regular_open = None
+        from_regular_open = None  # only defined for after_hours
 
         if session == "pre":
             day_start_utc  = datetime(today_et.year, today_et.month, today_et.day,
@@ -1867,63 +1170,48 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
                                       9, 30, tzinfo=et).astimezone(utc)
             def in_session(idx):
                 ts = idx if idx.tzinfo else idx.replace(tzinfo=utc)
-                ts = ts.astimezone(utc)
-                return day_start_utc <= ts < day_cutoff_utc
-
+                return day_start_utc <= ts.astimezone(utc) < day_cutoff_utc
         else:  # after_hours
-            cutoff_utc = datetime(today_et.year, today_et.month, today_et.day,
-                                  16, 0, tzinfo=et).astimezone(utc)
+            cutoff_utc       = datetime(today_et.year, today_et.month, today_et.day,
+                                        16, 0, tzinfo=et).astimezone(utc)
             regular_open_utc = datetime(today_et.year, today_et.month, today_et.day,
                                         9, 30, tzinfo=et).astimezone(utc)
-
             def in_session(idx):
                 ts = idx if idx.tzinfo else idx.replace(tzinfo=utc)
-                ts = ts.astimezone(utc)
-                return ts >= cutoff_utc
-
+                return ts.astimezone(utc) >= cutoff_utc
             def from_regular_open(idx):
                 ts = idx if idx.tzinfo else idx.replace(tzinfo=utc)
-                ts = ts.astimezone(utc)
-                return ts >= regular_open_utc
+                return ts.astimezone(utc) >= regular_open_utc
 
-        # use_completed=False is correct for both extended sessions:
-        # pre-market  → iloc[-1] = yesterday's close (today not yet open)
-        # after-hours → iloc[-1] = today's official close (session just ended)
+        # use_completed=False is correct for both extended sessions (see docstring).
         prev_close_map = _fetch_prev_close(list(tickers), use_completed=False)
         if not prev_close_map:
             return fetch_price_data_eod(tickers)
 
         rows = []
         for tk, df_tk in ticker_data.items():
-            # Price: latest tick in the extended-hours window
-            df_ext = df_tk[df_tk.index.map(in_session)]
-            df_ext = df_ext.dropna(subset=["close"])
+            df_ext = df_tk[df_tk.index.map(in_session)].dropna(subset=["close"])
             if df_ext.empty:
                 continue
-
             pc = prev_close_map.get(tk)
             if pc is None or pc == 0:
                 continue
 
-            lp      = float(df_ext["close"].iloc[-1])
-            chg_pct = (lp / pc - 1) * 100
-            chg_abs = lp - pc
+            lp = float(df_ext["close"].iloc[-1])
 
-            # FIX 3: after-hours volume = regular session + after-hours bars.
-            # Pre-market volume = pre-market bars only (— if zero).
+            # After-hours volume = regular session + after-hours bars combined.
+            # Pre-market volume  = pre-market bars only (— if zero).
             if session == "after_hours" and from_regular_open is not None:
-                df_day  = df_tk[df_tk.index.map(from_regular_open)]
-                vol_raw = df_day["volume"].sum()
+                vol_raw = df_tk[df_tk.index.map(from_regular_open)]["volume"].sum()
             else:
                 vol_raw = df_ext["volume"].sum()
-
             vol = int(vol_raw) if not pd.isna(vol_raw) and vol_raw > 0 else None
 
             rows.append({
                 "ticker":     tk,
                 "price":      round(lp, 2),
-                "chg_pct":    round(chg_pct, 2),
-                "chg_abs":    round(chg_abs, 2),
+                "chg_pct":    round((lp / pc - 1) * 100, 2),
+                "chg_abs":    round(lp - pc, 2),
                 "volume":     vol,
                 "trade_date": str(df_ext.index[-1].date()),
             })
@@ -1939,28 +1227,20 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
     """
-    Closed / fallback: daily bars.
+    Closed / fallback — daily bars.
     Chg % = (last session's close / prior session's close − 1) × 100
     Volume = full last-session volume.
     """
     try:
         raw = yf.download(
-            list(tickers),
-            period="5d",
-            interval="1d",
-            auto_adjust=True,
-            progress=False,
-            threads=True,
+            list(tickers), period="5d", interval="1d",
+            auto_adjust=True, progress=False, threads=True,
         )
-        if raw.empty:
+        if raw.empty or len(raw["Close"]) < 2:
             return pd.DataFrame()
 
-        close  = raw["Close"]
-        volume = raw["Volume"]
-
-        if len(close) < 2:
-            return pd.DataFrame()
-
+        close      = raw["Close"]
+        volume     = raw["Volume"]
         last_close = close.iloc[-1]
         prev_close = close.iloc[-2]
         last_vol   = volume.iloc[-1]
@@ -1974,14 +1254,12 @@ def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
             pc = prev_close[ticker]
             if pd.isna(lc) or pd.isna(pc) or pc == 0:
                 continue
-            chg_pct = (float(lc) / float(pc) - 1) * 100
-            chg_abs = float(lc) - float(pc)
-            vol     = last_vol[ticker] if ticker in last_vol.index else 0
+            vol = last_vol[ticker] if ticker in last_vol.index else 0
             rows.append({
                 "ticker":     ticker,
                 "price":      round(float(lc), 2),
-                "chg_pct":    round(chg_pct, 2),
-                "chg_abs":    round(chg_abs, 2),
+                "chg_pct":    round((float(lc) / float(pc) - 1) * 100, 2),
+                "chg_abs":    round(float(lc) - float(pc), 2),
                 "volume":     int(vol) if not pd.isna(vol) else 0,
                 "trade_date": str(last_date),
             })
@@ -1992,7 +1270,6 @@ def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
 
 
 def fetch_price_data(tickers: tuple) -> tuple:
-    """Router: picks correct fetch based on market state."""
     state = get_market_state()
     if state == "open":
         return fetch_price_data_live(tickers), state
@@ -2003,129 +1280,116 @@ def fetch_price_data(tickers: tuple) -> tuple:
 
 
 def fmt_volume(v) -> str:
-    if v is None:
-        return "—"
+    if v is None: return "—"
     v = int(v)
     if v >= 1_000_000_000: return f"{v/1_000_000_000:.1f}B"
     if v >= 1_000_000:     return f"{v/1_000_000:.1f}M"
     if v >= 1_000:         return f"{v/1_000:.0f}K"
     return str(v)
 
-
 # ─────────────────────────────────────────────────────────────────────────────
-# MARKETS SCREENER — RENDERER
+# MARKET CAP  — shares cached 24h, multiplied by displayed price at render time
 # ─────────────────────────────────────────────────────────────────────────────
-def fmt_mktcap(v) -> str:
-    if v is None or (isinstance(v, float) and pd.isna(v)):
-        return "—"
-    if v >= 1_000_000_000_000:
-        return f"${v/1_000_000_000_000:.2f}T"
-    if v >= 1_000_000_000:
-        return f"${v/1_000_000_000:.1f}B"
-    if v >= 1_000_000:
-        return f"${v/1_000_000:.0f}M"
-    return f"${v:,.0f}"
-
-
 @st.cache_data(ttl=86400, show_spinner=False)
-def fetch_market_caps(tickers: tuple, prev_prices: tuple) -> dict:
-    price_map = dict(prev_prices)
-    result    = {}
+def fetch_shares_outstanding(tickers: tuple) -> dict:
+    """
+    Cache shares outstanding for 24 hours (changes rarely).
+    Market cap = these shares × the price already shown in df["price"],
+    so it is always consistent with the displayed session price.
+    """
+    result = {}
     for tk in tickers:
         try:
             shares = yf.Ticker(tk).fast_info.shares
-            pc     = price_map.get(tk)
-            if shares and pc and not pd.isna(shares) and not pd.isna(pc):
-                result[tk] = float(shares) * float(pc)
-            else:
-                result[tk] = None
+            result[tk] = float(shares) if shares and not pd.isna(shares) else None
         except Exception:
             result[tk] = None
     return result
 
+def fmt_mktcap(v) -> str:
+    if v is None or (isinstance(v, float) and pd.isna(v)): return "—"
+    if v >= 1_000_000_000_000: return f"${v/1_000_000_000_000:.2f}T"
+    if v >= 1_000_000_000:     return f"${v/1_000_000_000:.1f}B"
+    if v >= 1_000_000:         return f"${v/1_000_000:.0f}M"
+    return f"${v:,.0f}"
 
+# ─────────────────────────────────────────────────────────────────────────────
+# MARKETS SCREENER — RENDERER
+# ─────────────────────────────────────────────────────────────────────────────
 def render_screener() -> None:
     sgt = timezone(timedelta(hours=8))
-    now = datetime.now(sgt)
 
     st.markdown("""
-    <div class="screener-header">
-      <div>
-        <div class="screener-title">📈 Markets Screener — Top 50 Movers</div>
-        <div class="data-hover-wrap" style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(120,140,200,.08)">
-          <div class="data-hover-trigger">DATA <span class="data-q">?</span></div>
-          <div class="data-hover-bar">
-            <div class="data-hover-item">
-              <span class="data-hover-label">Source</span>
-              <span class="data-hover-val">Yahoo Finance</span>
-            </div>
-            <div class="data-hover-divider"></div>
-            <div class="data-hover-item">
-              <span class="data-hover-label">Prices</span>
-              <span class="data-hover-val">~15min delayed · Session-aware</span>
-            </div>
-            <div class="data-hover-divider"></div>
-            <div class="data-hover-item">
-              <span class="data-hover-label">Market Cap</span>
-              <span class="data-hover-val">Live · Top 50 Only</span>
-            </div>
-            <div class="data-hover-divider"></div>
-            <div class="data-hover-item">
-              <span class="data-hover-label">Cache</span>
-              <span class="data-hover-val">Refreshes Every 5 Min</span>
-            </div>
+    <div style="margin-bottom:16px">
+      <div class="screener-title">📈 Markets Screener — Top 50 Movers</div>
+      <div class="data-hover-wrap" style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(120,140,200,.08)">
+        <div class="data-hover-trigger">DATA <span class="data-q">?</span></div>
+        <div class="data-hover-bar">
+          <div class="data-hover-item">
+            <span class="data-hover-label">Source</span>
+            <span class="data-hover-val">Yahoo Finance</span>
+          </div>
+          <div class="data-hover-divider"></div>
+          <div class="data-hover-item">
+            <span class="data-hover-label">Prices</span>
+            <span class="data-hover-val">~15min delayed · Session-aware</span>
+          </div>
+          <div class="data-hover-divider"></div>
+          <div class="data-hover-item">
+            <span class="data-hover-label">Mkt Cap</span>
+            <span class="data-hover-val">Displayed price × shares (top 50)</span>
+          </div>
+          <div class="data-hover-divider"></div>
+          <div class="data-hover-item">
+            <span class="data-hover-label">Cache</span>
+            <span class="data-hover-val">Prices: 5 min · Shares: 24 hr</span>
           </div>
         </div>
       </div>
     </div>
     """, unsafe_allow_html=True)
 
+    # ── Index selector ────────────────────────────────────────────────────
     if "idx_choice" not in st.session_state:
         st.session_state["idx_choice"] = "S&P 500"
 
     is_sp  = st.session_state["idx_choice"] == "S&P 500"
     is_ndx = not is_sp
 
-    sp_bg   = "rgba(255,255,255,.14)"  if is_sp  else "transparent"
-    sp_bd   = "rgba(255,255,255,.55)"  if is_sp  else "rgba(120,140,200,.18)"
-    sp_col  = "#FFFFFF"                if is_sp  else "rgba(255,255,255,.3)"
-    sp_fw   = "700"                    if is_sp  else "400"
-    ndx_bg  = "rgba(255,255,255,.14)"  if is_ndx else "transparent"
-    ndx_bd  = "rgba(255,255,255,.55)"  if is_ndx else "rgba(120,140,200,.18)"
-    ndx_col = "#FFFFFF"                if is_ndx else "rgba(255,255,255,.3)"
-    ndx_fw  = "700"                    if is_ndx else "400"
+    sp_bg  = "rgba(255,255,255,.14)" if is_sp  else "transparent"
+    sp_bd  = "rgba(255,255,255,.55)" if is_sp  else "rgba(120,140,200,.18)"
+    sp_col = "#FFFFFF"               if is_sp  else "rgba(255,255,255,.3)"
+    sp_fw  = "700"                   if is_sp  else "400"
+    nx_bg  = "rgba(255,255,255,.14)" if is_ndx else "transparent"
+    nx_bd  = "rgba(255,255,255,.55)" if is_ndx else "rgba(120,140,200,.18)"
+    nx_col = "#FFFFFF"               if is_ndx else "rgba(255,255,255,.3)"
+    nx_fw  = "700"                   if is_ndx else "400"
 
     st.markdown(f"""
     <style>
-    button[aria-label="S&P 500"] {{ background:{sp_bg}!important; border-color:{sp_bd}!important; color:{sp_col}!important; font-weight:{sp_fw}!important; }}
-    button[aria-label="Nasdaq 100"] {{ background:{ndx_bg}!important; border-color:{ndx_bd}!important; color:{ndx_col}!important; font-weight:{ndx_fw}!important; }}
-    </style>
-    """, unsafe_allow_html=True)
+    button[aria-label="S&P 500"]    {{ background:{sp_bg}!important; border-color:{sp_bd}!important; color:{sp_col}!important; font-weight:{sp_fw}!important; }}
+    button[aria-label="Nasdaq 100"] {{ background:{nx_bg}!important; border-color:{nx_bd}!important; color:{nx_col}!important; font-weight:{nx_fw}!important; }}
+    </style>""", unsafe_allow_html=True)
 
-    col_sp, col_ndx, col_rest = st.columns([1, 1, 8])
+    col_sp, col_ndx, _ = st.columns([1, 1, 8])
     with col_sp:
         if st.button("S&P 500", key="btn_sp500", use_container_width=True):
-            st.session_state["idx_choice"] = "S&P 500"
-            st.rerun()
+            st.session_state["idx_choice"] = "S&P 500"; st.rerun()
     with col_ndx:
         if st.button("Nasdaq 100", key="btn_ndx100", use_container_width=True):
-            st.session_state["idx_choice"] = "Nasdaq 100"
-            st.rerun()
-    idx_choice = st.session_state["idx_choice"]
+            st.session_state["idx_choice"] = "Nasdaq 100"; st.rerun()
 
+    # ── Load constituents ─────────────────────────────────────────────────
     with st.spinner("Loading constituent list…"):
-        if idx_choice == "S&P 500":
-            constituents = fetch_sp500_constituents()
-        else:
-            constituents = fetch_ndx_constituents()
-
+        constituents = fetch_sp500_constituents() if st.session_state["idx_choice"] == "S&P 500" else fetch_ndx_constituents()
     if constituents.empty:
-        st.error("Failed to load constituent list. Check network connectivity.")
+        st.error("Failed to load constituent list.")
         return
 
     tickers_tuple  = tuple(constituents["ticker"].tolist())
     total_universe = len(tickers_tuple)
 
+    # ── Fetch prices ──────────────────────────────────────────────────────
     market_state = get_market_state()
     spinner_msgs = {
         "open":        f"Fetching live prices for {total_universe} stocks (~15min delay)…",
@@ -2145,81 +1409,57 @@ def render_screener() -> None:
         st.error("No matching price data found.")
         return
 
-    trade_date    = df["trade_date"].iloc[0] if "trade_date" in df.columns else "—"
-    active_count  = len(df)
-    now_sgt_str   = datetime.now(sgt).strftime("%H:%M SGT")
+    trade_date   = df["trade_date"].iloc[0] if "trade_date" in df.columns else "—"
+    active_count = len(df)
+    now_sgt_str  = datetime.now(sgt).strftime("%H:%M SGT")
 
     if market_state == "open":
-        state_html = (
-            f"<span style='color:#0FD68A;font-weight:700'>● LIVE</span>"
-            f"<span style='color:#4D6080'> (~15min delay) · "
-            f"{active_count} of {total_universe} stocks active · "
-            f"as of {now_sgt_str}</span>"
-        )
+        state_html = (f"<span style='color:#0FD68A;font-weight:700'>● LIVE</span>"
+                      f"<span style='color:#4D6080'> (~15min delay) · {active_count} of {total_universe} stocks active · as of {now_sgt_str}</span>")
     elif market_state == "pre":
-        state_html = (
-            f"<span style='color:#F59E0B;font-weight:700'>● PRE-MARKET</span>"
-            f"<span style='color:#4D6080'> (~15min delay) · "
-            f"{active_count} of {total_universe} stocks active · "
-            f"as of {now_sgt_str}</span>"
-        )
+        state_html = (f"<span style='color:#F59E0B;font-weight:700'>● PRE-MARKET</span>"
+                      f"<span style='color:#4D6080'> (~15min delay) · {active_count} of {total_universe} stocks active · as of {now_sgt_str}</span>")
     elif market_state == "after_hours":
-        state_html = (
-            f"<span style='color:#A78BFA;font-weight:700'>● AFTER-HOURS</span>"
-            f"<span style='color:#4D6080'> (~15min delay) · "
-            f"{active_count} of {total_universe} stocks active · "
-            f"as of {now_sgt_str}</span>"
-        )
+        state_html = (f"<span style='color:#A78BFA;font-weight:700'>● AFTER-HOURS</span>"
+                      f"<span style='color:#4D6080'> (~15min delay) · {active_count} of {total_universe} stocks active · as of {now_sgt_str}</span>")
     else:
-        state_html = (
-            f"<span style='color:#F0485A;font-weight:700'>● CLOSED</span>"
-            f"<span style='color:#4D6080'> · showing {trade_date} official close · "
-            f"{active_count} stocks</span>"
-        )
+        state_html = (f"<span style='color:#F0485A;font-weight:700'>● CLOSED</span>"
+                      f"<span style='color:#4D6080'> · showing {trade_date} official close · {active_count} stocks</span>")
 
     st.markdown(
-        f"<div style='font-family:IBM Plex Mono,monospace;font-size:11px;margin-bottom:14px'>"
-        f"✓ {state_html}"
-        f"</div>",
+        f"<div style='font-family:IBM Plex Mono,monospace;font-size:11px;margin-bottom:14px'>✓ {state_html}</div>",
         unsafe_allow_html=True
     )
 
+    # ── Sector filter ─────────────────────────────────────────────────────
     sectors    = ["All"] + sorted(df["sector"].dropna().unique().tolist())
-    sector_sel = st.selectbox("Filter by Sector", sectors, key="sector_sel",
-                              label_visibility="collapsed")
+    sector_sel = st.selectbox("Filter by Sector", sectors, key="sector_sel", label_visibility="collapsed")
     if sector_sel != "All":
         df = df[df["sector"] == sector_sel]
 
+    # ── Gainers / Losers toggle ───────────────────────────────────────────
     if "view_sel" not in st.session_state:
         st.session_state["view_sel"] = "Gainers"
     is_gainers = st.session_state["view_sel"] == "Gainers"
-    is_losers  = not is_gainers
 
-    g_bg  = "rgba(15,214,138,.15)"  if is_gainers else "transparent"
-    g_bd  = "rgba(15,214,138,.5)"   if is_gainers else "rgba(15,214,138,.2)"
-    g_col = "#0FD68A"
-    g_fw  = "700"                   if is_gainers else "400"
-    l_bg  = "rgba(240,72,90,.15)"   if is_losers  else "transparent"
-    l_bd  = "rgba(240,72,90,.5)"    if is_losers  else "rgba(240,72,90,.2)"
-    l_col = "#F0485A"
-    l_fw  = "700"                   if is_losers  else "400"
+    g_bg = "rgba(15,214,138,.15)"  if is_gainers else "transparent"
+    g_bd = "rgba(15,214,138,.5)"   if is_gainers else "rgba(15,214,138,.2)"
+    l_bg = "rgba(240,72,90,.15)"   if not is_gainers else "transparent"
+    l_bd = "rgba(240,72,90,.5)"    if not is_gainers else "rgba(240,72,90,.2)"
 
     st.markdown(f"""
     <style>
-    button[aria-label="Top 50 Gainers"] {{ background:{g_bg}!important; border-color:{g_bd}!important; color:{g_col}!important; font-weight:{g_fw}!important; }}
-    button[aria-label="Top 50 Losers"]  {{ background:{l_bg}!important; border-color:{l_bd}!important; color:{l_col}!important; font-weight:{l_fw}!important; }}
-    </style>
-    """, unsafe_allow_html=True)
+    button[aria-label="Top 50 Gainers"] {{ background:{g_bg}!important; border-color:{g_bd}!important; color:#0FD68A!important; font-weight:{'700' if is_gainers else '400'}!important; }}
+    button[aria-label="Top 50 Losers"]  {{ background:{l_bg}!important; border-color:{l_bd}!important; color:#F0485A!important; font-weight:{'700' if not is_gainers else '400'}!important; }}
+    </style>""", unsafe_allow_html=True)
 
-    col_g, col_l, col_vrest = st.columns([1, 1, 8])
+    col_g, col_l, _ = st.columns([1, 1, 8])
     with col_g:
         if st.button("Top 50 Gainers", key="btn_gainers", use_container_width=True):
-            st.session_state["view_sel"] = "Gainers"
-            st.rerun()
+            st.session_state["view_sel"] = "Gainers"; st.rerun()
     with col_l:
         if st.button("Top 50 Losers", key="btn_losers", use_container_width=True):
-            st.session_state["view_sel"] = "Losers"
-            st.rerun()
+            st.session_state["view_sel"] = "Losers"; st.rerun()
 
     view = st.session_state["view_sel"]
     if view == "Gainers":
@@ -2232,29 +1472,20 @@ def render_screener() -> None:
     top50_avg_chg = df["chg_pct"].mean() if not df.empty else 0.0
     top50_label   = "Top 50 Gainers Avg" if view == "Gainers" else "Top 50 Losers Avg"
 
+    # ── Market cap: displayed price × shares outstanding (cached 24h) ─────
+    # Uses df["price"] directly — the same price shown in the table — so
+    # market cap is always consistent with the current session's prices.
     top50_tickers = tuple(df["ticker"].tolist())
-    try:
-        raw_prev = yf.download(
-            list(top50_tickers),
-            period="5d", interval="1d",
-            auto_adjust=True, progress=False, threads=True,
-        )
-        if not raw_prev.empty and len(raw_prev["Close"]) >= 2:
-            pc_row      = raw_prev["Close"].iloc[-2]
-            prev_prices = tuple(
-                (tk, float(pc_row[tk]))
-                for tk in top50_tickers
-                if tk in pc_row.index and not pd.isna(pc_row[tk])
-            )
-        else:
-            prev_prices = tuple()
-    except Exception:
-        prev_prices = tuple()
+    with st.spinner("Fetching shares outstanding…"):
+        shares_map = fetch_shares_outstanding(top50_tickers)
 
-    with st.spinner("Fetching market caps (prev close)…"):
-        mktcap_map = fetch_market_caps(top50_tickers, prev_prices)
-    df["mkt_cap"] = df["ticker"].map(mktcap_map)
+    df["mkt_cap"] = df.apply(
+        lambda row: row["price"] * shares_map[row["ticker"]]
+        if shares_map.get(row["ticker"]) is not None else None,
+        axis=1,
+    )
 
+    # ── Summary stats ─────────────────────────────────────────────────────
     all_active  = constituents.merge(prices, on="ticker", how="inner")
     gainers     = (all_active["chg_pct"] > 0).sum()
     losers      = (all_active["chg_pct"] < 0).sum()
@@ -2273,16 +1504,14 @@ def render_screener() -> None:
             st.markdown(f"""
             <div style="background:#0D1628;border:1px solid rgba(120,140,200,.1);
                 border-radius:8px;padding:12px 16px;text-align:center">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;
-                   color:#FFFFFF;letter-spacing:.6px;text-transform:uppercase;
-                   margin-bottom:4px">{label}</div>
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:22px;
-                   font-weight:700;color:{color}">{val}</div>
-            </div>
-            """, unsafe_allow_html=True)
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#FFFFFF;
+                   letter-spacing:.6px;text-transform:uppercase;margin-bottom:4px">{label}</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:700;color:{color}">{val}</div>
+            </div>""", unsafe_allow_html=True)
 
     st.markdown("<div style='margin-top:16px'></div>", unsafe_allow_html=True)
 
+    # ── Stock table ───────────────────────────────────────────────────────
     rows_html = ""
     for i, row in df.iterrows():
         chg_cls  = "chg-pos" if row["chg_pct"] >= 0 else "chg-neg"
@@ -2291,14 +1520,11 @@ def render_screener() -> None:
         <tr>
           <td style="color:#4D6080;width:36px">{i+1}</td>
           <td><span class="ticker-badge">{row['ticker']}</span></td>
-          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;
-              white-space:nowrap">{row['company']}</td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{row['company']}</td>
           <td><span class="sector-tag">{row['sector']}</span></td>
           <td style="text-align:right">${row['price']:,.2f}</td>
-          <td class="{chg_cls}" style="text-align:right">
-              {chg_sign} {abs(row['chg_pct']):.2f}%</td>
-          <td class="{chg_cls}" style="text-align:right">
-              {'+' if row['chg_abs']>=0 else ''}{row['chg_abs']:.2f}</td>
+          <td class="{chg_cls}" style="text-align:right">{chg_sign} {abs(row['chg_pct']):.2f}%</td>
+          <td class="{chg_cls}" style="text-align:right">{'+' if row['chg_abs']>=0 else ''}{row['chg_abs']:.2f}</td>
           <td style="text-align:right;color:#FFFFFF">{fmt_volume(row['volume'])}</td>
           <td style="text-align:right;color:#FFFFFF">{fmt_mktcap(row.get('mkt_cap'))}</td>
         </tr>"""
@@ -2320,10 +1546,9 @@ def render_screener() -> None:
         <tbody>{rows_html}</tbody>
       </table>
     </div>
-    <div style="font-family:'IBM Plex Mono',
-    monospace;font-size:9px;color:#4D6080;
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#4D6080;
         margin-top:8px;text-align:right">
-      Data: Yahoo Finance · Market cap: prev-day close · Top {len(df)} of {active_count}
+      Data: Yahoo Finance · Mkt cap: displayed price × shares · Top {len(df)} of {active_count}
     </div>
     """, unsafe_allow_html=True)
 
@@ -2332,46 +1557,45 @@ def render_screener() -> None:
 # MAIN
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
-    sgt = timezone(timedelta(hours=8))
+    sgt     = timezone(timedelta(hours=8))
     now_str = datetime.now(sgt).strftime("%d %b %Y · %H:%M SGT")
 
+    # ── Page toggle: MACRO / MARKETS ──────────────────────────────────────
     if "page" not in st.session_state:
         st.session_state["page"] = "MACRO"
 
     is_macro   = st.session_state["page"] == "MACRO"
     is_markets = not is_macro
-    m_bg  = "rgba(91,141,239,.22)"  if is_macro   else "transparent"
-    m_bd  = "rgba(91,141,239,.7)"   if is_macro   else "rgba(120,140,200,.2)"
-    m_col = "#FFFFFF"               if is_macro   else "rgba(255,255,255,.35)"
-    m_fw  = "700"                   if is_macro   else "400"
-    mk_bg = "rgba(91,141,239,.22)"  if is_markets else "transparent"
-    mk_bd = "rgba(91,141,239,.7)"   if is_markets else "rgba(120,140,200,.2)"
-    mk_col= "#FFFFFF"               if is_markets else "rgba(255,255,255,.35)"
-    mk_fw = "700"                   if is_markets else "400"
+    m_bg  = "rgba(91,141,239,.22)" if is_macro   else "transparent"
+    m_bd  = "rgba(91,141,239,.7)"  if is_macro   else "rgba(120,140,200,.2)"
+    m_col = "#FFFFFF"              if is_macro   else "rgba(255,255,255,.35)"
+    m_fw  = "700"                  if is_macro   else "400"
+    mk_bg = "rgba(91,141,239,.22)" if is_markets else "transparent"
+    mk_bd = "rgba(91,141,239,.7)"  if is_markets else "rgba(120,140,200,.2)"
+    mk_col= "#FFFFFF"              if is_markets else "rgba(255,255,255,.35)"
+    mk_fw = "700"                  if is_markets else "400"
 
     st.markdown(f"""
     <style>
     button[aria-label="📊  MACRO"]   {{ background:{m_bg}!important;  border-color:{m_bd}!important;  color:{m_col}!important;  font-weight:{m_fw}!important;  }}
     button[aria-label="📈  MARKETS"] {{ background:{mk_bg}!important; border-color:{mk_bd}!important; color:{mk_col}!important; font-weight:{mk_fw}!important; }}
-    </style>
-    """, unsafe_allow_html=True)
+    </style>""", unsafe_allow_html=True)
 
     st.markdown("<div style='padding:20px 0 0'>", unsafe_allow_html=True)
-    col_macro, col_markets, col_spacer = st.columns([1, 1, 8])
+    col_macro, col_markets, _ = st.columns([1, 1, 8])
     with col_macro:
         if st.button("📊  MACRO", key="btn_macro", use_container_width=True):
-            st.session_state["page"] = "MACRO"
-            st.rerun()
+            st.session_state["page"] = "MACRO"; st.rerun()
     with col_markets:
         if st.button("📈  MARKETS", key="btn_markets", use_container_width=True):
-            st.session_state["page"] = "MARKETS"
-            st.rerun()
+            st.session_state["page"] = "MARKETS"; st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 
     if st.session_state["page"] == "MARKETS":
         render_screener()
         return
 
+    # ── Expanded chart view ────────────────────────────────────────────────
     if "expanded" in st.session_state:
         exp     = st.session_state["expanded"]
         cfg_e   = exp["cfg"]
@@ -2393,63 +1617,35 @@ def main():
         """, unsafe_allow_html=True)
 
         is_fred = cfg_e.get("transform") in ("claims", "adp", "sentiment")
-
         if is_fred:
             plot_df = df_e.tail(104 if cfg_e.get("freq") == "Weekly" else 60)
             color_e = cfg_e["color"]
-            r_e = int(color_e[1:3], 16)
-            g_e = int(color_e[3:5], 16)
-            b_e = int(color_e[5:7], 16)
-            fill_e = f"rgba({r_e},{g_e},{b_e},0.1)"
-
-            if cfg_e["transform"] == "adp":
-                bar_colors  = ["rgba(15,214,138,.7)"  if v >= 0 else "rgba(240,72,90,.7)"  for v in plot_df["value"]]
-                bar_borders = ["rgba(15,214,138,.95)" if v >= 0 else "rgba(240,72,90,.95)" for v in plot_df["value"]]
-                fig_exp = go.Figure(go.Bar(
-                    x=plot_df["date"], y=plot_df["value"],
-                    marker_color=bar_colors, marker_line_color=bar_borders,
-                    marker_line_width=1,
-                    hovertemplate="%{x|%b %Y}<br><b>%{y:+.0f}K</b><extra></extra>",
-                ))
-                fig_exp.add_hline(y=0, line_color="rgba(120,140,200,.2)", line_width=1)
-            else:
-                hover_fmt = "%{x|%d %b '%y}<br><b>%{y:.0f}K</b>" if cfg_e.get("freq") == "Weekly" else "%{x|%b %Y}<br><b>%{y:.1f}</b>"
-                fig_exp = go.Figure(go.Scatter(
-                    x=plot_df["date"], y=plot_df["value"],
-                    mode="lines", line=dict(color=color_e, width=2),
-                    fill="tozeroy", fillcolor=fill_e,
-                    hovertemplate=hover_fmt + "<extra></extra>",
-                ))
-                y_min = max(0, plot_df["value"].min() * 0.9)
-                y_max = plot_df["value"].max() * 1.05
-                fig_exp.update_yaxes(range=[y_min, y_max])
-
+            r_e = int(color_e[1:3], 16); g_e = int(color_e[3:5], 16); b_e = int(color_e[5:7], 16)
+            fill_e  = f"rgba({r_e},{g_e},{b_e},0.1)"
+            hover_e = "%{x|%d %b '%y}<br><b>%{y:.0f}K</b>" if cfg_e.get("freq") == "Weekly" else "%{x|%b %Y}<br><b>%{y:.1f}</b>"
+            fig_exp = go.Figure(go.Scatter(
+                x=plot_df["date"], y=plot_df["value"], mode="lines",
+                line=dict(color=color_e, width=2), fill="tozeroy", fillcolor=fill_e,
+                hovertemplate=hover_e + "<extra></extra>",
+            ))
+            y_min = max(0, plot_df["value"].min() * 0.9)
+            y_max = plot_df["value"].max() * 1.05
+            fig_exp.update_yaxes(range=[y_min, y_max])
             fig_exp.update_layout(
-                height=550,
-                margin=dict(l=0, r=0, t=8, b=0),
+                height=550, margin=dict(l=0, r=0, t=8, b=0),
                 paper_bgcolor="#0B1020", plot_bgcolor="#0B1020",
                 font=dict(family="IBM Plex Mono, monospace", color="#8898BB", size=11),
-                xaxis=dict(showgrid=False, zeroline=False,
-                           tickfont=dict(size=11, color="#FFFFFF"),
-                           tickformat="%b '%y", nticks=8),
-                yaxis=dict(showgrid=True, gridcolor="rgba(120,140,200,.06)", zeroline=False,
-                           tickfont=dict(size=11, color="#FFFFFF"), nticks=6),
-                hoverlabel=dict(bgcolor="#0E1428", bordercolor="rgba(91,141,239,.3)",
-                                font=dict(family="IBM Plex Mono, monospace", size=13, color="#FFFFFF")),
+                xaxis=dict(showgrid=False, zeroline=False, tickfont=dict(size=11, color="#FFFFFF"), tickformat="%b '%y", nticks=8),
+                yaxis=dict(showgrid=True, gridcolor="rgba(120,140,200,.06)", zeroline=False, tickfont=dict(size=11, color="#FFFFFF"), nticks=6),
+                hoverlabel=dict(bgcolor="#0E1428", bordercolor="rgba(91,141,239,.3)", font=dict(family="IBM Plex Mono, monospace", size=13, color="#FFFFFF")),
                 showlegend=False,
             )
         else:
             fig_exp = make_chart(df_e, cfg_e, which_e, height=550)
 
-        st.plotly_chart(
-            fig_exp, use_container_width=True,
-            config={
-                "displayModeBar": True,
-                "modeBarButtonsToRemove": ["lasso2d", "select2d"],
-                "displaylogo": False
-            },
-            key="expanded_chart"
-        )
+        st.plotly_chart(fig_exp, use_container_width=True,
+                        config={"displayModeBar": True, "modeBarButtonsToRemove": ["lasso2d", "select2d"], "displaylogo": False},
+                        key="expanded_chart")
         return
 
     # ── Hero banner ────────────────────────────────────────────────────────
@@ -2460,9 +1656,7 @@ def main():
           <div class="hero-title"><span>US Macro Dashboard</span></div>
           <div class="hero-sub">OFFICIAL BLS DATA · {now_str}</div>
         </div>
-        <div class="hero-right">
-          <span class="bls-tag">BLS · OFFICIAL</span>
-        </div>
+        <div class="hero-right"><span class="bls-tag">BLS · OFFICIAL</span></div>
       </div>
       <div class="data-hover-wrap">
         <div class="data-hover-trigger">DATA <span class="data-q">?</span></div>
@@ -2496,24 +1690,23 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
+    # ── Fetch BLS + FRED data ──────────────────────────────────────────────
     with st.spinner("Fetching data from BLS & FRED…"):
         try:
             all_data = fetch_bls_data()
         except Exception as e:
-            st.error(f"❌ BLS API error: {e}")
-            st.stop()
+            st.error(f"❌ BLS API error: {e}"); st.stop()
         try:
             fred_data = fetch_fred_data()
         except Exception as e:
-            st.error(f"❌ FRED API error: {e}")
-            fred_data = {}
+            st.error(f"❌ FRED API error: {e}"); fred_data = {}
 
     bls_loaded   = len(all_data)
     fred_loaded  = len([v for v in fred_data.values() if not v.empty])
     total_loaded = bls_loaded + fred_loaded
     total_series = len(SERIES) + len(FRED_SERIES)
 
-    c_status, c_spacer, c_btn = st.columns([4, 6, 1])
+    c_status, _, c_btn = st.columns([4, 6, 1])
     with c_status:
         cls = "status-ok" if total_loaded == total_series else "status-warn"
         st.markdown(
@@ -2523,15 +1716,12 @@ def main():
         )
     with c_btn:
         if st.button("↻", help="Refresh data", key="refresh_main"):
-            st.cache_data.clear()
-            st.rerun()
+            st.cache_data.clear(); st.rerun()
 
     st.markdown("<div style='margin-bottom:20px'></div>", unsafe_allow_html=True)
 
-    st.markdown(
-        '<div class="section-header"><span class="section-icon">▲</span>INFLATION</div>',
-        unsafe_allow_html=True
-    )
+    # ── INFLATION ─────────────────────────────────────────────────────────
+    st.markdown('<div class="section-header"><span class="section-icon">▲</span>INFLATION</div>', unsafe_allow_html=True)
     cols_price = st.columns(3, gap="medium")
     for col, key in zip(cols_price, ["cpi", "corecpi", "ppi"]):
         with col:
@@ -2545,22 +1735,20 @@ def main():
 
     st.markdown("<div style='margin-top:24px'></div>", unsafe_allow_html=True)
 
-    st.markdown(
-        '<div class="section-header"><span class="section-icon">●</span>LABOR MARKET</div>',
-        unsafe_allow_html=True
-    )
+    # ── LABOR MARKET ──────────────────────────────────────────────────────
+    st.markdown('<div class="section-header"><span class="section-icon">●</span>LABOR MARKET</div>', unsafe_allow_html=True)
     cols_labor = st.columns(2, gap="medium")
     for col, key in zip(cols_labor, ["unemp", "nfp"]):
         with col:
             with st.container(border=True):
                 render_card(key, SERIES[key], all_data.get(key))
-
     st.markdown("<div style='margin-top:10px'></div>", unsafe_allow_html=True)
     cols_labor2 = st.columns(2, gap="medium")
     with cols_labor2[0]:
         with st.container(border=True):
             render_fred_card("claims", FRED_SERIES["claims"], fred_data.get("claims"))
 
+    # ── Footer ─────────────────────────────────────────────────────────────
     st.markdown("<hr style='margin-top:32px'>", unsafe_allow_html=True)
     st.markdown(
         "<p style='font-size:11px;color:#4D6080;font-family:IBM Plex Mono,monospace;text-align:center'>"
