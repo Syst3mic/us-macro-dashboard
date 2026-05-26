@@ -1925,9 +1925,14 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
         today_et = now_et.date()
 
         if session == "pre":
-            cutoff = datetime(today_et.year, today_et.month, today_et.day,
-                              9, 30, tzinfo=et)
-            def in_session(idx): return idx < cutoff
+            # Today's pre-market only: midnight ET → 9:30am ET today
+            # This excludes yesterday's after-hours bars which also appear
+            # in period='1d' prepost=True data
+            day_start  = datetime(today_et.year, today_et.month, today_et.day,
+                                  0, 0, tzinfo=et)
+            day_cutoff = datetime(today_et.year, today_et.month, today_et.day,
+                                  9, 30, tzinfo=et)
+            def in_session(idx): return day_start <= idx < day_cutoff
         else:
             cutoff = datetime(today_et.year, today_et.month, today_et.day,
                               16, 0, tzinfo=et)
