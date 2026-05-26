@@ -1911,13 +1911,8 @@ def render_screener() -> None:
 
     st.markdown(f"""
     <style>
-    div[data-testid="stButton"]:has(button[data-testid="baseButton-secondary"][key="btn_sp500"]) button,
-    button.btn-sp500 {{ background:{sp_bg}!important; border-color:{sp_bd}!important; color:{sp_col}!important; font-weight:{sp_fw}!important; }}
-    div[data-testid="stButton"]:has(button[data-testid="baseButton-secondary"][key="btn_ndx100"]) button,
-    button.btn-ndx100 {{ background:{ndx_bg}!important; border-color:{ndx_bd}!important; color:{ndx_col}!important; font-weight:{ndx_fw}!important; }}
-    /* Simpler fallback: nth-child targeting within columns */
-    div[data-testid="column"]:nth-child(1) button {{ background:{sp_bg}!important; border-color:{sp_bd}!important; color:{sp_col}!important; font-weight:{sp_fw}!important; }}
-    div[data-testid="column"]:nth-child(2) button {{ background:{ndx_bg}!important; border-color:{ndx_bd}!important; color:{ndx_col}!important; font-weight:{ndx_fw}!important; }}
+    button[aria-label="S&P 500"] {{ background:{sp_bg}!important; border-color:{sp_bd}!important; color:{sp_col}!important; font-weight:{sp_fw}!important; }}
+    button[aria-label="Nasdaq 100"] {{ background:{ndx_bg}!important; border-color:{ndx_bd}!important; color:{ndx_col}!important; font-weight:{ndx_fw}!important; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -1994,8 +1989,8 @@ def render_screener() -> None:
 
     st.markdown(f"""
     <style>
-    div[data-testid="column"]:nth-child(4) button {{ background:{g_bg}!important; border-color:{g_bd}!important; color:{g_col}!important; font-weight:{g_fw}!important; }}
-    div[data-testid="column"]:nth-child(5) button {{ background:{l_bg}!important; border-color:{l_bd}!important; color:{l_col}!important; font-weight:{l_fw}!important; }}
+    button[aria-label="Top Gainers"] {{ background:{g_bg}!important; border-color:{g_bd}!important; color:{g_col}!important; font-weight:{g_fw}!important; }}
+    button[aria-label="Top Losers"] {{ background:{l_bg}!important; border-color:{l_bd}!important; color:{l_col}!important; font-weight:{l_fw}!important; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -2109,24 +2104,32 @@ def main():
     if "page" not in st.session_state:
         st.session_state["page"] = "MACRO"
 
+    is_macro   = st.session_state["page"] == "MACRO"
+    is_markets = not is_macro
+    m_bg  = "rgba(91,141,239,.22)"  if is_macro   else "transparent"
+    m_bd  = "rgba(91,141,239,.7)"   if is_macro   else "rgba(120,140,200,.2)"
+    m_col = "#FFFFFF"               if is_macro   else "rgba(255,255,255,.35)"
+    m_fw  = "700"                   if is_macro   else "400"
+    mk_bg = "rgba(91,141,239,.22)"  if is_markets else "transparent"
+    mk_bd = "rgba(91,141,239,.7)"   if is_markets else "rgba(120,140,200,.2)"
+    mk_col= "#FFFFFF"               if is_markets else "rgba(255,255,255,.35)"
+    mk_fw = "700"                   if is_markets else "400"
+
+    st.markdown(f"""
+    <style>
+    button[aria-label="📊  MACRO"] {{ background:{m_bg}!important; border-color:{m_bd}!important; color:{m_col}!important; font-weight:{m_fw}!important; }}
+    button[aria-label="📈  MARKETS"] {{ background:{mk_bg}!important; border-color:{mk_bd}!important; color:{mk_col}!important; font-weight:{mk_fw}!important; }}
+    </style>
+    """, unsafe_allow_html=True)
+
     st.markdown("<div style='padding:20px 0 0'>", unsafe_allow_html=True)
     col_macro, col_markets, col_spacer = st.columns([1, 1, 8])
     with col_macro:
-        if st.button(
-            "📊  MACRO",
-            key="btn_macro",
-            use_container_width=True,
-            type="primary" if st.session_state["page"] == "MACRO" else "secondary"
-        ):
+        if st.button("📊  MACRO", key="btn_macro", use_container_width=True):
             st.session_state["page"] = "MACRO"
             st.rerun()
     with col_markets:
-        if st.button(
-            "📈  MARKETS",
-            key="btn_markets",
-            use_container_width=True,
-            type="primary" if st.session_state["page"] == "MARKETS" else "secondary"
-        ):
+        if st.button("📈  MARKETS", key="btn_markets", use_container_width=True):
             st.session_state["page"] = "MARKETS"
             st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
