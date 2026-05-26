@@ -1808,7 +1808,7 @@ def _fetch_prev_close(tickers: list) -> dict:
         )
         if raw.empty or len(raw["Close"]) < 2:
             return {}
-        pc_series = raw["Close"].iloc[-1]
+        pc_series = raw["Close"].iloc[-2]
         return {
             tk: float(pc_series[tk])
             for tk in tickers
@@ -1898,85 +1898,68 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
             prepost=True,
             progress=False,
             threads=True,
-            group_by="ticker",
         )
-        if raw.empty:
+        if raw.empty or raw["Close"].empty:
             return fetch_price_data_eod(tickers)
 
-        # ── Normalise to a flat {ticker: DataFrame} dict ──────────────────
-        # yfinance with group_by="ticker" returns a MultiIndex column
-        # structure: (ticker, field). Flatten it so we can iterate reliably.
-        ticker_data = {}
-        for tk in tickers:
-            try:
-                if tk in raw.columns.get_level_values(0):
-                    tk_df = raw[tk][["Close", "Volume"]].copy()
-                    tk_df.columns = ["close", "volume"]
-                    ticker_data[tk] = tk_df
-            except Exception:
-                continue
+        close  = raw["Close"]
+        volume = raw["Volume"]
 
-        if not ticker_data:
-            return fetch_price_data_eod(tickers)
-
-        # ── Time filter: keep only extended-hours bars ─────────────────────
+        # Filter to extended-hours bars only (exclude regular session)
+        sgt      = timezone(timedelta(hours=8))
         et       = timezone(timedelta(hours=-4))   # EDT
         now_et   = datetime.now(et)
         today_et = now_et.date()
 
-        # Convert cutoff times to UTC for safe comparison with yfinance index
-        # yfinance returns timestamps in UTC regardless of local timezone
-        utc = timezone.utc
         if session == "pre":
-            # Today's pre-market only: midnight ET → 9:30am ET
-            day_start_utc  = datetime(today_et.year, today_et.month, today_et.day,
-                                      0, 0, tzinfo=et).astimezone(utc)
-            day_cutoff_utc = datetime(today_et.year, today_et.month, today_et.day,
-                                      9, 30, tzinfo=et).astimezone(utc)
-            def in_session(idx):
-                ts = idx if idx.tzinfo else idx.replace(tzinfo=utc)
-                ts = ts.astimezone(utc)
-                return day_start_utc <= ts < day_cutoff_utc
+            # Keep bars before 9:30am ET today
+            cutoff = datetime(today_et.year, today_et.month, today_et.day,
+                              9, 30, tzinfo=et)
+            mask = close.index < cutoff
         else:
-            cutoff_utc = datetime(today_et.year, today_et.month, today_et.day,
-                                  16, 0, tzinfo=et).astimezone(utc)
-            def in_session(idx):
-                ts = idx if idx.tzinfo else idx.replace(tzinfo=utc)
-                ts = ts.astimezone(utc)
-                return ts >= cutoff_utc
+            # after_hours: keep bars after 4:00pm ET today
+            cutoff = datetime(today_et.year, today_et.month, today_et.day,
+                              16, 0, tzinfo=et)
+            mask = close.index >= cutoff
+
+        close_ext  = close[mask]
+        volume_ext = volume[mask]
+
+        if close_ext.empty:
+            return fetch_price_data_eod(tickers)
 
         prev_close_map = _fetch_prev_close(list(tickers))
         if not prev_close_map:
             return fetch_price_data_eod(tickers)
 
+        last_price = close_ext.iloc[-1]
+        cum_volume = volume_ext.sum(axis=0)
+        trade_date = close_ext.index[-1].date()
+
         rows = []
-        for tk, df_tk in ticker_data.items():
-            # Filter to session window
-            df_ext = df_tk[df_tk.index.map(in_session)]
-            df_ext = df_ext.dropna(subset=["close"])
-            if df_ext.empty:
+        for ticker in tickers:
+            if ticker not in close_ext.columns:
                 continue
-
-            pc = prev_close_map.get(tk)
-            if pc is None or pc == 0:
+            lp = last_price[ticker]
+            pc = prev_close_map.get(ticker)
+            if lp is None or pd.isna(lp) or pc is None or pc == 0:
                 continue
-
-            lp      = float(df_ext["close"].iloc[-1])
-            chg_pct = (lp / pc - 1) * 100
-            chg_abs = lp - pc
-
-            vol_raw = df_ext["volume"].sum()
+            # Only include tickers with actual extended-hours activity
+            ticker_bars = close_ext[ticker].dropna()
+            if ticker_bars.empty:
+                continue
+            chg_pct = (float(lp) / pc - 1) * 100
+            chg_abs = float(lp) - pc
+            vol_raw = cum_volume[ticker] if ticker in cum_volume.index else 0
             vol     = int(vol_raw) if not pd.isna(vol_raw) and vol_raw > 0 else None
-
             rows.append({
-                "ticker":     tk,
-                "price":      round(lp, 2),
+                "ticker":     ticker,
+                "price":      round(float(lp), 2),
                 "chg_pct":    round(chg_pct, 2),
                 "chg_abs":    round(chg_abs, 2),
-                "volume":     vol,
-                "trade_date": str(df_ext.index[-1].date()),
+                "volume":     vol,          # None → renders as '—'
+                "trade_date": str(trade_date),
             })
-
         if not rows:
             return fetch_price_data_eod(tickers)
         return pd.DataFrame(rows)
@@ -2102,6 +2085,343 @@ def fetch_market_caps(tickers: tuple, prev_prices: tuple) -> dict:
         except Exception:
             result[tk] = None
     return result
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DOCUMENTATION PAGE
+# ─────────────────────────────────────────────────────────────────────────────
+def render_docs() -> None:
+    st.markdown("""
+    <style>
+    .doc-h1 {
+        font-family: 'Sora', sans-serif;
+        font-size: 26px; font-weight: 800;
+        color: #FFFFFF; letter-spacing: -.5px;
+        margin: 32px 0 6px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid rgba(91,141,239,.4);
+    }
+    .doc-h2 {
+        font-family: 'Sora', sans-serif;
+        font-size: 16px; font-weight: 700;
+        color: #FFFFFF; letter-spacing: .3px;
+        text-transform: uppercase;
+        margin: 28px 0 10px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid rgba(120,140,200,.15);
+    }
+    .doc-h3 {
+        font-family: 'Sora', sans-serif;
+        font-size: 13px; font-weight: 700;
+        color: #7BA4F5;
+        letter-spacing: .3px;
+        margin: 20px 0 6px;
+    }
+    .doc-body {
+        font-family: 'Sora', sans-serif;
+        font-size: 13px; line-height: 1.75;
+        color: rgba(255,255,255,.75);
+        max-width: 900px;
+    }
+    .doc-body ul { padding-left: 20px; margin: 8px 0; }
+    .doc-body li { margin-bottom: 5px; }
+    .doc-body b  { color: #FFFFFF; font-weight: 600; }
+    .doc-tag {
+        display: inline-block;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 10px; font-weight: 700;
+        padding: 2px 8px; border-radius: 4px;
+        background: rgba(91,141,239,.1);
+        border: 1px solid rgba(91,141,239,.25);
+        color: #7BA4F5; margin: 0 2px;
+    }
+    .doc-disclaimer {
+        background: rgba(91,141,239,.06);
+        border: 1px solid rgba(91,141,239,.2);
+        border-radius: 8px;
+        padding: 14px 18px;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+        color: rgba(255,255,255,.6);
+        margin: 16px 0 24px;
+        line-height: 1.6;
+    }
+    .doc-table {
+        width: 100%; border-collapse: collapse;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px; margin: 12px 0 20px;
+    }
+    .doc-table th {
+        text-align: left; padding: 8px 12px;
+        font-size: 9px; font-weight: 700;
+        letter-spacing: .6px; text-transform: uppercase;
+        color: #FFFFFF; background: #0D1628;
+        border-bottom: 1px solid rgba(120,140,200,.15);
+        opacity: .7;
+    }
+    .doc-table td {
+        padding: 8px 12px;
+        color: rgba(255,255,255,.75);
+        border-bottom: 1px solid rgba(120,140,200,.06);
+        vertical-align: top;
+    }
+    .doc-table tr:hover td { background: rgba(91,141,239,.04); }
+    </style>
+
+    <div class="doc-body">
+
+    <!-- ── OVERVIEW ── -->
+    <div class="doc-h1">US Macro Dashboard — Documentation</div>
+
+    <div class="doc-h2">Overview</div>
+    <p>
+        The US Macro Dashboard is a personal project built for idea generation and to stay better informed
+        on macroeconomic conditions and market movements. It is not intended for institutional or commercial use.
+        Built on <b>Streamlit (Python)</b> and hosted on <b>Streamlit Community Cloud</b>, the dashboard
+        consists of two tabs — <b>Macro</b> and <b>Markets</b> — pulling from official government data sources
+        and market data providers to present a consolidated view of key US economic indicators and equity
+        market activity.
+    </p>
+
+    <div class="doc-disclaimer">
+        <b>Data Freshness</b><br>
+        · <b>Macro tab</b> — indicators are as current as the underlying source publishes them.
+        BLS and FRED series are updated whenever the respective agency releases new data (typically monthly).
+        The dashboard reflects the latest available release at any given time.<br>
+        · <b>Markets tab</b> — all price data (price, chg %, chg $, volume) carries an approximate
+        <b>15-minute delay</b> sourced from Yahoo Finance's free data feed.
+        This applies during market hours, pre-market, and after-hours sessions.
+        Market cap is based on the previous session's official closing price and is updated once daily.<br><br>
+        This dashboard is intended solely for personal informational purposes and idea generation.
+    </div>
+
+    <!-- ── MACRO TAB ── -->
+    <div class="doc-h1">Macro Tab</div>
+
+    <div class="doc-h2">Data Sources</div>
+    <table class="doc-table">
+        <thead>
+            <tr><th>Indicator</th><th>Source</th><th>Series ID</th><th>Frequency</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>CPI All Items SA</td><td>BLS Official API v2</td><td>CUSR0000SA0</td><td>Monthly</td></tr>
+            <tr><td>Core CPI (ex Food &amp; Energy SA)</td><td>BLS Official API v2</td><td>CUSR0000SA0L1E</td><td>Monthly</td></tr>
+            <tr><td>PPI Final Demand</td><td>BLS Official API v2</td><td>WPSFD4</td><td>Monthly</td></tr>
+            <tr><td>Core PCE (ex Food &amp; Energy)</td><td>FRED API (BEA)</td><td>PCEPILFE</td><td>Monthly</td></tr>
+            <tr><td>Unemployment Rate U-3 SA</td><td>BLS Official API v2</td><td>LNS14000000</td><td>Monthly</td></tr>
+            <tr><td>Nonfarm Payrolls SA</td><td>BLS Official API v2</td><td>CES0000000001</td><td>Monthly</td></tr>
+            <tr><td>Initial Jobless Claims SA</td><td>FRED API (DOL)</td><td>ICSA</td><td>Weekly</td></tr>
+        </tbody>
+    </table>
+
+    <div class="doc-h2">Indicator Methodology</div>
+
+    <div class="doc-h3">CPI / Core CPI / PPI / Core PCE</div>
+    <ul>
+        <li>These are price index series. The raw data is a monthly index level (e.g. 314.87).</li>
+        <li><b>MoM%</b> = (current index level / prior month index level − 1) × 100</li>
+        <li><b>YoY%</b> = (current index level / index level 12 months prior − 1) × 100</li>
+        <li>YoY comparison uses <b>exact date matching</b> (e.g. Apr 2026 vs Apr 2025), not a fixed index offset, to ensure accuracy around calendar boundaries.</li>
+        <li>Delta badge on MoM box = current MoM print minus prior month's MoM print (i.e. how much the monthly pace has accelerated or decelerated).</li>
+        <li>Delta badge on YoY box = current YoY print minus prior month's YoY print.</li>
+        <li>Core PCE is the <b>Federal Reserve's preferred inflation measure</b>.</li>
+    </ul>
+
+    <div class="doc-h3">Unemployment Rate</div>
+    <ul>
+        <li>The headline value displayed is the <b>actual rate level</b> (e.g. 4.2%), not a period-over-period change.</li>
+        <li>MoM badge = current rate vs prior month's actual rate (e.g. vs Mar 2026: 4.1%).</li>
+        <li>YoY badge = current rate vs same month last year (e.g. vs Apr 2025: 3.9%).</li>
+        <li>Chart displays actual monthly rate prints, not diffs, so movements are visually meaningful.</li>
+        <li>A <b>declining rate</b> is treated as a positive signal (green); rising rate is negative (red).</li>
+    </ul>
+
+    <div class="doc-h3">Nonfarm Payrolls</div>
+    <ul>
+        <li>The headline value is the <b>net jobs added month-over-month</b> (e.g. +177K).</li>
+        <li>Computed client-side: <span class="doc-tag">PAYEMS[n] − PAYEMS[n−1]</span> using raw level data from BLS.</li>
+        <li>FRED's server-side <span class="doc-tag">ch1</span> transformation is intentionally not used — it is unreliable when fetched via proxy and has been known to return incorrect values.</li>
+        <li>MoM badge = current print vs prior month's print (e.g. vs Mar 2026: +185K).</li>
+        <li>YoY badge = current MoM print vs same month last year's MoM print, showing the difference between the two (e.g. +7K vs Apr 2025: +108K).</li>
+        <li>Chart displays a bar chart of monthly net jobs — <b>green for positive months, red for negative months</b>.</li>
+    </ul>
+
+    <div class="doc-h3">Initial Jobless Claims</div>
+    <ul>
+        <li>Weekly series fetched from FRED (ICSA), converted from raw persons to thousands (÷1000).</li>
+        <li>Headline = latest weekly print in thousands (e.g. 228K).</li>
+        <li>WoW badge = current week's print minus prior week's print.</li>
+        <li>Lower claims = positive signal (green); higher claims = negative (red).</li>
+        <li>Chart displays last 2 years of weekly prints.</li>
+    </ul>
+
+    <div class="doc-h2">Card Layout</div>
+    <ul>
+        <li>Each indicator is displayed as a card with two stat boxes side by side: <b>Month-over-Month</b> and <b>Year-over-Year</b> (or Latest Print and Prior for weekly series).</li>
+        <li>Each stat box shows: headline value, delta badge vs comparison period, and the reference date.</li>
+        <li>A chart below with MoM/YoY tab toggle for price index indicators (CPI, Core CPI, PPI, Core PCE).</li>
+        <li>Unemployment and NFP show actual prints directly with no tab toggle.</li>
+        <li>An expand button (⛶) opens a full-page version of the chart for closer inspection.</li>
+    </ul>
+
+    <div class="doc-h2">Caching</div>
+    <ul>
+        <li>BLS and FRED data: <b>1-hour TTL</b> per session.</li>
+        <li>A manual refresh button (↻) is available to clear the cache on demand, useful on data release days when fresh prints are expected.</li>
+    </ul>
+
+    <div class="doc-h2">Excluded Indicators</div>
+    <ul>
+        <li><b>Michigan Consumer Sentiment (UMCSENT)</b> — FRED imposes a 1-month publication lag due to licensing restrictions by the University of Michigan. The data available on FRED is always one month stale, making it unsuitable for a timely dashboard.</li>
+        <li><b>ADP Employment</b> — The ADP series on FRED underwent a methodology change post-2022 and the historical series was discontinued. The revised series is inconsistent with prior data and has been excluded on reliability grounds.</li>
+    </ul>
+
+    <!-- ── MARKETS TAB ── -->
+    <div class="doc-h1">Markets Tab</div>
+
+    <div class="doc-h2">Overview</div>
+    <p>
+        An equity screener covering the <b>S&amp;P 500 (~503 stocks)</b> and <b>Nasdaq 100 (~100 stocks)</b>,
+        displaying the top 50 gainers or top 50 losers ranked by percentage change.
+        All price data carries an approximate <b>15-minute delay</b>.
+    </p>
+
+    <div class="doc-h2">Data Sources</div>
+    <table class="doc-table">
+        <thead>
+            <tr><th>Data</th><th>Source</th><th>Cache TTL</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>S&amp;P 500 constituent list</td><td>GitHub (datasets/s-and-p-500-companies CSV)</td><td>24 hours</td></tr>
+            <tr><td>Nasdaq 100 constituent list</td><td>Hardcoded list in source code</td><td>Static — updated manually each December</td></tr>
+            <tr><td>Price / Chg % / Chg $ / Volume</td><td>Yahoo Finance via yfinance</td><td>5 min (live/extended hours) · 1 hr (EOD)</td></tr>
+            <tr><td>Market Cap</td><td>Yahoo Finance fast_info.shares × prev close</td><td>24 hours</td></tr>
+        </tbody>
+    </table>
+
+    <div class="doc-h2">Market State Detection</div>
+    <p>The screener automatically detects the current market state based on <b>Singapore Time (SGT, UTC+8)</b>
+    and routes to the appropriate data source. US Eastern Time (ET) is used as the reference for session boundaries.</p>
+
+    <table class="doc-table">
+        <thead>
+            <tr><th>SGT Time</th><th>ET Equivalent</th><th>Market State</th><th>Data Method</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>00:00 – 04:00</td><td>12:00pm – 4:00pm ET</td><td>🟢 LIVE</td><td>2-min intraday bars, ~15min delay</td></tr>
+            <tr><td>04:00 – 08:00</td><td>4:00pm – 8:00pm ET</td><td>🟣 AFTER-HOURS</td><td>1-min bars with prepost=True, ~15min delay</td></tr>
+            <tr><td>08:00 – 16:00</td><td>8:00pm – 4:00am ET</td><td>🔴 CLOSED</td><td>Previous session's official closing prices</td></tr>
+            <tr><td>16:00 – 21:30</td><td>4:00am – 9:30am ET</td><td>🟡 PRE-MARKET</td><td>1-min bars with prepost=True, ~15min delay</td></tr>
+            <tr><td>21:30 – 24:00</td><td>9:30am – 12:00pm ET</td><td>🟢 LIVE</td><td>2-min intraday bars, ~15min delay</td></tr>
+        </tbody>
+    </table>
+    <ul>
+        <li>Weekends → CLOSED throughout.</li>
+        <li>US market holidays → falls back to CLOSED automatically (yfinance returns no intraday bars, triggering EOD fallback).</li>
+    </ul>
+
+    <div class="doc-h2">Price & Change Calculation</div>
+
+    <div class="doc-h3">LIVE (Market Hours)</div>
+    <ul>
+        <li>Price = latest available 2-min bar close (~15min delay from actual market price).</li>
+        <li>Previous close baseline = most recent completed session's official closing price.</li>
+        <li><b>Chg %</b> = (current price / previous close − 1) × 100</li>
+        <li><b>Chg $</b> = current price − previous close</li>
+        <li>Volume = cumulative intraday volume from open to current bar.</li>
+    </ul>
+
+    <div class="doc-h3">PRE-MARKET</div>
+    <ul>
+        <li>Price = latest available 1-min pre-market bar close (~15min delay).</li>
+        <li>Pre-market window = <b>midnight ET → 9:30am ET, today only</b>.</li>
+        <li>Yesterday's after-hours bars are explicitly excluded from the pre-market window to prevent contamination of the percentage change calculation.</li>
+        <li>Previous close baseline = most recent completed session's official closing price.</li>
+        <li><b>Chg %</b> = (pre-market price / previous close − 1) × 100</li>
+        <li><b>Chg $</b> = pre-market price − previous close</li>
+        <li>Volume = cumulative pre-market volume; shown as <b>—</b> if zero or unavailable.</li>
+        <li>Only stocks with actual pre-market trading activity are included. The status bar shows how many stocks are active (e.g. 124 of 503 stocks active).</li>
+    </ul>
+
+    <div class="doc-h3">AFTER-HOURS</div>
+    <ul>
+        <li>Same methodology as pre-market, filtered to bars from <b>4:00pm ET onwards</b>.</li>
+        <li>Volume shown as <b>—</b> if unavailable.</li>
+    </ul>
+
+    <div class="doc-h3">CLOSED / EOD</div>
+    <ul>
+        <li>Price = most recent session's official closing price.</li>
+        <li>Previous close baseline = session before that.</li>
+        <li><b>Chg %</b> = (last close / prior close − 1) × 100</li>
+        <li>Volume = full completed session volume.</li>
+    </ul>
+
+    <div class="doc-h2">Market Cap Methodology</div>
+    <ul>
+        <li>Market cap = <b>shares outstanding × previous session's official closing price</b>.</li>
+        <li>This is a <b>previous-day static metric</b> — it does not update intraday.</li>
+        <li>Shares outstanding sourced from Yahoo Finance <span class="doc-tag">fast_info.shares</span>.</li>
+        <li>Computed for the <b>top 50 displayed stocks only</b> — fetching for all 503 stocks sequentially is not viable within response time constraints.</li>
+        <li>Cached 24 hours.</li>
+    </ul>
+
+    <div class="doc-h2">Ranking & Display Consistency</div>
+    <ul>
+        <li>Price data is fetched for all stocks in the index in a <b>single batch call</b>.</li>
+        <li>All stocks are ranked using the same data source and same methodology — ranking and displayed values are always consistent (apple-to-apple).</li>
+        <li>Top 50 by chg % (gainers) or bottom 50 by chg % (losers) are sliced after ranking the full index.</li>
+    </ul>
+
+    <div class="doc-h2">Summary Bar</div>
+    <p>All counts and averages are computed dynamically from the <b>active pool</b> for the current market state.
+    During pre-market and after-hours, "active" means stocks with actual trading bars in that session — the pool may be significantly smaller than the full index.</p>
+
+    <table class="doc-table">
+        <thead>
+            <tr><th>Metric</th><th>Definition</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>Gainers</td><td>Count of active stocks with chg % &gt; 0</td></tr>
+            <tr><td>Losers</td><td>Count of active stocks with chg % &lt; 0</td></tr>
+            <tr><td>Unchanged</td><td>Count of active stocks with chg % = 0</td></tr>
+            <tr><td>Top 50 Gainers / Losers Avg</td><td>Mean chg % of the 50 currently displayed stocks</td></tr>
+            <tr><td>Overall Avg</td><td>Mean chg % of all active stocks in the selected index</td></tr>
+        </tbody>
+    </table>
+
+    <div class="doc-h2">Caching</div>
+    <table class="doc-table">
+        <thead>
+            <tr><th>Data</th><th>Cache TTL</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>S&amp;P 500 constituent list</td><td>24 hours</td></tr>
+            <tr><td>Nasdaq 100 constituent list</td><td>Static (hardcoded)</td></tr>
+            <tr><td>LIVE prices (2-min intraday)</td><td>5 minutes</td></tr>
+            <tr><td>PRE-MARKET / AFTER-HOURS prices</td><td>5 minutes</td></tr>
+            <tr><td>EOD prices</td><td>1 hour</td></tr>
+            <tr><td>Market cap</td><td>24 hours</td></tr>
+        </tbody>
+    </table>
+
+    <div class="doc-h2">Known Limitations</div>
+    <ul>
+        <li>Pre-market and after-hours data only covers stocks with actual extended-hours trading activity. Thinly traded or illiquid stocks may not appear during these sessions.</li>
+        <li>Volume during pre-market and after-hours is often zero or unavailable for many stocks due to thin liquidity — displayed as <b>—</b> in the table.</li>
+        <li>Market cap is computed for the top 50 displayed stocks only — not shown for the full index.</li>
+        <li>The Nasdaq 100 constituent list is hardcoded and requires a manual update each December when the index rebalances annually.</li>
+        <li>All price data carries an approximate 15-minute delay. The screener is not suitable for monitoring live executions.</li>
+    </ul>
+
+    <div style="margin-top:48px;padding-top:16px;border-top:1px solid rgba(120,140,200,.1);
+        font-family:'IBM Plex Mono',monospace;font-size:10px;color:#4D6080;">
+        US Macro Dashboard · Personal Project · Built with Streamlit + BLS API + FRED API + Yahoo Finance
+    </div>
+
+    </div>
+    """, unsafe_allow_html=True)
 
 
 def render_screener() -> None:
@@ -2408,30 +2728,36 @@ def main():
     sgt = timezone(timedelta(hours=8))
     now_str = datetime.now(sgt).strftime("%d %b %Y · %H:%M SGT")
 
-    # ── Page toggle: MACRO / MARKETS ──────────────────────────────────────
+    # ── Page toggle: MACRO / MARKETS / DOCUMENTATION ─────────────────────
     if "page" not in st.session_state:
         st.session_state["page"] = "MACRO"
 
-    is_macro   = st.session_state["page"] == "MACRO"
-    is_markets = not is_macro
-    m_bg  = "rgba(91,141,239,.22)"  if is_macro   else "transparent"
-    m_bd  = "rgba(91,141,239,.7)"   if is_macro   else "rgba(120,140,200,.2)"
-    m_col = "#FFFFFF"               if is_macro   else "rgba(255,255,255,.35)"
-    m_fw  = "700"                   if is_macro   else "400"
-    mk_bg = "rgba(91,141,239,.22)"  if is_markets else "transparent"
-    mk_bd = "rgba(91,141,239,.7)"   if is_markets else "rgba(120,140,200,.2)"
-    mk_col= "#FFFFFF"               if is_markets else "rgba(255,255,255,.35)"
-    mk_fw = "700"                   if is_markets else "400"
+    is_macro = st.session_state["page"] == "MACRO"
+    is_mkt   = st.session_state["page"] == "MARKETS"
+    is_docs  = st.session_state["page"] == "DOCUMENTATION"
+
+    def _btn_style(active):
+        return {
+            "bg":  "rgba(91,141,239,.22)" if active else "transparent",
+            "bd":  "rgba(91,141,239,.7)"  if active else "rgba(120,140,200,.2)",
+            "col": "#FFFFFF"              if active else "rgba(255,255,255,.35)",
+            "fw":  "700"                  if active else "400",
+        }
+
+    ms  = _btn_style(is_macro)
+    mks = _btn_style(is_mkt)
+    ds  = _btn_style(is_docs)
 
     st.markdown(f"""
     <style>
-    button[aria-label="📊  MACRO"]   {{ background:{m_bg}!important;  border-color:{m_bd}!important;  color:{m_col}!important;  font-weight:{m_fw}!important;  }}
-    button[aria-label="📈  MARKETS"] {{ background:{mk_bg}!important; border-color:{mk_bd}!important; color:{mk_col}!important; font-weight:{mk_fw}!important; }}
+    button[aria-label="📊  MACRO"]         {{ background:{ms['bg']}!important;  border-color:{ms['bd']}!important;  color:{ms['col']}!important;  font-weight:{ms['fw']}!important;  }}
+    button[aria-label="📈  MARKETS"]       {{ background:{mks['bg']}!important; border-color:{mks['bd']}!important; color:{mks['col']}!important; font-weight:{mks['fw']}!important; }}
+    button[aria-label="📋  DOCUMENTATION"] {{ background:{ds['bg']}!important;  border-color:{ds['bd']}!important;  color:{ds['col']}!important;  font-weight:{ds['fw']}!important;  }}
     </style>
     """, unsafe_allow_html=True)
 
     st.markdown("<div style='padding:20px 0 0'>", unsafe_allow_html=True)
-    col_macro, col_markets, col_spacer = st.columns([1, 1, 8])
+    col_macro, col_markets, col_docs, col_spacer = st.columns([1, 1, 1.5, 6.5])
     with col_macro:
         if st.button("📊  MACRO", key="btn_macro", use_container_width=True):
             st.session_state["page"] = "MACRO"
@@ -2440,11 +2766,20 @@ def main():
         if st.button("📈  MARKETS", key="btn_markets", use_container_width=True):
             st.session_state["page"] = "MARKETS"
             st.rerun()
+    with col_docs:
+        if st.button("📋  DOCUMENTATION", key="btn_docs", use_container_width=True):
+            st.session_state["page"] = "DOCUMENTATION"
+            st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 
     # ── Route to MARKETS screener ──────────────────────────────────────────
     if st.session_state["page"] == "MARKETS":
         render_screener()
+        return
+
+    # ── Route to DOCUMENTATION ────────────────────────────────────────────
+    if st.session_state["page"] == "DOCUMENTATION":
+        render_docs()
         return
 
     # ── Expanded chart view ────────────────────────────────────────────────
