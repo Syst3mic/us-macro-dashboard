@@ -1452,28 +1452,22 @@ def fmt_volume(v) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MARKET CAP  — fetched directly from fast_info.market_cap (pre-computed by
-# Yahoo Finance), cached 24h, parallelised across 20 threads.
-# Using market_cap directly avoids a separate shares × price multiplication
-# and is more accurate than shares_outstanding × delayed display price.
+# SHARES OUTSTANDING — cached 24h, parallelised across 20 threads.
+# Market cap is computed as price × shares in render_screener.
 # ─────────────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=86400, show_spinner=False)
-def fetch_market_caps(tickers: tuple) -> dict:
-    """
-    Cache market caps for 24 hours.  Uses 20 parallel threads so cold-loading
-    50 tickers takes ~2-3 s instead of ~25 s sequentially.
-    """
+def fetch_shares_outstanding(tickers: tuple) -> dict:
     def _get(tk):
         try:
-            mc = yf.Ticker(tk).fast_info.market_cap
-            return tk, float(mc) if mc and not pd.isna(mc) else None
+            shares = yf.Ticker(tk).fast_info.shares
+            return tk, float(shares) if shares and not pd.isna(shares) else None
         except Exception:
             return tk, None
 
     result = {}
     with ThreadPoolExecutor(max_workers=20) as ex:
-        for tk, mc in ex.map(_get, tickers):
-            result[tk] = mc
+        for tk, shares in ex.map(_get, tickers):
+            result[tk] = shares
     return result
 
 
@@ -1536,7 +1530,7 @@ def render_screener() -> None:
           <div class="data-hover-divider"></div>
           <div class="data-hover-item">
             <span class="data-hover-label">Mkt Cap</span>
-            <span class="data-hover-val">fast_info.market_cap · Yahoo Finance · 24hr cache</span>
+            <span class="data-hover-val">fast_info.shares × price · Yahoo Finance · 24hr cache</span>
           </div>
           <div class="data-hover-divider"></div>
           <div class="data-hover-item">
@@ -1699,12 +1693,16 @@ def render_screener() -> None:
     df = df_sorted.head(int(top_n)).reset_index(drop=True)
     actual_n = len(df)
 
-    # ── Market cap: fast_info.market_cap direct from Yahoo Finance (24h cache) ─
+    # ── Market cap: shares outstanding × current price (24h cache for shares) ─
     display_tickers = tuple(df["ticker"].tolist())
-    with st.spinner("Fetching market caps…"):
-        mktcap_map = fetch_market_caps(display_tickers)
+    with st.spinner("Fetching shares outstanding…"):
+        shares_map = fetch_shares_outstanding(display_tickers)
 
-    df["mkt_cap"] = df["ticker"].map(mktcap_map)
+    df["mkt_cap"] = df.apply(
+        lambda row: row["price"] * shares_map[row["ticker"]]
+        if shares_map.get(row["ticker"]) is not None else None,
+        axis=1,
+    )
 
     # ── Summary stats — uses full universe (ignores sector filter) ─────────
     all_active = constituents.merge(prices, on="ticker", how="inner")
