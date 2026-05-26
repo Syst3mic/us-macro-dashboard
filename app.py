@@ -376,17 +376,6 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 .status-ok  { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #0FD68A; }
 .status-warn{ font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #F59E0B; }
 
-/* ── Tab labels ── */
-[data-testid="stTab"] p {
-    color: rgba(255,255,255,.4) !important;
-    font-family: 'IBM Plex Mono', monospace !important;
-    font-size: 12px !important;
-    font-weight: 600 !important;
-}
-[data-testid="stTab"][aria-selected="true"] p {
-    color: #FFFFFF !important;
-}
-
 /* ── Index selector buttons — active = bright white filled, inactive = dim ── */
 .idx-active button {
     background: rgba(255,255,255,.12) !important;
@@ -1347,79 +1336,651 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MARKETS SCREENER — DATA  (FMP-powered)
+# MARKETS SCREENER — DATA
 # ─────────────────────────────────────────────────────────────────────────────
 
-_FMP_BASE = "https://financialmodelingprep.com/api/v3"
+_SP500_FALLBACK_DATA = [
+    ("AAPL","Apple Inc.","Information Technology"),
+    ("MSFT","Microsoft Corp.","Information Technology"),
+    ("NVDA","NVIDIA Corp.","Information Technology"),
+    ("AVGO","Broadcom Inc.","Information Technology"),
+    ("ORCL","Oracle Corp.","Information Technology"),
+    ("CRM","Salesforce Inc.","Information Technology"),
+    ("ACN","Accenture plc","Information Technology"),
+    ("CSCO","Cisco Systems","Information Technology"),
+    ("IBM","IBM Corp.","Information Technology"),
+    ("AMD","Advanced Micro Devices","Information Technology"),
+    ("QCOM","Qualcomm Inc.","Information Technology"),
+    ("TXN","Texas Instruments","Information Technology"),
+    ("INTC","Intel Corp.","Information Technology"),
+    ("AMAT","Applied Materials","Information Technology"),
+    ("MU","Micron Technology","Information Technology"),
+    ("ADI","Analog Devices","Information Technology"),
+    ("KLAC","KLA Corp.","Information Technology"),
+    ("LRCX","Lam Research","Information Technology"),
+    ("NOW","ServiceNow Inc.","Information Technology"),
+    ("PANW","Palo Alto Networks","Information Technology"),
+    ("CDNS","Cadence Design Systems","Information Technology"),
+    ("SNPS","Synopsys Inc.","Information Technology"),
+    ("MSI","Motorola Solutions","Information Technology"),
+    ("APH","Amphenol Corp.","Information Technology"),
+    ("TEL","TE Connectivity","Information Technology"),
+    ("FTNT","Fortinet Inc.","Information Technology"),
+    ("HPQ","HP Inc.","Information Technology"),
+    ("HPE","Hewlett Packard Enterprise","Information Technology"),
+    ("KEYS","Keysight Technologies","Information Technology"),
+    ("INTU","Intuit Inc.","Information Technology"),
+    ("ADSK","Autodesk Inc.","Information Technology"),
+    ("ANSS","ANSYS Inc.","Information Technology"),
+    ("PTC","PTC Inc.","Information Technology"),
+    ("GEN","Gen Digital","Information Technology"),
+    ("FFIV","F5 Inc.","Information Technology"),
+    ("JNPR","Juniper Networks","Information Technology"),
+    ("WDC","Western Digital","Information Technology"),
+    ("STX","Seagate Technology","Information Technology"),
+    ("NTAP","NetApp Inc.","Information Technology"),
+    ("ENPH","Enphase Energy","Information Technology"),
+    ("JPM","JPMorgan Chase","Financials"),
+    ("BAC","Bank of America","Financials"),
+    ("WFC","Wells Fargo","Financials"),
+    ("GS","Goldman Sachs","Financials"),
+    ("MS","Morgan Stanley","Financials"),
+    ("BLK","BlackRock Inc.","Financials"),
+    ("SCHW","Charles Schwab","Financials"),
+    ("AXP","American Express","Financials"),
+    ("CB","Chubb Ltd.","Financials"),
+    ("MMC","Marsh & McLennan","Financials"),
+    ("PGR","Progressive Corp.","Financials"),
+    ("USB","U.S. Bancorp","Financials"),
+    ("TFC","Truist Financial","Financials"),
+    ("COF","Capital One Financial","Financials"),
+    ("PNC","PNC Financial Services","Financials"),
+    ("ICE","Intercontinental Exchange","Financials"),
+    ("CME","CME Group","Financials"),
+    ("SPGI","S&P Global Inc.","Financials"),
+    ("MCO","Moody's Corp.","Financials"),
+    ("AON","Aon plc","Financials"),
+    ("MET","MetLife Inc.","Financials"),
+    ("PRU","Prudential Financial","Financials"),
+    ("ALL","Allstate Corp.","Financials"),
+    ("AFL","Aflac Inc.","Financials"),
+    ("AIG","American International Group","Financials"),
+    ("BK","Bank of New York Mellon","Financials"),
+    ("STT","State Street Corp.","Financials"),
+    ("MTB","M&T Bank Corp.","Financials"),
+    ("FITB","Fifth Third Bancorp","Financials"),
+    ("RF","Regions Financial","Financials"),
+    ("HBAN","Huntington Bancshares","Financials"),
+    ("CFG","Citizens Financial","Financials"),
+    ("KEY","KeyCorp","Financials"),
+    ("PYPL","PayPal Holdings","Financials"),
+    ("V","Visa Inc.","Financials"),
+    ("MA","Mastercard Inc.","Financials"),
+    ("LLY","Eli Lilly and Co.","Health Care"),
+    ("UNH","UnitedHealth Group","Health Care"),
+    ("JNJ","Johnson & Johnson","Health Care"),
+    ("ABBV","AbbVie Inc.","Health Care"),
+    ("MRK","Merck & Co.","Health Care"),
+    ("TMO","Thermo Fisher Scientific","Health Care"),
+    ("ABT","Abbott Laboratories","Health Care"),
+    ("DHR","Danaher Corp.","Health Care"),
+    ("BMY","Bristol-Myers Squibb","Health Care"),
+    ("AMGN","Amgen Inc.","Health Care"),
+    ("PFE","Pfizer Inc.","Health Care"),
+    ("GILD","Gilead Sciences","Health Care"),
+    ("SYK","Stryker Corp.","Health Care"),
+    ("MDT","Medtronic plc","Health Care"),
+    ("ELV","Elevance Health","Health Care"),
+    ("CI","Cigna Group","Health Care"),
+    ("CVS","CVS Health Corp.","Health Care"),
+    ("HUM","Humana Inc.","Health Care"),
+    ("ISRG","Intuitive Surgical","Health Care"),
+    ("BSX","Boston Scientific","Health Care"),
+    ("BDX","Becton Dickinson","Health Care"),
+    ("IQV","IQVIA Holdings","Health Care"),
+    ("VRTX","Vertex Pharmaceuticals","Health Care"),
+    ("REGN","Regeneron Pharmaceuticals","Health Care"),
+    ("BIIB","Biogen Inc.","Health Care"),
+    ("MRNA","Moderna Inc.","Health Care"),
+    ("HCA","HCA Healthcare","Health Care"),
+    ("MCK","McKesson Corp.","Health Care"),
+    ("GEHC","GE HealthCare","Health Care"),
+    ("IDXX","IDEXX Laboratories","Health Care"),
+    ("ALGN","Align Technology","Health Care"),
+    ("DXCM","DexCom Inc.","Health Care"),
+    ("AMZN","Amazon.com Inc.","Consumer Discretionary"),
+    ("TSLA","Tesla Inc.","Consumer Discretionary"),
+    ("HD","Home Depot","Consumer Discretionary"),
+    ("MCD","McDonald's Corp.","Consumer Discretionary"),
+    ("NKE","Nike Inc.","Consumer Discretionary"),
+    ("LOW","Lowe's Companies","Consumer Discretionary"),
+    ("SBUX","Starbucks Corp.","Consumer Discretionary"),
+    ("TJX","TJX Companies","Consumer Discretionary"),
+    ("BKNG","Booking Holdings","Consumer Discretionary"),
+    ("GM","General Motors","Consumer Discretionary"),
+    ("F","Ford Motor Co.","Consumer Discretionary"),
+    ("ORLY","O'Reilly Automotive","Consumer Discretionary"),
+    ("AZO","AutoZone Inc.","Consumer Discretionary"),
+    ("MAR","Marriott International","Consumer Discretionary"),
+    ("HLT","Hilton Worldwide","Consumer Discretionary"),
+    ("EXPE","Expedia Group","Consumer Discretionary"),
+    ("RCL","Royal Caribbean","Consumer Discretionary"),
+    ("CCL","Carnival Corp.","Consumer Discretionary"),
+    ("DHI","D.R. Horton","Consumer Discretionary"),
+    ("LEN","Lennar Corp.","Consumer Discretionary"),
+    ("PHM","PulteGroup Inc.","Consumer Discretionary"),
+    ("ROST","Ross Stores","Consumer Discretionary"),
+    ("BBY","Best Buy Co.","Consumer Discretionary"),
+    ("DRI","Darden Restaurants","Consumer Discretionary"),
+    ("YUM","Yum! Brands","Consumer Discretionary"),
+    ("CMG","Chipotle Mexican Grill","Consumer Discretionary"),
+    ("EBAY","eBay Inc.","Consumer Discretionary"),
+    ("ETSY","Etsy Inc.","Consumer Discretionary"),
+    ("MELI","MercadoLibre","Consumer Discretionary"),
+    ("LULU","Lululemon Athletica","Consumer Discretionary"),
+    ("DASH","DoorDash Inc.","Consumer Discretionary"),
+    ("ABNB","Airbnb Inc.","Consumer Discretionary"),
+    ("DLTR","Dollar Tree","Consumer Discretionary"),
+    ("META","Meta Platforms","Communication Services"),
+    ("GOOGL","Alphabet Inc. Class A","Communication Services"),
+    ("GOOG","Alphabet Inc. Class C","Communication Services"),
+    ("NFLX","Netflix Inc.","Communication Services"),
+    ("DIS","Walt Disney Co.","Communication Services"),
+    ("CMCSA","Comcast Corp.","Communication Services"),
+    ("T","AT&T Inc.","Communication Services"),
+    ("VZ","Verizon Communications","Communication Services"),
+    ("TMUS","T-Mobile US","Communication Services"),
+    ("CHTR","Charter Communications","Communication Services"),
+    ("EA","Electronic Arts","Communication Services"),
+    ("TTWO","Take-Two Interactive","Communication Services"),
+    ("OMC","Omnicom Group","Communication Services"),
+    ("WBD","Warner Bros. Discovery","Communication Services"),
+    ("PARA","Paramount Global","Communication Services"),
+    ("FOX","Fox Corp. Class B","Communication Services"),
+    ("FOXA","Fox Corp. Class A","Communication Services"),
+    ("CAT","Caterpillar Inc.","Industrials"),
+    ("RTX","RTX Corp.","Industrials"),
+    ("HON","Honeywell International","Industrials"),
+    ("UPS","United Parcel Service","Industrials"),
+    ("BA","Boeing Co.","Industrials"),
+    ("GE","GE Aerospace","Industrials"),
+    ("LMT","Lockheed Martin","Industrials"),
+    ("DE","Deere & Co.","Industrials"),
+    ("MMM","3M Co.","Industrials"),
+    ("EMR","Emerson Electric","Industrials"),
+    ("ETN","Eaton Corp.","Industrials"),
+    ("ITW","Illinois Tool Works","Industrials"),
+    ("PH","Parker Hannifin","Industrials"),
+    ("GD","General Dynamics","Industrials"),
+    ("NOC","Northrop Grumman","Industrials"),
+    ("TDG","TransDigm Group","Industrials"),
+    ("FDX","FedEx Corp.","Industrials"),
+    ("CSX","CSX Corp.","Industrials"),
+    ("UNP","Union Pacific Corp.","Industrials"),
+    ("NSC","Norfolk Southern","Industrials"),
+    ("WM","Waste Management","Industrials"),
+    ("RSG","Republic Services","Industrials"),
+    ("CTAS","Cintas Corp.","Industrials"),
+    ("FAST","Fastenal Co.","Industrials"),
+    ("PWR","Quanta Services","Industrials"),
+    ("VRSK","Verisk Analytics","Industrials"),
+    ("DAL","Delta Air Lines","Industrials"),
+    ("UAL","United Airlines","Industrials"),
+    ("LUV","Southwest Airlines","Industrials"),
+    ("AAL","American Airlines","Industrials"),
+    ("PCAR","PACCAR Inc.","Industrials"),
+    ("ODFL","Old Dominion Freight","Industrials"),
+    ("CPRT","Copart Inc.","Industrials"),
+    ("PAYX","Paychex Inc.","Industrials"),
+    ("WMT","Walmart Inc.","Consumer Staples"),
+    ("PG","Procter & Gamble","Consumer Staples"),
+    ("COST","Costco Wholesale","Consumer Staples"),
+    ("KO","Coca-Cola Co.","Consumer Staples"),
+    ("PEP","PepsiCo Inc.","Consumer Staples"),
+    ("PM","Philip Morris","Consumer Staples"),
+    ("MO","Altria Group","Consumer Staples"),
+    ("MDLZ","Mondelez International","Consumer Staples"),
+    ("CL","Colgate-Palmolive","Consumer Staples"),
+    ("KMB","Kimberly-Clark","Consumer Staples"),
+    ("GIS","General Mills","Consumer Staples"),
+    ("KR","Kroger Co.","Consumer Staples"),
+    ("SYY","Sysco Corp.","Consumer Staples"),
+    ("ADM","Archer-Daniels-Midland","Consumer Staples"),
+    ("TSN","Tyson Foods","Consumer Staples"),
+    ("MNST","Monster Beverage","Consumer Staples"),
+    ("KDP","Keurig Dr Pepper","Consumer Staples"),
+    ("WBA","Walgreens Boots Alliance","Consumer Staples"),
+    ("XOM","ExxonMobil Corp.","Energy"),
+    ("CVX","Chevron Corp.","Energy"),
+    ("COP","ConocoPhillips","Energy"),
+    ("EOG","EOG Resources","Energy"),
+    ("SLB","SLB (Schlumberger)","Energy"),
+    ("MPC","Marathon Petroleum","Energy"),
+    ("PSX","Phillips 66","Energy"),
+    ("VLO","Valero Energy","Energy"),
+    ("DVN","Devon Energy","Energy"),
+    ("HAL","Halliburton Co.","Energy"),
+    ("BKR","Baker Hughes","Energy"),
+    ("OXY","Occidental Petroleum","Energy"),
+    ("HES","Hess Corp.","Energy"),
+    ("FANG","Diamondback Energy","Energy"),
+    ("MRO","Marathon Oil","Energy"),
+    ("APA","APA Corp.","Energy"),
+    ("CTRA","Coterra Energy","Energy"),
+    ("EQT","EQT Corp.","Energy"),
+    ("KMI","Kinder Morgan","Energy"),
+    ("NEE","NextEra Energy","Utilities"),
+    ("SO","Southern Co.","Utilities"),
+    ("DUK","Duke Energy","Utilities"),
+    ("SRE","Sempra","Utilities"),
+    ("AEP","American Electric Power","Utilities"),
+    ("D","Dominion Energy","Utilities"),
+    ("EXC","Exelon Corp.","Utilities"),
+    ("XEL","Xcel Energy","Utilities"),
+    ("PCG","PG&E Corp.","Utilities"),
+    ("ED","Consolidated Edison","Utilities"),
+    ("ETR","Entergy Corp.","Utilities"),
+    ("FE","FirstEnergy Corp.","Utilities"),
+    ("PPL","PPL Corp.","Utilities"),
+    ("AES","AES Corp.","Utilities"),
+    ("AWK","American Water Works","Utilities"),
+    ("WEC","WEC Energy Group","Utilities"),
+    ("CMS","CMS Energy","Utilities"),
+    ("CNP","CenterPoint Energy","Utilities"),
+    ("CEG","Constellation Energy","Utilities"),
+    ("PLD","Prologis Inc.","Real Estate"),
+    ("AMT","American Tower","Real Estate"),
+    ("EQIX","Equinix Inc.","Real Estate"),
+    ("CCI","Crown Castle","Real Estate"),
+    ("SPG","Simon Property Group","Real Estate"),
+    ("O","Realty Income","Real Estate"),
+    ("VICI","VICI Properties","Real Estate"),
+    ("WELL","Welltower Inc.","Real Estate"),
+    ("DLR","Digital Realty Trust","Real Estate"),
+    ("PSA","Public Storage","Real Estate"),
+    ("AVB","AvalonBay Communities","Real Estate"),
+    ("EQR","Equity Residential","Real Estate"),
+    ("INVH","Invitation Homes","Real Estate"),
+    ("VTR","Ventas Inc.","Real Estate"),
+    ("ARE","Alexandria Real Estate","Real Estate"),
+    ("BXP","BXP Inc.","Real Estate"),
+    ("KIM","Kimco Realty","Real Estate"),
+    ("WY","Weyerhaeuser Co.","Real Estate"),
+    ("HST","Host Hotels","Real Estate"),
+    ("LIN","Linde plc","Materials"),
+    ("APD","Air Products","Materials"),
+    ("SHW","Sherwin-Williams","Materials"),
+    ("FCX","Freeport-McMoRan","Materials"),
+    ("NEM","Newmont Corp.","Materials"),
+    ("ECL","Ecolab Inc.","Materials"),
+    ("DD","DuPont de Nemours","Materials"),
+    ("DOW","Dow Inc.","Materials"),
+    ("LYB","LyondellBasell","Materials"),
+    ("NUE","Nucor Corp.","Materials"),
+    ("STLD","Steel Dynamics","Materials"),
+    ("CF","CF Industries","Materials"),
+    ("MOS","Mosaic Co.","Materials"),
+    ("IP","International Paper","Materials"),
+    ("PKG","Packaging Corp.","Materials"),
+    ("ALB","Albemarle Corp.","Materials"),
+    ("EMN","Eastman Chemical","Materials"),
+    ("RPM","RPM International","Materials"),
+]
 
+_NDX100_DATA = [
+    ("AAPL","Apple Inc.","Information Technology"),
+    ("MSFT","Microsoft Corp.","Information Technology"),
+    ("NVDA","NVIDIA Corp.","Information Technology"),
+    ("AMZN","Amazon.com Inc.","Consumer Discretionary"),
+    ("META","Meta Platforms","Communication Services"),
+    ("GOOGL","Alphabet Inc. Class A","Communication Services"),
+    ("GOOG","Alphabet Inc. Class C","Communication Services"),
+    ("TSLA","Tesla Inc.","Consumer Discretionary"),
+    ("AVGO","Broadcom Inc.","Information Technology"),
+    ("COST","Costco Wholesale","Consumer Staples"),
+    ("NFLX","Netflix Inc.","Communication Services"),
+    ("AMD","Advanced Micro Devices","Information Technology"),
+    ("QCOM","Qualcomm Inc.","Information Technology"),
+    ("TMUS","T-Mobile US","Communication Services"),
+    ("LIN","Linde plc","Materials"),
+    ("AMAT","Applied Materials","Information Technology"),
+    ("INTU","Intuit Inc.","Information Technology"),
+    ("ISRG","Intuitive Surgical","Health Care"),
+    ("TXN","Texas Instruments","Information Technology"),
+    ("BKNG","Booking Holdings","Consumer Discretionary"),
+    ("AMGN","Amgen Inc.","Health Care"),
+    ("CMCSA","Comcast Corp.","Communication Services"),
+    ("HON","Honeywell International","Industrials"),
+    ("VRTX","Vertex Pharmaceuticals","Health Care"),
+    ("REGN","Regeneron Pharmaceuticals","Health Care"),
+    ("MU","Micron Technology","Information Technology"),
+    ("PANW","Palo Alto Networks","Information Technology"),
+    ("KLAC","KLA Corp.","Information Technology"),
+    ("LRCX","Lam Research","Information Technology"),
+    ("ADI","Analog Devices","Information Technology"),
+    ("CDNS","Cadence Design Systems","Information Technology"),
+    ("SNPS","Synopsys Inc.","Information Technology"),
+    ("MELI","MercadoLibre","Consumer Discretionary"),
+    ("CRWD","CrowdStrike Holdings","Information Technology"),
+    ("CSX","CSX Corp.","Industrials"),
+    ("ORLY","O'Reilly Automotive","Consumer Discretionary"),
+    ("MAR","Marriott International","Consumer Discretionary"),
+    ("MNST","Monster Beverage","Consumer Staples"),
+    ("FTNT","Fortinet Inc.","Information Technology"),
+    ("PCAR","PACCAR Inc.","Industrials"),
+    ("ADSK","Autodesk Inc.","Information Technology"),
+    ("MRVL","Marvell Technology","Information Technology"),
+    ("ASML","ASML Holding","Information Technology"),
+    ("AZN","AstraZeneca","Health Care"),
+    ("TTD","The Trade Desk","Communication Services"),
+    ("DXCM","DexCom Inc.","Health Care"),
+    ("ON","ON Semiconductor","Information Technology"),
+    ("NXPI","NXP Semiconductors","Information Technology"),
+    ("WDAY","Workday Inc.","Information Technology"),
+    ("FAST","Fastenal Co.","Industrials"),
+    ("BIIB","Biogen Inc.","Health Care"),
+    ("IDXX","IDEXX Laboratories","Health Care"),
+    ("ROST","Ross Stores","Consumer Discretionary"),
+    ("ODFL","Old Dominion Freight","Industrials"),
+    ("CPRT","Copart Inc.","Industrials"),
+    ("CTAS","Cintas Corp.","Industrials"),
+    ("EA","Electronic Arts","Communication Services"),
+    ("GEHC","GE HealthCare","Health Care"),
+    ("AEP","American Electric Power","Utilities"),
+    ("XEL","Xcel Energy","Utilities"),
+    ("KDP","Keurig Dr Pepper","Consumer Staples"),
+    ("PAYX","Paychex Inc.","Industrials"),
+    ("VRSK","Verisk Analytics","Industrials"),
+    ("EXC","Exelon Corp.","Utilities"),
+    ("FANG","Diamondback Energy","Energy"),
+    ("CTSH","Cognizant Technology","Information Technology"),
+    ("TEAM","Atlassian Corp.","Information Technology"),
+    ("ZS","Zscaler Inc.","Information Technology"),
+    ("DASH","DoorDash Inc.","Consumer Discretionary"),
+    ("ABNB","Airbnb Inc.","Consumer Discretionary"),
+    ("CEG","Constellation Energy","Utilities"),
+    ("ILMN","Illumina Inc.","Health Care"),
+    ("MRNA","Moderna Inc.","Health Care"),
+    ("DLTR","Dollar Tree","Consumer Discretionary"),
+    ("SBUX","Starbucks Corp.","Consumer Discretionary"),
+    ("PYPL","PayPal Holdings","Financials"),
+    ("MCHP","Microchip Technology","Information Technology"),
+    ("LULU","Lululemon Athletica","Consumer Discretionary"),
+    ("TTWO","Take-Two Interactive","Communication Services"),
+    ("DDOG","Datadog Inc.","Information Technology"),
+    ("EBAY","eBay Inc.","Consumer Discretionary"),
+    ("PDD","PDD Holdings","Consumer Discretionary"),
+    ("ANSS","ANSYS Inc.","Information Technology"),
+    ("ENPH","Enphase Energy","Information Technology"),
+    ("SMCI","Super Micro Computer","Information Technology"),
+    ("ALGN","Align Technology","Health Care"),
+    ("ARM","Arm Holdings","Information Technology"),
+    ("APP","Applovin Corp.","Information Technology"),
+    ("V","Visa Inc.","Financials"),
+    ("MA","Mastercard Inc.","Financials"),
+    ("WBA","Walgreens Boots Alliance","Consumer Staples"),
+    ("NTES","NetEase Inc.","Communication Services"),
+    ("WBD","Warner Bros. Discovery","Communication Services"),
+    ("NOW","ServiceNow Inc.","Information Technology"),
+    ("GFS","GlobalFoundries","Information Technology"),
+    ("SIRI","Sirius XM","Communication Services"),
+    ("MDLZ","Mondelez International","Consumer Staples"),
+    ("RIVN","Rivian Automotive","Consumer Discretionary"),
+]
+
+# ── S&P 500: fetch full 503-name list from GitHub CSV (reliable, no bot blocks) ──
+_SP500_CSV = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_sp500_constituents() -> pd.DataFrame:
-    """Fetch S&P 500 constituent list from FMP. Cached 24hrs."""
+    """Fetch full S&P 500 constituent list (503 stocks) from GitHub-hosted CSV."""
     try:
-        fmp_key = st.secrets["FMP_API_KEY"]
-        url  = f"{_FMP_BASE}/sp500_constituent?apikey={fmp_key}"
-        resp = requests.get(url, timeout=20)
-        resp.raise_for_status()
-        data = resp.json()
-        if not data or not isinstance(data, list):
-            st.error("FMP S&P 500 constituent list returned empty or invalid data.")
-            return pd.DataFrame()
-        rows = []
-        for item in data:
-            ticker = item.get("symbol", "").replace(".", "-")
-            if ticker:
-                rows.append({
-                    "ticker":  ticker,
-                    "company": item.get("name", ""),
-                    "sector":  item.get("sector", ""),
-                    "index":   "S&P 500",
-                })
-        return pd.DataFrame(rows).reset_index(drop=True)
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = requests.get(_SP500_CSV, headers=headers, timeout=15)
+        r.raise_for_status()
+        df = pd.read_csv(pd.io.common.StringIO(r.text))
+        df = df[["Symbol", "Security", "GICS Sector"]].copy()
+        df.columns = ["ticker", "company", "sector"]
+        # yfinance uses dashes not dots: BRK.B → BRK-B
+        df["ticker"] = df["ticker"].str.replace(".", "-", regex=False)
+        df["index"] = "S&P 500"
+        return df.reset_index(drop=True)
     except Exception as e:
-        st.error(f"Failed to fetch S&P 500 constituents from FMP: {e}")
-        return pd.DataFrame()
+        print(f"SP500 CSV fetch failed: {e} — falling back to hardcoded list")
+        return _sp500_fallback()
 
+def _sp500_fallback() -> pd.DataFrame:
+    """Fallback: ~270 well-known S&P 500 names if GitHub CSV is unreachable."""
+    data = _SP500_FALLBACK_DATA
+    df = pd.DataFrame(data, columns=["ticker", "company", "sector"])
+    df["index"] = "S&P 500"
+    return df
 
-@st.cache_data(ttl=86400, show_spinner=False)
+# ── Nasdaq 100: hardcoded (100 stocks, easy to maintain) ─────────────────────
 def fetch_ndx_constituents() -> pd.DataFrame:
-    """Fetch Nasdaq 100 constituent list from FMP. Cached 24hrs."""
+    df = pd.DataFrame(_NDX100_DATA, columns=["ticker", "company", "sector"])
+    df["index"] = "Nasdaq 100"
+    return df
+
+def get_market_state() -> str:
+    """
+    Returns market state based on current SGT time (UTC+8).
+    SGT schedule (weekdays only):
+      00:00 – 04:00  →  open        (NYSE 9:30am–4:00pm ET)
+      04:00 – 08:00  →  after_hours (NYSE 4:00pm–8:00pm ET)
+      08:00 – 16:00  →  closed      (overnight)
+      16:00 – 21:30  →  pre         (NYSE 4:00am–9:30am ET)
+      21:30 – 24:00  →  open        (NYSE 9:30am–4:00pm ET continues)
+    Weekends → closed.
+    """
+    sgt  = timezone(timedelta(hours=8))
+    now  = datetime.now(sgt)
+    if now.weekday() >= 5:
+        return "closed"
+    h, m = now.hour, now.minute
+    mins = h * 60 + m
+    if mins < 240:          # 00:00–04:00 SGT
+        return "open"
+    elif mins < 480:        # 04:00–08:00 SGT
+        return "after_hours"
+    elif mins < 960:        # 08:00–16:00 SGT
+        return "closed"
+    elif mins < 1290:       # 16:00–21:30 SGT
+        return "pre"
+    else:                   # 21:30–24:00 SGT
+        return "open"
+
+
+def _fetch_prev_close(tickers: list) -> dict:
+    """
+    Fetch previous trading day's closing prices for all tickers.
+    Used as chg % baseline for all non-EOD modes.
+    Returns {ticker: prev_close_price}.
+    """
     try:
-        fmp_key = st.secrets["FMP_API_KEY"]
-        url  = f"{_FMP_BASE}/nasdaq_constituent?apikey={fmp_key}"
-        resp = requests.get(url, timeout=20)
-        resp.raise_for_status()
-        data = resp.json()
-        if not data or not isinstance(data, list):
-            st.error("FMP Nasdaq 100 constituent list returned empty or invalid data.")
-            return pd.DataFrame()
-        rows = []
-        for item in data:
-            ticker = item.get("symbol", "").replace(".", "-")
-            if ticker:
-                rows.append({
-                    "ticker":  ticker,
-                    "company": item.get("name", ""),
-                    "sector":  item.get("sector", ""),
-                    "index":   "Nasdaq 100",
-                })
-        return pd.DataFrame(rows).reset_index(drop=True)
+        raw = yf.download(
+            tickers,
+            period="5d",
+            interval="1d",
+            auto_adjust=True,
+            progress=False,
+            threads=True,
+        )
+        if raw.empty or len(raw["Close"]) < 2:
+            return {}
+        pc_series = raw["Close"].iloc[-2]
+        return {
+            tk: float(pc_series[tk])
+            for tk in tickers
+            if tk in pc_series.index and not pd.isna(pc_series[tk])
+        }
     except Exception as e:
-        st.error(f"Failed to fetch Nasdaq 100 constituents from FMP: {e}")
-        return pd.DataFrame()
+        print(f"Prev close fetch failed: {e}")
+        return {}
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_price_data_live(tickers: tuple) -> pd.DataFrame:
+    """
+    Market hours: 2-min intraday bars (~15min delayed).
+    Chg % vs previous day's close.
+    Volume = cumulative intraday volume so far.
+    Falls back to EOD if intraday data is empty.
+    """
+    try:
+        raw = yf.download(
+            list(tickers),
+            period="1d",
+            interval="2m",
+            auto_adjust=True,
+            progress=False,
+            threads=True,
+        )
+        if raw.empty or raw["Close"].empty:
+            return fetch_price_data_eod(tickers)
+
+        close  = raw["Close"]
+        volume = raw["Volume"]
+
+        if len(close) == 0:
+            return fetch_price_data_eod(tickers)
+
+        prev_close_map = _fetch_prev_close(list(tickers))
+        if not prev_close_map:
+            return fetch_price_data_eod(tickers)
+
+        last_price = close.iloc[-1]
+        cum_volume = volume.sum(axis=0)
+        trade_date = close.index[-1].date()
+
+        rows = []
+        for ticker in tickers:
+            if ticker not in close.columns:
+                continue
+            lp = last_price[ticker]
+            pc = prev_close_map.get(ticker)
+            if lp is None or pd.isna(lp) or pc is None or pc == 0:
+                continue
+            chg_pct = (float(lp) / pc - 1) * 100
+            chg_abs = float(lp) - pc
+            vol     = cum_volume[ticker] if ticker in cum_volume.index else 0
+            rows.append({
+                "ticker":     ticker,
+                "price":      round(float(lp), 2),
+                "chg_pct":    round(chg_pct, 2),
+                "chg_abs":    round(chg_abs, 2),
+                "volume":     int(vol) if not pd.isna(vol) else 0,
+                "trade_date": str(trade_date),
+            })
+        if not rows:
+            return fetch_price_data_eod(tickers)
+        return pd.DataFrame(rows)
+    except Exception as e:
+        print(f"Live fetch failed: {e} — falling back to EOD")
+        return fetch_price_data_eod(tickers)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
+    """
+    Pre-market and after-hours: 1-min bars with prepost=True (~15min delayed).
+    Only returns tickers that have actual extended-hours bars.
+    Volume = None if zero/missing → renders as '—' in table.
+    Chg % vs previous day's close.
+    session: 'pre' or 'after_hours' — used only for logging.
+    """
+    try:
+        raw = yf.download(
+            list(tickers),
+            period="1d",
+            interval="1m",
+            auto_adjust=True,
+            prepost=True,
+            progress=False,
+            threads=True,
+        )
+        if raw.empty or raw["Close"].empty:
+            return fetch_price_data_eod(tickers)
+
+        close  = raw["Close"]
+        volume = raw["Volume"]
+
+        # Filter to extended-hours bars only (exclude regular session)
+        sgt      = timezone(timedelta(hours=8))
+        et       = timezone(timedelta(hours=-4))   # EDT
+        now_et   = datetime.now(et)
+        today_et = now_et.date()
+
+        if session == "pre":
+            # Keep bars before 9:30am ET today
+            cutoff = datetime(today_et.year, today_et.month, today_et.day,
+                              9, 30, tzinfo=et)
+            mask = close.index < cutoff
+        else:
+            # after_hours: keep bars after 4:00pm ET today
+            cutoff = datetime(today_et.year, today_et.month, today_et.day,
+                              16, 0, tzinfo=et)
+            mask = close.index >= cutoff
+
+        close_ext  = close[mask]
+        volume_ext = volume[mask]
+
+        if close_ext.empty:
+            return fetch_price_data_eod(tickers)
+
+        prev_close_map = _fetch_prev_close(list(tickers))
+        if not prev_close_map:
+            return fetch_price_data_eod(tickers)
+
+        last_price = close_ext.iloc[-1]
+        cum_volume = volume_ext.sum(axis=0)
+        trade_date = close_ext.index[-1].date()
+
+        rows = []
+        for ticker in tickers:
+            if ticker not in close_ext.columns:
+                continue
+            lp = last_price[ticker]
+            pc = prev_close_map.get(ticker)
+            if lp is None or pd.isna(lp) or pc is None or pc == 0:
+                continue
+            # Only include tickers with actual extended-hours activity
+            ticker_bars = close_ext[ticker].dropna()
+            if ticker_bars.empty:
+                continue
+            chg_pct = (float(lp) / pc - 1) * 100
+            chg_abs = float(lp) - pc
+            vol_raw = cum_volume[ticker] if ticker in cum_volume.index else 0
+            vol     = int(vol_raw) if not pd.isna(vol_raw) and vol_raw > 0 else None
+            rows.append({
+                "ticker":     ticker,
+                "price":      round(float(lp), 2),
+                "chg_pct":    round(chg_pct, 2),
+                "chg_abs":    round(chg_abs, 2),
+                "volume":     vol,          # None → renders as '—'
+                "trade_date": str(trade_date),
+            })
+        if not rows:
+            return fetch_price_data_eod(tickers)
+        return pd.DataFrame(rows)
+    except Exception as e:
+        print(f"Extended hours fetch failed [{session}]: {e} — falling back to EOD")
+        return fetch_price_data_eod(tickers)
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def fetch_price_data(tickers: tuple) -> pd.DataFrame:
+def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
     """
-    Batch fetch last 5 days OHLCV for all tickers via yfinance.
-    Compute % change and $ change vs prior close.
-    Returns one row per ticker with latest close data.
+    EOD / closed / fallback: daily bars.
+    last_close = most recent session's official close.
+    prev_close = session before that.
+    Volume = full session volume.
     """
     try:
         raw = yf.download(
             list(tickers),
             period="5d",
+            interval="1d",
             auto_adjust=True,
             progress=False,
             threads=True,
@@ -1446,24 +2007,42 @@ def fetch_price_data(tickers: tuple) -> pd.DataFrame:
             pc = prev_close[ticker]
             if pd.isna(lc) or pd.isna(pc) or pc == 0:
                 continue
-            chg_pct = (lc / pc - 1) * 100
-            chg_abs = lc - pc
+            chg_pct = (float(lc) / float(pc) - 1) * 100
+            chg_abs = float(lc) - float(pc)
             vol     = last_vol[ticker] if ticker in last_vol.index else 0
             rows.append({
                 "ticker":     ticker,
                 "price":      round(float(lc), 2),
-                "chg_pct":    round(float(chg_pct), 2),
-                "chg_abs":    round(float(chg_abs), 2),
+                "chg_pct":    round(chg_pct, 2),
+                "chg_abs":    round(chg_abs, 2),
                 "volume":     int(vol) if not pd.isna(vol) else 0,
                 "trade_date": str(last_date),
             })
         return pd.DataFrame(rows)
     except Exception as e:
-        print(f"Price fetch failed: {e}")
+        print(f"EOD fetch failed: {e}")
         return pd.DataFrame()
 
 
-def fmt_volume(v: int) -> str:
+def fetch_price_data(tickers: tuple) -> tuple:
+    """
+    Router: picks correct fetch based on market state.
+    Returns (DataFrame, market_state_str).
+    """
+    state = get_market_state()
+    if state == "open":
+        return fetch_price_data_live(tickers), state
+    elif state in ("pre", "after_hours"):
+        return fetch_price_data_extended(tickers, state), state
+    else:
+        return fetch_price_data_eod(tickers), state
+
+
+def fmt_volume(v) -> str:
+    """Format volume; None → '—' for extended hours with no volume."""
+    if v is None:
+        return "—"
+    v = int(v)
     if v >= 1_000_000_000: return f"{v/1_000_000_000:.1f}B"
     if v >= 1_000_000:     return f"{v/1_000_000:.1f}M"
     if v >= 1_000:         return f"{v/1_000:.0f}K"
@@ -1487,38 +2066,26 @@ def fmt_mktcap(v) -> str:
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def fetch_market_caps(tickers: tuple) -> dict:
+def fetch_market_caps(tickers: tuple, prev_prices: tuple) -> dict:
     """
-    Fetch previous-day market cap for all tickers in one batch call via FMP.
-    Uses /api/v3/quote/{tickers} which returns marketCap per ticker.
-    Split into chunks of 500 to stay within URL length limits.
-    Cached 24hrs — market cap is a static/daily metric.
+    Previous-day market cap = shares_outstanding × prev_close.
+    prev_prices: tuple of (ticker, price) pairs from EOD fetch.
+    Cached 24hrs — shares outstanding barely changes day-to-day.
     """
-    try:
-        fmp_key   = st.secrets["FMP_API_KEY"]
-        all_tickers = list(tickers)
-        chunk_size  = 500
-        result      = {}
+    price_map = dict(prev_prices)
+    result    = {}
+    for tk in tickers:
+        try:
+            shares = yf.Ticker(tk).fast_info.shares
+            pc     = price_map.get(tk)
+            if shares and pc and not pd.isna(shares) and not pd.isna(pc):
+                result[tk] = float(shares) * float(pc)
+            else:
+                result[tk] = None
+        except Exception:
+            result[tk] = None
+    return result
 
-        for i in range(0, len(all_tickers), chunk_size):
-            chunk     = all_tickers[i:i + chunk_size]
-            symbols   = ",".join(chunk)
-            url       = f"{_FMP_BASE}/quote/{symbols}?apikey={fmp_key}"
-            resp      = requests.get(url, timeout=30)
-            resp.raise_for_status()
-            data      = resp.json()
-            if not isinstance(data, list):
-                continue
-            for item in data:
-                tk  = item.get("symbol", "").replace(".", "-")
-                mc  = item.get("marketCap")
-                if tk:
-                    result[tk] = float(mc) if mc else None
-
-        return result
-    except Exception as e:
-        st.error(f"Failed to fetch market caps from FMP: {e}")
-        return {}
 
 def render_screener() -> None:
     sgt = timezone(timedelta(hours=8))
@@ -1602,11 +2169,19 @@ def render_screener() -> None:
         st.error("Failed to load constituent list. Check network connectivity.")
         return
 
-    tickers_tuple = tuple(constituents["ticker"].tolist())
+    tickers_tuple  = tuple(constituents["ticker"].tolist())
+    total_universe = len(tickers_tuple)
 
-    # ── Load price data ───────────────────────────────────────────────────
-    with st.spinner(f"Fetching prices for {len(tickers_tuple)} stocks…"):
-        prices = fetch_price_data(tickers_tuple)
+    # ── Load price data (market-state-aware) ──────────────────────────────
+    market_state = get_market_state()
+    spinner_msgs = {
+        "open":        f"Fetching live prices for {total_universe} stocks (~15min delay)…",
+        "pre":         f"Fetching pre-market prices for {total_universe} stocks (~15min delay)…",
+        "after_hours": f"Fetching after-hours prices for {total_universe} stocks (~15min delay)…",
+        "closed":      f"Fetching EOD prices for {total_universe} stocks…",
+    }
+    with st.spinner(spinner_msgs.get(market_state, "Fetching prices…")):
+        prices, market_state = fetch_price_data(tickers_tuple)
 
     if prices.empty:
         st.error("Failed to fetch price data from Yahoo Finance.")
@@ -1618,13 +2193,43 @@ def render_screener() -> None:
         st.error("No matching price data found.")
         return
 
-    trade_date  = df["trade_date"].iloc[0] if "trade_date" in df.columns else "—"
-    total_loaded = len(df)
+    trade_date    = df["trade_date"].iloc[0] if "trade_date" in df.columns else "—"
+    active_count  = len(df)
+    sgt           = timezone(timedelta(hours=8))
+    now_sgt_str   = datetime.now(sgt).strftime("%H:%M SGT")
+
+    # ── Market state status badge ─────────────────────────────────────────
+    if market_state == "open":
+        state_html = (
+            f"<span style='color:#0FD68A;font-weight:700'>● LIVE</span>"
+            f"<span style='color:#4D6080'> (~15min delay) · "
+            f"{active_count} of {total_universe} stocks active · "
+            f"as of {now_sgt_str}</span>"
+        )
+    elif market_state == "pre":
+        state_html = (
+            f"<span style='color:#F59E0B;font-weight:700'>● PRE-MARKET</span>"
+            f"<span style='color:#4D6080'> (~15min delay) · "
+            f"{active_count} of {total_universe} stocks active · "
+            f"as of {now_sgt_str}</span>"
+        )
+    elif market_state == "after_hours":
+        state_html = (
+            f"<span style='color:#A78BFA;font-weight:700'>● AFTER-HOURS</span>"
+            f"<span style='color:#4D6080'> (~15min delay) · "
+            f"{active_count} of {total_universe} stocks active · "
+            f"as of {now_sgt_str}</span>"
+        )
+    else:
+        state_html = (
+            f"<span style='color:#F0485A;font-weight:700'>● CLOSED</span>"
+            f"<span style='color:#4D6080'> · showing {trade_date} official close · "
+            f"{active_count} stocks</span>"
+        )
 
     st.markdown(
-        f"<div style='font-family:IBM Plex Mono,monospace;font-size:11px;"
-        f"color:#4D6080;margin-bottom:14px'>"
-        f"✓ {total_loaded} stocks loaded · Last trading day: <b style='color:#FFFFFF'>{trade_date}</b>"
+        f"<div style='font-family:IBM Plex Mono,monospace;font-size:11px;margin-bottom:14px'>"
+        f"✓ {state_html}"
         f"</div>",
         unsafe_allow_html=True
     )
@@ -1636,7 +2241,7 @@ def render_screener() -> None:
     if sector_sel != "All":
         df = df[df["sector"] == sector_sel]
 
-    # ── View toggle: Gainers / Losers (no All Stocks) ───────────────────
+    # ── View toggle: Top 50 Gainers / Top 50 Losers ───────────────────────
     if "view_sel" not in st.session_state:
         st.session_state["view_sel"] = "Gainers"
     is_gainers = st.session_state["view_sel"] == "Gainers"
@@ -1674,28 +2279,51 @@ def render_screener() -> None:
     else:
         df = df[df["chg_pct"] < 0].sort_values("chg_pct", ascending=True)
 
-    # ── Slice top 50 ──────────────────────────────────────────────────────
+    # ── Slice top 50 BEFORE fetching market cap ───────────────────────────
     df = df.head(50).reset_index(drop=True)
 
-    # ── Fetch market cap for ALL constituents via FMP batch (cached 24hrs) ─
-    with st.spinner("Fetching market caps from FMP…"):
-        mktcap_map = fetch_market_caps(tickers_tuple)
+    # ── Top 50 avg (computed after slice) ────────────────────────────────
+    top50_avg_chg = df["chg_pct"].mean() if not df.empty else 0.0
+    top50_label   = "Top 50 Gainers Avg" if view == "Gainers" else "Top 50 Losers Avg"
+
+    # ── Prev-day market cap for top 50 (shares × prev close) ─────────────
+    top50_tickers = tuple(df["ticker"].tolist())
+    try:
+        raw_prev = yf.download(
+            list(top50_tickers),
+            period="5d", interval="1d",
+            auto_adjust=True, progress=False, threads=True,
+        )
+        if not raw_prev.empty and len(raw_prev["Close"]) >= 2:
+            pc_row      = raw_prev["Close"].iloc[-2]
+            prev_prices = tuple(
+                (tk, float(pc_row[tk]))
+                for tk in top50_tickers
+                if tk in pc_row.index and not pd.isna(pc_row[tk])
+            )
+        else:
+            prev_prices = tuple()
+    except Exception:
+        prev_prices = tuple()
+
+    with st.spinner("Fetching market caps (prev close)…"):
+        mktcap_map = fetch_market_caps(top50_tickers, prev_prices)
     df["mkt_cap"] = df["ticker"].map(mktcap_map)
 
-    # ── Summary stats row ─────────────────────────────────────────────────
-    all_prices = constituents.merge(prices, on="ticker", how="inner")
-    gainers    = (all_prices["chg_pct"] > 0).sum()
-    losers     = (all_prices["chg_pct"] < 0).sum()
-    unchanged  = (all_prices["chg_pct"] == 0).sum()
-    avg_chg    = all_prices["chg_pct"].mean()
+    # ── Summary stats row — dynamic to active pool ────────────────────────
+    all_active  = constituents.merge(prices, on="ticker", how="inner")
+    gainers     = (all_active["chg_pct"] > 0).sum()
+    losers      = (all_active["chg_pct"] < 0).sum()
+    unchanged   = (all_active["chg_pct"] == 0).sum()
+    overall_avg = all_active["chg_pct"].mean()
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     for col, label, val, color in [
-        (c1, "Gainers",    f"{gainers}",          "#0FD68A"),
-        (c2, "Losers",     f"{losers}",            "#F0485A"),
-        (c3, "Unchanged",  f"{unchanged}",         "#8898BB"),
-        (c4, "Avg Change", f"{avg_chg:+.2f}%",
-             "#0FD68A" if avg_chg >= 0 else "#F0485A"),
+        (c1, "Gainers",     f"{gainers}",              "#0FD68A"),
+        (c2, "Losers",      f"{losers}",               "#F0485A"),
+        (c3, "Unchanged",   f"{unchanged}",            "#8898BB"),
+        (c4, top50_label,   f"{top50_avg_chg:+.2f}%", "#0FD68A" if top50_avg_chg >= 0 else "#F0485A"),
+        (c5, "Overall Avg", f"{overall_avg:+.2f}%",   "#0FD68A" if overall_avg   >= 0 else "#F0485A"),
     ]:
         with col:
             st.markdown(f"""
@@ -1751,7 +2379,7 @@ def render_screener() -> None:
     </div>
     <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#4D6080;
         margin-top:8px;text-align:right">
-      Data: Yahoo Finance · End-of-day prices · Market cap live · Top {len(df)} of {total_loaded}
+      Data: Yahoo Finance · Market cap: prev-day close · Top {len(df)} of {active_count}
     </div>
     """, unsafe_allow_html=True)
 
