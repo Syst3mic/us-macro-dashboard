@@ -1808,7 +1808,7 @@ def _fetch_prev_close(tickers: list) -> dict:
         )
         if raw.empty or len(raw["Close"]) < 2:
             return {}
-        pc_series = raw["Close"].iloc[-2]
+        pc_series = raw["Close"].iloc[-1]
         return {
             tk: float(pc_series[tk])
             for tk in tickers
