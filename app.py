@@ -376,17 +376,6 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 .status-ok  { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #0FD68A; }
 .status-warn{ font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #F59E0B; }
 
-/* ── Tab labels ── */
-[data-testid="stTab"] p {
-    color: rgba(255,255,255,.4) !important;
-    font-family: 'IBM Plex Mono', monospace !important;
-    font-size: 12px !important;
-    font-weight: 600 !important;
-}
-[data-testid="stTab"][aria-selected="true"] p {
-    color: #FFFFFF !important;
-}
-
 /* ── Index selector buttons — active = bright white filled, inactive = dim ── */
 .idx-active button {
     background: rgba(255,255,255,.12) !important;
@@ -1922,13 +1911,8 @@ def render_screener() -> None:
 
     st.markdown(f"""
     <style>
-    div[data-testid="stButton"]:has(button[data-testid="baseButton-secondary"][key="btn_sp500"]) button,
-    button.btn-sp500 {{ background:{sp_bg}!important; border-color:{sp_bd}!important; color:{sp_col}!important; font-weight:{sp_fw}!important; }}
-    div[data-testid="stButton"]:has(button[data-testid="baseButton-secondary"][key="btn_ndx100"]) button,
-    button.btn-ndx100 {{ background:{ndx_bg}!important; border-color:{ndx_bd}!important; color:{ndx_col}!important; font-weight:{ndx_fw}!important; }}
-    /* Simpler fallback: nth-child targeting within columns */
-    div[data-testid="column"]:nth-child(1) button {{ background:{sp_bg}!important; border-color:{sp_bd}!important; color:{sp_col}!important; font-weight:{sp_fw}!important; }}
-    div[data-testid="column"]:nth-child(2) button {{ background:{ndx_bg}!important; border-color:{ndx_bd}!important; color:{ndx_col}!important; font-weight:{ndx_fw}!important; }}
+    button[aria-label="S&P 500"] {{ background:{sp_bg}!important; border-color:{sp_bd}!important; color:{sp_col}!important; font-weight:{sp_fw}!important; }}
+    button[aria-label="Nasdaq 100"] {{ background:{ndx_bg}!important; border-color:{ndx_bd}!important; color:{ndx_col}!important; font-weight:{ndx_fw}!important; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -2005,18 +1989,18 @@ def render_screener() -> None:
 
     st.markdown(f"""
     <style>
-    div[data-testid="column"]:nth-child(4) button {{ background:{g_bg}!important; border-color:{g_bd}!important; color:{g_col}!important; font-weight:{g_fw}!important; }}
-    div[data-testid="column"]:nth-child(5) button {{ background:{l_bg}!important; border-color:{l_bd}!important; color:{l_col}!important; font-weight:{l_fw}!important; }}
+    button[aria-label="Top 50 Gainers"] {{ background:{g_bg}!important; border-color:{g_bd}!important; color:{g_col}!important; font-weight:{g_fw}!important; }}
+    button[aria-label="Top 50 Losers"] {{ background:{l_bg}!important; border-color:{l_bd}!important; color:{l_col}!important; font-weight:{l_fw}!important; }}
     </style>
     """, unsafe_allow_html=True)
 
     col_g, col_l, col_vrest = st.columns([1, 1, 8])
     with col_g:
-        if st.button("Top Gainers", key="btn_gainers", use_container_width=True):
+        if st.button("Top 50 Gainers", key="btn_gainers", use_container_width=True):
             st.session_state["view_sel"] = "Gainers"
             st.rerun()
     with col_l:
-        if st.button("Top Losers", key="btn_losers", use_container_width=True):
+        if st.button("Top 50 Losers", key="btn_losers", use_container_width=True):
             st.session_state["view_sel"] = "Losers"
             st.rerun()
 
@@ -2029,6 +2013,10 @@ def render_screener() -> None:
     # ── Slice top 50 BEFORE fetching market cap ───────────────────────────
     df = df.head(50).reset_index(drop=True)
 
+    # ── Top 50 avg change (computed after slice) ──────────────────────────
+    top50_avg_chg = df["chg_pct"].mean() if not df.empty else 0.0
+    top50_label   = "Top 50 Gainers Avg" if view == "Gainers" else "Top 50 Losers Avg"
+
     # ── Fetch live market cap for top 50 only ─────────────────────────────
     top50_tickers = tuple(df["ticker"].tolist())
     with st.spinner("Fetching live market caps…"):
@@ -2036,19 +2024,19 @@ def render_screener() -> None:
     df["mkt_cap"] = df["ticker"].map(mktcap_map)
 
     # ── Summary stats row ─────────────────────────────────────────────────
-    all_prices = constituents.merge(prices, on="ticker", how="inner")
-    gainers    = (all_prices["chg_pct"] > 0).sum()
-    losers     = (all_prices["chg_pct"] < 0).sum()
-    unchanged  = (all_prices["chg_pct"] == 0).sum()
-    avg_chg    = all_prices["chg_pct"].mean()
+    all_prices  = constituents.merge(prices, on="ticker", how="inner")
+    gainers     = (all_prices["chg_pct"] > 0).sum()
+    losers      = (all_prices["chg_pct"] < 0).sum()
+    unchanged   = (all_prices["chg_pct"] == 0).sum()
+    overall_avg = all_prices["chg_pct"].mean()
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     for col, label, val, color in [
-        (c1, "Gainers",    f"{gainers}",          "#0FD68A"),
-        (c2, "Losers",     f"{losers}",            "#F0485A"),
-        (c3, "Unchanged",  f"{unchanged}",         "#8898BB"),
-        (c4, "Avg Change", f"{avg_chg:+.2f}%",
-             "#0FD68A" if avg_chg >= 0 else "#F0485A"),
+        (c1, "Gainers",       f"{gainers}",               "#0FD68A"),
+        (c2, "Losers",        f"{losers}",                "#F0485A"),
+        (c3, "Unchanged",     f"{unchanged}",             "#8898BB"),
+        (c4, top50_label,     f"{top50_avg_chg:+.2f}%",  "#0FD68A" if top50_avg_chg >= 0 else "#F0485A"),
+        (c5, "Overall Avg",   f"{overall_avg:+.2f}%",    "#0FD68A" if overall_avg   >= 0 else "#F0485A"),
     ]:
         with col:
             st.markdown(f"""
