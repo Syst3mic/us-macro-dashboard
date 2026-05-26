@@ -117,7 +117,6 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     background: rgba(91,141,239,.15);
     border-color: rgba(91,141,239,.4);
 }
-/* .hero-stats removed — replaced with hover tooltip */
 
 /* ── Section headers ── */
 .section-header {
@@ -307,7 +306,6 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     color: #FFFFFF;
     font-weight: 700;
 }
-/* Horizontal bar — hidden until hover, inline next to trigger */
 .data-hover-bar {
     display: none;
     position: relative;
@@ -376,7 +374,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 .status-ok  { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #0FD68A; }
 .status-warn{ font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #F59E0B; }
 
-/* ── Index selector buttons — active = bright white filled, inactive = dim ── */
+/* ── Index selector buttons ── */
 .idx-active button {
     background: rgba(255,255,255,.12) !important;
     border-color: rgba(255,255,255,.5) !important;
@@ -391,9 +389,8 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     font-weight: 400 !important;
 }
 
-/* ── Screener view buttons — Gainers green, Losers red ── */
+/* ── Screener view buttons ── */
 div[data-testid="stButton"]:has(button[kind="primaryFormSubmit"]) { display:none; }
-/* Target by button text content via CSS attribute trick */
 .gainers-active button  { color: #0FD68A !important; border-color: rgba(15,214,138,.4) !important; background: rgba(15,214,138,.1) !important; }
 .losers-active  button  { color: #F0485A !important; border-color: rgba(240,72,90,.4)  !important; background: rgba(240,72,90,.1)  !important; }
 .gainers-inactive button{ color: #0FD68A !important; opacity: .5; }
@@ -501,7 +498,6 @@ function openModal(title, chartDivId) {
     var dest = document.getElementById('modalChart');
     if (src) {
         dest.innerHTML = src.innerHTML;
-        // Resize the plotly chart inside modal
         var plots = dest.querySelectorAll('.js-plotly-plot');
         plots.forEach(function(p) {
             if (window.Plotly) Plotly.relayout(p, {height: 480});
@@ -566,7 +562,7 @@ SERIES = {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# FRED SERIES CONFIG  (for indicators not on BLS)
+# FRED SERIES CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
 FRED_SERIES = {
     "corepce": {
@@ -585,15 +581,13 @@ FRED_SERIES = {
         "id":        "ICSA",
         "name":      "Initial Jobless Claims",
         "full":      "Initial Unemployment Insurance Claims (Weekly SA)",
-        "transform": "claims",    # weekly level, show actual print + WoW change
+        "transform": "claims",
         "color":     "#F97316",
         "unit":      "K",
         "dp":        0,
         "freq":      "Weekly",
         "source":    "DOL via FRED",
     },
-
-
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -647,15 +641,10 @@ def fetch_bls_data() -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_fred_data() -> dict:
-    """
-    Fetch ICSA, ADPNFPCA, UMCSENT from FRED API.
-    Server-side GET — no CORS, no proxy needed.
-    """
     fred_key = "bc1f32b397114934e95d879ec2646074"
     result   = {}
 
     for key, cfg in FRED_SERIES.items():
-        # Weekly series: fetch 3 years (156 weeks). Monthly: 10 years.
         limit = 156 if cfg["freq"] == "Weekly" else 120
         url   = (
             f"https://api.stlouisfed.org/fred/series/observations"
@@ -678,10 +667,8 @@ def fetch_fred_data() -> dict:
                     "value": float(obs["value"]),
                 })
             df = pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
-            # Claims: convert from persons to thousands
             if key == "claims":
                 df["value"] = df["value"] / 1000
-
             result[key] = df
         except Exception as e:
             print(f"FRED fetch failed [{key}]: {e}")
@@ -715,7 +702,7 @@ def fmt_val(v: float, cfg: dict, which: str) -> str:
 
 def is_positive_signal(v: float, key: str) -> bool:
     if key == "nfp":   return v >= 0
-    return v <= 0  # lower inflation / lower unemployment = positive
+    return v <= 0
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PLOTLY CHART
@@ -737,9 +724,6 @@ def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy",
         b = int(hex_col[5:7], 16)
         return f"rgba({r},{g},{b},{alpha})"
 
-    # ── Rate (Unemployment): plot raw level — actual % prints ──────────────
-    # Both MoM and YoY tabs show the same historical rate series so the user
-    # sees real prints (4.3%, 4.4% etc.), not percentage-point diffs.
     if cfg["transform"] == "rate":
         plot_df = df.dropna(subset=["value"]).tail(60)
         fig.add_trace(go.Scatter(
@@ -750,12 +734,10 @@ def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy",
             fillcolor=hex_fill(color, 0.1),
             hovertemplate="%{x|%b %Y}<br><b>%{y:.1f}%</b><extra></extra>",
         ))
-        # Floor y-axis close to data so small moves are visible
         y_min = max(0, plot_df["value"].min() - 0.5)
         y_max = plot_df["value"].max() + 0.5
         yaxis_opts["range"] = [y_min, y_max]
 
-    # ── NFP: bar chart of MoM net jobs added ───────────────────────────────
     elif cfg["transform"] == "nfp":
         plot_df    = df.dropna(subset=[which]).tail(60)
         bar_colors = ["rgba(15,214,138,.7)"  if v >= 0 else "rgba(240,72,90,.7)"  for v in plot_df[which]]
@@ -769,7 +751,6 @@ def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy",
         ))
         fig.add_hline(y=0, line_color="rgba(120,140,200,.2)", line_width=1)
 
-    # ── Price index (CPI / Core CPI / PPI): MoM% or YoY% changes ──────────
     else:
         plot_df = df.dropna(subset=[which]).tail(60)
         unit    = cfg[f"unit_{which}"]
@@ -850,7 +831,6 @@ def nfp_release_table(df: pd.DataFrame) -> str:
 # RENDER ONE INDICATOR CARD
 # ─────────────────────────────────────────────────────────────────────────────
 def render_card(key: str, cfg: dict, df) -> None:
-    # ── Label row ────────────────────────────────────────────────────────
     st.markdown(f"""
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:10px">
@@ -869,7 +849,6 @@ def render_card(key: str, cfg: dict, df) -> None:
         st.warning("Data unavailable", icon="⚠️")
         return
 
-    # ── Compute ───────────────────────────────────────────────────────────
     df_c  = compute_series(df, cfg["transform"])
     valid = df_c.dropna(subset=["mom", "yoy"])
     if len(valid) < 2:
@@ -877,21 +856,16 @@ def render_card(key: str, cfg: dict, df) -> None:
         return
 
     last     = valid.iloc[-1]
-    prev     = valid.iloc[-2]   # one period back
+    prev     = valid.iloc[-2]
     date_str = last["date"].strftime("%b %Y")
 
-    mom_val  = last["mom"]   # MoM change (pp or % or K)
-    yoy_val  = last["yoy"]   # YoY change (pp or % or K)
-    level    = last["value"] # Raw level (unemployment rate %, NFP thousands)
+    mom_val  = last["mom"]
+    yoy_val  = last["yoy"]
+    level    = last["value"]
 
-    # ── Pull prior period level values for badges ─────────────────────────
-    # prev_mom_level  = level 1 month ago  (for MoM box badge)
-    # prev_yoy_level  = level 12 months ago (for YoY box badge)
-    # These come from the raw df (before diffs), aligned by date
-    df_raw   = df.sort_values("date").reset_index(drop=True)
-    last_date = last["date"]  # e.g. 2026-04-01
+    df_raw    = df.sort_values("date").reset_index(drop=True)
+    last_date = last["date"]
 
-    # Look up exactly 1 month prior by date arithmetic (not index offset)
     prev1_target  = last_date - pd.DateOffset(months=1)
     prev12_target = last_date - pd.DateOffset(months=12)
 
@@ -903,46 +877,25 @@ def render_card(key: str, cfg: dict, df) -> None:
     prev1_date  = prev1_row.iloc[0]["date"].strftime("%b %Y")  if not prev1_row.empty  else "—"
     prev12_date = prev12_row.iloc[0]["date"].strftime("%b %Y") if not prev12_row.empty else "—"
 
-    # ── Headline value ────────────────────────────────────────────────────
-    # price_index : headline = MoM% change (e.g. +0.64%) / YoY% change (e.g. +3.95%)
-    # rate        : headline = actual rate level (e.g. 4.3%) — same in both boxes
-    # nfp         : headline = MoM net jobs (e.g. +177K) / YoY net (e.g. +2100K)
     if cfg["transform"] == "price_index":
         mom_headline = fmt_val(mom_val, cfg, "mom")
         yoy_headline = fmt_val(yoy_val, cfg, "yoy")
     elif cfg["transform"] == "rate":
         mom_headline = f"{level:.1f}%"
         yoy_headline = f"{level:.1f}%"
-    else:  # nfp — show actual MoM net jobs in both boxes
-        mom_headline = fmt_val(mom_val, cfg, "mom")   # e.g. +115K
-        yoy_headline = fmt_val(mom_val, cfg, "mom")   # same print, badge shows YoY comparison
-
-    # ── Delta badges ──────────────────────────────────────────────────────
-    # price_index:
-    #   MoM box → change vs prior MoM print  (e.g. +0.64% vs prior +0.38%)
-    #   YoY box → change vs prior YoY print  (e.g. +3.95% vs prior +2.40%)
-    # rate:
-    #   MoM box → "vs {prev month}: {prev_val}%"  (e.g. vs Mar: 4.3%)
-    #   YoY box → "vs {12mo ago}: {prev12_val}%"  (e.g. vs Apr 2025: 4.2%)
-    # nfp:
-    #   MoM box → change vs prior MoM print
-    #   YoY box → change vs prior YoY print
+    else:
+        mom_headline = fmt_val(mom_val, cfg, "mom")
+        yoy_headline = fmt_val(mom_val, cfg, "mom")
 
     if cfg["transform"] == "rate":
-        # MoM badge: show prior month actual rate
         mom_dlt_str = f"vs {prev1_date}: {prev1_val:.1f}%" if prev1_val is not None else "—"
         yoy_dlt_str = f"vs {prev12_date}: {prev12_val:.1f}%" if prev12_val is not None else "—"
         delta_up    = is_positive_signal(mom_val, key)
         yoy_dlt_up  = is_positive_signal(yoy_val, key)
 
     elif cfg["transform"] == "nfp":
-        # All comparisons use MoM diff values (net jobs), not raw levels.
-        # mom_val  = Apr 2026 print  = diff(Apr26 level - Mar26 level) e.g. +115K
-        # We need Apr 2025 print     = diff(Apr25 level - Mar25 level) e.g. +108K
-        # Retrieve from df_c (which has the mom column computed) by exact date match.
-
-        prev1_target_nfp  = last["date"] - pd.DateOffset(months=1)   # Mar 2026
-        prev12_target_nfp = last["date"] - pd.DateOffset(months=12)  # Apr 2025
+        prev1_target_nfp  = last["date"] - pd.DateOffset(months=1)
+        prev12_target_nfp = last["date"] - pd.DateOffset(months=12)
 
         prev1_row_nfp  = df_c[df_c["date"] == prev1_target_nfp]
         prev12_row_nfp = df_c[df_c["date"] == prev12_target_nfp]
@@ -953,16 +906,14 @@ def render_card(key: str, cfg: dict, df) -> None:
         prev1_date_nfp  = prev1_row_nfp.iloc[0]["date"].strftime("%b %Y")  if not prev1_row_nfp.empty  else "—"
         prev12_date_nfp = prev12_row_nfp.iloc[0]["date"].strftime("%b %Y") if not prev12_row_nfp.empty else "—"
 
-        # MoM badge: vs prior month print  e.g. "vs Mar 2026: +185K"
         if prev1_mom is not None:
             s = "+" if prev1_mom >= 0 else ""
             mom_dlt_str = f"vs {prev1_date_nfp}: {s}{int(round(prev1_mom))}K"
         else:
             mom_dlt_str = "—"
 
-        # YoY badge: diff vs same month last year  e.g. "+7K vs Apr 2025: +108K"
         if prev12_mom is not None:
-            yoy_diff = mom_val - prev12_mom   # e.g. 115 - 108 = +7
+            yoy_diff = mom_val - prev12_mom
             diff_s   = "+" if yoy_diff  >= 0 else ""
             prev_s   = "+" if prev12_mom >= 0 else ""
             yoy_dlt_str = f"{diff_s}{int(round(yoy_diff))}K vs {prev12_date_nfp}: {prev_s}{int(round(prev12_mom))}K"
@@ -980,7 +931,6 @@ def render_card(key: str, cfg: dict, df) -> None:
         delta_up    = is_positive_signal(mom_delta, key)
         yoy_dlt_up  = is_positive_signal(yoy_delta, key)
 
-    # ── Stat pair ─────────────────────────────────────────────────────────
     c1, c2 = st.columns(2)
     with c1:
         st.markdown(stat_box_html(
@@ -993,12 +943,8 @@ def render_card(key: str, cfg: dict, df) -> None:
             yoy_dlt_str, yoy_dlt_up, date_str
         ), unsafe_allow_html=True)
 
-    # NFP release table removed — chart shows the actual prints directly
-
-    # ── Chart section ─────────────────────────────────────────────────────
     st.markdown("<div style='margin-top:16px'>", unsafe_allow_html=True)
 
-    # Rate (unemployment) and NFP: no tab toggle — render chart directly
     if cfg["transform"] in ("rate", "nfp"):
         fig_direct = make_chart(df_c, cfg, "mom", height=200)
         col_chart, col_btn = st.columns([10, 1])
@@ -1018,7 +964,6 @@ def render_card(key: str, cfg: dict, df) -> None:
                 st.rerun()
         st.caption(cfg["full"])
 
-    # Price index indicators (CPI / Core CPI / PPI): MoM / YoY tab toggle
     else:
         tab_mom, tab_yoy = st.tabs(["  MoM  ", "  YoY  "])
 
@@ -1062,26 +1007,13 @@ def render_card(key: str, cfg: dict, df) -> None:
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Modal handled at top level in main() via st.session_state["expanded"]
-
 # ─────────────────────────────────────────────────────────────────────────────
 # FRED CARD RENDERER
 # ─────────────────────────────────────────────────────────────────────────────
 def render_fred_card(key: str, cfg: dict, df) -> None:
-    """
-    Renders a card for FRED-sourced indicators.
-    Layout:
-      Claims   — headline = latest weekly print (K), badge = WoW change
-      ADP      — headline = latest MoM print (K),    badge = vs same month prior year
-      Sentiment— headline = latest index level,       badge = MoM change + YoY comparison
-    Chart shows actual prints (no MoM/YoY toggle), with expand button.
-    """
     color = cfg["color"]
 
-    # ── Price index (Core PCE): delegate to render_card with FRED badge ──
     if cfg.get("transform") == "price_index":
-        # render_card handles all price_index logic (MoM%/YoY%, charts, tabs)
-        # Override the source badge to show FRED instead of BLS
         st.markdown(f"""
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
           <div style="display:flex;align-items:center;gap:10px">
@@ -1098,7 +1030,6 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
         if df is None or df.empty:
             st.warning("Data unavailable", icon="⚠️")
             return
-        # Use compute_series + same stat/chart logic as BLS price_index cards
         df_c  = compute_series(df, "price_index")
         valid = df_c.dropna(subset=["mom", "yoy"])
         if len(valid) < 2:
@@ -1111,7 +1042,6 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
         yoy_val  = last["yoy"]
         mom_delta  = mom_val - prev["mom"]
         yoy_delta  = yoy_val - prev["yoy"]
-        mom_up     = is_positive_signal(mom_val,   key)
         delta_up   = is_positive_signal(mom_delta, key)
         yoy_dlt_up = is_positive_signal(yoy_delta, key)
         mom_str     = fmt_val(mom_val,   cfg, "mom")
@@ -1123,7 +1053,6 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
             st.markdown(stat_box_html("Month-over-Month", mom_str, mom_dlt_str, delta_up, date_str), unsafe_allow_html=True)
         with c2:
             st.markdown(stat_box_html("Year-over-Year",   yoy_str, yoy_dlt_str, yoy_dlt_up, date_str), unsafe_allow_html=True)
-        # Charts with MoM/YoY toggle — same as BLS price_index cards
         st.markdown("<div style='margin-top:16px'>", unsafe_allow_html=True)
         tab_mom, tab_yoy = st.tabs(["  MoM  ", "  YoY  "])
         with tab_mom:
@@ -1149,7 +1078,6 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
         st.markdown("</div>", unsafe_allow_html=True)
         return
 
-    # ── Label row ─────────────────────────────────────────────────────────
     src_label = cfg.get("source", "FRED")
     st.markdown(f"""
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
@@ -1183,13 +1111,11 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
     def fmt_idx(v):
         return f"{v:.1f}"
 
-    # ── Claims ────────────────────────────────────────────────────────────
     if cfg["transform"] == "claims":
         wow        = last_val - prev1_val
-        wow_up     = wow <= 0    # fewer claims = positive signal
+        wow_up     = wow <= 0
         wow_sign   = "+" if wow >= 0 else ""
         wow_str    = f"{wow_sign}{int(round(wow))}K vs prior week"
-        prev_str   = f"Prior: {int(round(prev1_val))}K ({prev1['date'].strftime('%d %b')})"
 
         c1, c2 = st.columns(2)
         with c1:
@@ -1206,10 +1132,7 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
             </div>
             """, unsafe_allow_html=True)
 
-    # ── ADP ───────────────────────────────────────────────────────────────
     elif cfg["transform"] == "adp":
-        # ADP series is already a change (K) — last_val IS the MoM print
-        # YoY: same month 1 year ago by exact date match
         target_yoy = last["date"] - pd.DateOffset(months=12)
         yoy_row    = df[df["date"] == target_yoy]
         yoy_val    = yoy_row.iloc[0]["value"] if not yoy_row.empty else None
@@ -1225,7 +1148,6 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
             yoy_dlt_str = "—"
             yoy_dlt_up  = True
 
-        # MoM badge: vs prior month
         prev_s   = "+" if prev1_val >= 0 else ""
         mom_str  = f"vs {prev1['date'].strftime('%b %Y')}: {prev_s}{int(round(prev1_val))}K"
         mom_up   = last_val >= prev1_val
@@ -1242,14 +1164,11 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
                 yoy_dlt_str, yoy_dlt_up, date_str
             ), unsafe_allow_html=True)
 
-    # ── Michigan Sentiment ────────────────────────────────────────────────
     elif cfg["transform"] == "sentiment":
         mom_chg  = last_val - prev1_val
         mom_up   = mom_chg >= 0
         mom_sign = "+" if mom_chg >= 0 else ""
         mom_str  = f"{mom_sign}{mom_chg:.1f} vs {prev1['date'].strftime('%b %Y')}: {prev1_val:.1f}"
-
-        # Previous box: just show prior print with no delta badge
         prev_date_str = prev1["date"].strftime("%b %Y")
 
         c1, c2 = st.columns(2)
@@ -1267,17 +1186,14 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
             </div>
             """, unsafe_allow_html=True)
 
-    # ── Chart — actual prints, no MoM/YoY toggle ─────────────────────────
     st.markdown("<div style='margin-top:16px'>", unsafe_allow_html=True)
 
-    # Build chart using raw value column
     plot_df = df.tail(104 if cfg["freq"] == "Weekly" else 60)
     r_c = int(color[1:3], 16)
     g_c = int(color[3:5], 16)
     b_c = int(color[5:7], 16)
     fill_color = f"rgba({r_c},{g_c},{b_c},0.1)"
 
-    # ADP: bar chart (it's a change series, positive/negative)
     if cfg["transform"] == "adp":
         bar_colors  = ["rgba(15,214,138,.7)"  if v >= 0 else "rgba(240,72,90,.7)"  for v in plot_df["value"]]
         bar_borders = ["rgba(15,214,138,.95)" if v >= 0 else "rgba(240,72,90,.95)" for v in plot_df["value"]]
@@ -1299,7 +1215,6 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
             fillcolor=fill_color,
             hovertemplate=hover_fmt + "<extra></extra>",
         ))
-        # Floor y-axis so movements are visible
         y_min = max(0, plot_df["value"].min() * 0.9)
         y_max = plot_df["value"].max() * 1.05
         fig.update_yaxes(range=[y_min, y_max])
@@ -1728,12 +1643,10 @@ _NDX100_DATA = [
     ("RIVN","Rivian Automotive","Consumer Discretionary"),
 ]
 
-# ── S&P 500: fetch full 503-name list from GitHub CSV (reliable, no bot blocks) ──
 _SP500_CSV = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_sp500_constituents() -> pd.DataFrame:
-    """Fetch full S&P 500 constituent list (503 stocks) from GitHub-hosted CSV."""
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
         r = requests.get(_SP500_CSV, headers=headers, timeout=15)
@@ -1741,7 +1654,6 @@ def fetch_sp500_constituents() -> pd.DataFrame:
         df = pd.read_csv(pd.io.common.StringIO(r.text))
         df = df[["Symbol", "Security", "GICS Sector"]].copy()
         df.columns = ["ticker", "company", "sector"]
-        # yfinance uses dashes not dots: BRK.B → BRK-B
         df["ticker"] = df["ticker"].str.replace(".", "-", regex=False)
         df["index"] = "S&P 500"
         return df.reset_index(drop=True)
@@ -1750,13 +1662,10 @@ def fetch_sp500_constituents() -> pd.DataFrame:
         return _sp500_fallback()
 
 def _sp500_fallback() -> pd.DataFrame:
-    """Fallback: ~270 well-known S&P 500 names if GitHub CSV is unreachable."""
-    data = _SP500_FALLBACK_DATA
-    df = pd.DataFrame(data, columns=["ticker", "company", "sector"])
+    df = pd.DataFrame(_SP500_FALLBACK_DATA, columns=["ticker", "company", "sector"])
     df["index"] = "S&P 500"
     return df
 
-# ── Nasdaq 100: hardcoded (100 stocks, easy to maintain) ─────────────────────
 def fetch_ndx_constituents() -> pd.DataFrame:
     df = pd.DataFrame(_NDX100_DATA, columns=["ticker", "company", "sector"])
     df["index"] = "Nasdaq 100"
@@ -1764,14 +1673,12 @@ def fetch_ndx_constituents() -> pd.DataFrame:
 
 def get_market_state() -> str:
     """
-    Returns market state based on current SGT time (UTC+8).
-    SGT schedule (weekdays only):
-      00:00 – 04:00  →  open        (NYSE 9:30am–4:00pm ET)
-      04:00 – 08:00  →  after_hours (NYSE 4:00pm–8:00pm ET)
-      08:00 – 16:00  →  closed      (overnight)
-      16:00 – 21:30  →  pre         (NYSE 4:00am–9:30am ET)
-      21:30 – 24:00  →  open        (NYSE 9:30am–4:00pm ET continues)
-    Weekends → closed.
+    SGT (UTC+8) schedule — weekdays only:
+      00:00–04:00  open        (NYSE 9:30am–4:00pm ET, continued from prior SGT day)
+      04:00–08:00  after_hours (NYSE 4:00pm–8:00pm ET)
+      08:00–16:00  closed
+      16:00–21:30  pre         (NYSE 4:00am–9:30am ET pre-market)
+      21:30–24:00  open        (NYSE 9:30am–4:00pm ET)
     """
     sgt  = timezone(timedelta(hours=8))
     now  = datetime.now(sgt)
@@ -1779,23 +1686,36 @@ def get_market_state() -> str:
         return "closed"
     h, m = now.hour, now.minute
     mins = h * 60 + m
-    if mins < 240:          # 00:00–04:00 SGT
+    if mins < 240:
         return "open"
-    elif mins < 480:        # 04:00–08:00 SGT
+    elif mins < 480:
         return "after_hours"
-    elif mins < 960:        # 08:00–16:00 SGT
+    elif mins < 960:
         return "closed"
-    elif mins < 1290:       # 16:00–21:30 SGT
+    elif mins < 1290:
         return "pre"
-    else:                   # 21:30–24:00 SGT
+    else:
         return "open"
 
 
-def _fetch_prev_close(tickers: list) -> dict:
+# ─────────────────────────────────────────────────────────────────────────────
+# PRICE FETCH HELPERS  ← ALL THREE BUGS FIXED HERE
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _fetch_prev_close(tickers: list, use_completed: bool = False) -> dict:
     """
-    Fetch previous trading day's closing prices for all tickers.
-    Used as chg % baseline for all non-EOD modes.
-    Returns {ticker: prev_close_price}.
+    Fetch the baseline close used to compute Chg % and Chg $.
+
+    use_completed=True  → iloc[-2]: last *completed* session close.
+                          Required for live hours: yfinance includes today's
+                          partial bar as iloc[-1], which has NaN for ~100
+                          tickers and a near-current price for the rest —
+                          both causing wrong % change calculations.
+
+    use_completed=False → iloc[-1]: most-recent available close.
+                          Correct for pre-market (today hasn't opened, so
+                          iloc[-1] = yesterday's close) and after-hours
+                          (session just ended, iloc[-1] = today's close).
     """
     try:
         raw = yf.download(
@@ -1808,7 +1728,8 @@ def _fetch_prev_close(tickers: list) -> dict:
         )
         if raw.empty or len(raw["Close"]) < 2:
             return {}
-        pc_series = raw["Close"].iloc[-1]
+        row_idx   = -2 if use_completed else -1
+        pc_series = raw["Close"].iloc[row_idx]
         return {
             tk: float(pc_series[tk])
             for tk in tickers
@@ -1823,9 +1744,9 @@ def _fetch_prev_close(tickers: list) -> dict:
 def fetch_price_data_live(tickers: tuple) -> pd.DataFrame:
     """
     Market hours: 2-min intraday bars (~15min delayed).
-    Chg % vs previous day's close.
-    Volume = cumulative intraday volume so far.
-    Falls back to EOD if intraday data is empty.
+    Chg % = (current price / previous session's official close − 1) × 100
+    Chg $ = current price − previous session's official close
+    Volume = cumulative intraday volume from open to current bar.
     """
     try:
         raw = yf.download(
@@ -1845,17 +1766,26 @@ def fetch_price_data_live(tickers: tuple) -> pd.DataFrame:
         if len(close) == 0:
             return fetch_price_data_eod(tickers)
 
-        prev_close_map = _fetch_prev_close(list(tickers))
+        # FIX 1: forward-fill before taking the last bar.
+        # The most recent 2-min bar is often still forming and returns NaN
+        # for many tickers. ffill() substitutes the last valid price instead.
+        close_filled = close.ffill()
+        last_price   = close_filled.iloc[-1]
+
+        # FIX 2: use_completed=True → iloc[-2] = yesterday's confirmed close.
+        # Without this, iloc[-1] of the 5-day daily download is today's
+        # partial bar: NaN for ~100 tickers (drops them from active count)
+        # and near-current price for others (makes Chg % ≈ 0 for all).
+        prev_close_map = _fetch_prev_close(list(tickers), use_completed=True)
         if not prev_close_map:
             return fetch_price_data_eod(tickers)
 
-        last_price = close.iloc[-1]
         cum_volume = volume.sum(axis=0)
         trade_date = close.index[-1].date()
 
         rows = []
         for ticker in tickers:
-            if ticker not in close.columns:
+            if ticker not in close_filled.columns:
                 continue
             lp = last_price[ticker]
             pc = prev_close_map.get(ticker)
@@ -1884,10 +1814,16 @@ def fetch_price_data_live(tickers: tuple) -> pd.DataFrame:
 def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
     """
     Pre-market and after-hours: 1-min bars with prepost=True (~15min delayed).
-    Only returns tickers that have actual extended-hours bars.
-    Volume = None if zero/missing → renders as '—' in table.
-    Chg % vs previous day's close.
-    session: 'pre' or 'after_hours' — used only for logging.
+
+    Pre-market:
+      Chg % = (current pre-market price / previous session's close − 1) × 100
+      Volume = pre-market bars only; shown as — if zero/unavailable.
+
+    After-hours:
+      Chg % = (current after-hours price / that day's official close − 1) × 100
+      Volume = cumulative from regular open (9:30am ET) through current bar.
+               FIX 3: previously only summed after-hours bars, missing the
+               regular-session volume entirely.
     """
     try:
         raw = yf.download(
@@ -1903,9 +1839,6 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
         if raw.empty:
             return fetch_price_data_eod(tickers)
 
-        # ── Normalise to a flat {ticker: DataFrame} dict ──────────────────
-        # yfinance with group_by="ticker" returns a MultiIndex column
-        # structure: (ticker, field). Flatten it so we can iterate reliably.
         ticker_data = {}
         for tk in tickers:
             try:
@@ -1919,16 +1852,15 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
         if not ticker_data:
             return fetch_price_data_eod(tickers)
 
-        # ── Time filter: keep only extended-hours bars ─────────────────────
         et       = timezone(timedelta(hours=-4))   # EDT
         now_et   = datetime.now(et)
         today_et = now_et.date()
+        utc      = timezone.utc
 
-        # Convert cutoff times to UTC for safe comparison with yfinance index
-        # yfinance returns timestamps in UTC regardless of local timezone
-        utc = timezone.utc
+        # from_regular_open is only defined for after_hours; None for pre.
+        from_regular_open = None
+
         if session == "pre":
-            # Today's pre-market only: midnight ET → 9:30am ET
             day_start_utc  = datetime(today_et.year, today_et.month, today_et.day,
                                       0, 0, tzinfo=et).astimezone(utc)
             day_cutoff_utc = datetime(today_et.year, today_et.month, today_et.day,
@@ -1937,21 +1869,33 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
                 ts = idx if idx.tzinfo else idx.replace(tzinfo=utc)
                 ts = ts.astimezone(utc)
                 return day_start_utc <= ts < day_cutoff_utc
-        else:
+
+        else:  # after_hours
             cutoff_utc = datetime(today_et.year, today_et.month, today_et.day,
                                   16, 0, tzinfo=et).astimezone(utc)
+            regular_open_utc = datetime(today_et.year, today_et.month, today_et.day,
+                                        9, 30, tzinfo=et).astimezone(utc)
+
             def in_session(idx):
                 ts = idx if idx.tzinfo else idx.replace(tzinfo=utc)
                 ts = ts.astimezone(utc)
                 return ts >= cutoff_utc
 
-        prev_close_map = _fetch_prev_close(list(tickers))
+            def from_regular_open(idx):
+                ts = idx if idx.tzinfo else idx.replace(tzinfo=utc)
+                ts = ts.astimezone(utc)
+                return ts >= regular_open_utc
+
+        # use_completed=False is correct for both extended sessions:
+        # pre-market  → iloc[-1] = yesterday's close (today not yet open)
+        # after-hours → iloc[-1] = today's official close (session just ended)
+        prev_close_map = _fetch_prev_close(list(tickers), use_completed=False)
         if not prev_close_map:
             return fetch_price_data_eod(tickers)
 
         rows = []
         for tk, df_tk in ticker_data.items():
-            # Filter to session window
+            # Price: latest tick in the extended-hours window
             df_ext = df_tk[df_tk.index.map(in_session)]
             df_ext = df_ext.dropna(subset=["close"])
             if df_ext.empty:
@@ -1965,8 +1909,15 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
             chg_pct = (lp / pc - 1) * 100
             chg_abs = lp - pc
 
-            vol_raw = df_ext["volume"].sum()
-            vol     = int(vol_raw) if not pd.isna(vol_raw) and vol_raw > 0 else None
+            # FIX 3: after-hours volume = regular session + after-hours bars.
+            # Pre-market volume = pre-market bars only (— if zero).
+            if session == "after_hours" and from_regular_open is not None:
+                df_day  = df_tk[df_tk.index.map(from_regular_open)]
+                vol_raw = df_day["volume"].sum()
+            else:
+                vol_raw = df_ext["volume"].sum()
+
+            vol = int(vol_raw) if not pd.isna(vol_raw) and vol_raw > 0 else None
 
             rows.append({
                 "ticker":     tk,
@@ -1988,10 +1939,9 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
     """
-    EOD / closed / fallback: daily bars.
-    last_close = most recent session's official close.
-    prev_close = session before that.
-    Volume = full session volume.
+    Closed / fallback: daily bars.
+    Chg % = (last session's close / prior session's close − 1) × 100
+    Volume = full last-session volume.
     """
     try:
         raw = yf.download(
@@ -2042,10 +1992,7 @@ def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
 
 
 def fetch_price_data(tickers: tuple) -> tuple:
-    """
-    Router: picks correct fetch based on market state.
-    Returns (DataFrame, market_state_str).
-    """
+    """Router: picks correct fetch based on market state."""
     state = get_market_state()
     if state == "open":
         return fetch_price_data_live(tickers), state
@@ -2056,7 +2003,6 @@ def fetch_price_data(tickers: tuple) -> tuple:
 
 
 def fmt_volume(v) -> str:
-    """Format volume; None → '—' for extended hours with no volume."""
     if v is None:
         return "—"
     v = int(v)
@@ -2070,7 +2016,6 @@ def fmt_volume(v) -> str:
 # MARKETS SCREENER — RENDERER
 # ─────────────────────────────────────────────────────────────────────────────
 def fmt_mktcap(v) -> str:
-    """Format market cap value into readable string."""
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return "—"
     if v >= 1_000_000_000_000:
@@ -2084,11 +2029,6 @@ def fmt_mktcap(v) -> str:
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_market_caps(tickers: tuple, prev_prices: tuple) -> dict:
-    """
-    Previous-day market cap = shares_outstanding × prev_close.
-    prev_prices: tuple of (ticker, price) pairs from EOD fetch.
-    Cached 24hrs — shares outstanding barely changes day-to-day.
-    """
     price_map = dict(prev_prices)
     result    = {}
     for tk in tickers:
@@ -2122,7 +2062,7 @@ def render_screener() -> None:
             <div class="data-hover-divider"></div>
             <div class="data-hover-item">
               <span class="data-hover-label">Prices</span>
-              <span class="data-hover-val">End-of-Day · Last Trading Session</span>
+              <span class="data-hover-val">~15min delayed · Session-aware</span>
             </div>
             <div class="data-hover-divider"></div>
             <div class="data-hover-item">
@@ -2132,7 +2072,7 @@ def render_screener() -> None:
             <div class="data-hover-divider"></div>
             <div class="data-hover-item">
               <span class="data-hover-label">Cache</span>
-              <span class="data-hover-val">Refreshes Every Hour</span>
+              <span class="data-hover-val">Refreshes Every 5 Min</span>
             </div>
           </div>
         </div>
@@ -2140,14 +2080,12 @@ def render_screener() -> None:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Index selector — inject per-render CSS targeting button keys ─────
     if "idx_choice" not in st.session_state:
         st.session_state["idx_choice"] = "S&P 500"
 
     is_sp  = st.session_state["idx_choice"] == "S&P 500"
     is_ndx = not is_sp
 
-    # Active = bright white filled. Inactive = dimmed.
     sp_bg   = "rgba(255,255,255,.14)"  if is_sp  else "transparent"
     sp_bd   = "rgba(255,255,255,.55)"  if is_sp  else "rgba(120,140,200,.18)"
     sp_col  = "#FFFFFF"                if is_sp  else "rgba(255,255,255,.3)"
@@ -2175,7 +2113,6 @@ def render_screener() -> None:
             st.rerun()
     idx_choice = st.session_state["idx_choice"]
 
-    # ── Load constituents ─────────────────────────────────────────────────
     with st.spinner("Loading constituent list…"):
         if idx_choice == "S&P 500":
             constituents = fetch_sp500_constituents()
@@ -2189,7 +2126,6 @@ def render_screener() -> None:
     tickers_tuple  = tuple(constituents["ticker"].tolist())
     total_universe = len(tickers_tuple)
 
-    # ── Load price data (market-state-aware) ──────────────────────────────
     market_state = get_market_state()
     spinner_msgs = {
         "open":        f"Fetching live prices for {total_universe} stocks (~15min delay)…",
@@ -2204,7 +2140,6 @@ def render_screener() -> None:
         st.error("Failed to fetch price data from Yahoo Finance.")
         return
 
-    # ── Merge constituents + prices ───────────────────────────────────────
     df = constituents.merge(prices, on="ticker", how="inner")
     if df.empty:
         st.error("No matching price data found.")
@@ -2212,10 +2147,8 @@ def render_screener() -> None:
 
     trade_date    = df["trade_date"].iloc[0] if "trade_date" in df.columns else "—"
     active_count  = len(df)
-    sgt           = timezone(timedelta(hours=8))
     now_sgt_str   = datetime.now(sgt).strftime("%H:%M SGT")
 
-    # ── Market state status badge ─────────────────────────────────────────
     if market_state == "open":
         state_html = (
             f"<span style='color:#0FD68A;font-weight:700'>● LIVE</span>"
@@ -2251,14 +2184,12 @@ def render_screener() -> None:
         unsafe_allow_html=True
     )
 
-    # ── Sector filter ─────────────────────────────────────────────────────
     sectors    = ["All"] + sorted(df["sector"].dropna().unique().tolist())
     sector_sel = st.selectbox("Filter by Sector", sectors, key="sector_sel",
                               label_visibility="collapsed")
     if sector_sel != "All":
         df = df[df["sector"] == sector_sel]
 
-    # ── View toggle: Top 50 Gainers / Top 50 Losers ───────────────────────
     if "view_sel" not in st.session_state:
         st.session_state["view_sel"] = "Gainers"
     is_gainers = st.session_state["view_sel"] == "Gainers"
@@ -2296,14 +2227,11 @@ def render_screener() -> None:
     else:
         df = df[df["chg_pct"] < 0].sort_values("chg_pct", ascending=True)
 
-    # ── Slice top 50 BEFORE fetching market cap ───────────────────────────
     df = df.head(50).reset_index(drop=True)
 
-    # ── Top 50 avg (computed after slice) ────────────────────────────────
     top50_avg_chg = df["chg_pct"].mean() if not df.empty else 0.0
     top50_label   = "Top 50 Gainers Avg" if view == "Gainers" else "Top 50 Losers Avg"
 
-    # ── Prev-day market cap for top 50 (shares × prev close) ─────────────
     top50_tickers = tuple(df["ticker"].tolist())
     try:
         raw_prev = yf.download(
@@ -2327,7 +2255,6 @@ def render_screener() -> None:
         mktcap_map = fetch_market_caps(top50_tickers, prev_prices)
     df["mkt_cap"] = df["ticker"].map(mktcap_map)
 
-    # ── Summary stats row — dynamic to active pool ────────────────────────
     all_active  = constituents.merge(prices, on="ticker", how="inner")
     gainers     = (all_active["chg_pct"] > 0).sum()
     losers      = (all_active["chg_pct"] < 0).sum()
@@ -2356,7 +2283,6 @@ def render_screener() -> None:
 
     st.markdown("<div style='margin-top:16px'></div>", unsafe_allow_html=True)
 
-    # ── Stock table ───────────────────────────────────────────────────────
     rows_html = ""
     for i, row in df.iterrows():
         chg_cls  = "chg-pos" if row["chg_pct"] >= 0 else "chg-neg"
@@ -2394,7 +2320,8 @@ def render_screener() -> None:
         <tbody>{rows_html}</tbody>
       </table>
     </div>
-    <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#4D6080;
+    <div style="font-family:'IBM Plex Mono',
+    monospace;font-size:9px;color:#4D6080;
         margin-top:8px;text-align:right">
       Data: Yahoo Finance · Market cap: prev-day close · Top {len(df)} of {active_count}
     </div>
@@ -2408,7 +2335,6 @@ def main():
     sgt = timezone(timedelta(hours=8))
     now_str = datetime.now(sgt).strftime("%d %b %Y · %H:%M SGT")
 
-    # ── Page toggle: MACRO / MARKETS ──────────────────────────────────────
     if "page" not in st.session_state:
         st.session_state["page"] = "MACRO"
 
@@ -2442,14 +2368,10 @@ def main():
             st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── Route to MARKETS screener ──────────────────────────────────────────
     if st.session_state["page"] == "MARKETS":
         render_screener()
         return
 
-    # ── Expanded chart view ────────────────────────────────────────────────
-    # If an expand button was clicked, show ONLY the expanded chart +
-    # a Back button. Nothing else renders until Back is pressed.
     if "expanded" in st.session_state:
         exp     = st.session_state["expanded"]
         cfg_e   = exp["cfg"]
@@ -2457,31 +2379,22 @@ def main():
         which_e = exp["which"]
         title_e = exp["title"]
 
-        # Back button — top left
         st.markdown("<div style='margin-bottom:20px'>", unsafe_allow_html=True)
         if st.button("← Back to Dashboard", key="back_btn"):
             del st.session_state["expanded"]
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # Chart title
         st.markdown(f"""
-        <div style="
-            font-family:'Sora',sans-serif;font-size:22px;font-weight:700;
-            color:#FFFFFF;margin-bottom:6px;letter-spacing:-.3px
-        ">{title_e}</div>
-        <div style="
-            font-family:'IBM Plex Mono',monospace;font-size:11px;
-            color:#4D6080;margin-bottom:24px;letter-spacing:.3px
-        ">{cfg_e['full']}</div>
+        <div style="font-family:'Sora',sans-serif;font-size:22px;font-weight:700;
+            color:#FFFFFF;margin-bottom:6px;letter-spacing:-.3px">{title_e}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;
+            color:#4D6080;margin-bottom:24px;letter-spacing:.3px">{cfg_e['full']}</div>
         """, unsafe_allow_html=True)
 
-        # Full-height expanded chart
-        # FRED cards store transform in cfg — use raw value column directly
         is_fred = cfg_e.get("transform") in ("claims", "adp", "sentiment")
 
         if is_fred:
-            # Rebuild expanded chart from raw df using same logic as render_fred_card
             plot_df = df_e.tail(104 if cfg_e.get("freq") == "Weekly" else 60)
             color_e = cfg_e["color"]
             r_e = int(color_e[1:3], 16)
@@ -2537,7 +2450,7 @@ def main():
             },
             key="expanded_chart"
         )
-        return  # Stop here — don't render the rest of the dashboard
+        return
 
     # ── Hero banner ────────────────────────────────────────────────────────
     st.markdown(f"""
@@ -2552,9 +2465,7 @@ def main():
         </div>
       </div>
       <div class="data-hover-wrap">
-        <div class="data-hover-trigger">
-          DATA <span class="data-q">?</span>
-        </div>
+        <div class="data-hover-trigger">DATA <span class="data-q">?</span></div>
         <div class="data-hover-bar">
           <div class="data-hover-item">
             <span class="data-hover-label">Source</span>
@@ -2585,7 +2496,6 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Fetch BLS data ─────────────────────────────────────────────────────
     with st.spinner("Fetching data from BLS & FRED…"):
         try:
             all_data = fetch_bls_data()
@@ -2598,9 +2508,8 @@ def main():
             st.error(f"❌ FRED API error: {e}")
             fred_data = {}
 
-    # ── Status + refresh row ───────────────────────────────────────────────
-    bls_loaded  = len(all_data)
-    fred_loaded = len([v for v in fred_data.values() if not v.empty])
+    bls_loaded   = len(all_data)
+    fred_loaded  = len([v for v in fred_data.values() if not v.empty])
     total_loaded = bls_loaded + fred_loaded
     total_series = len(SERIES) + len(FRED_SERIES)
 
@@ -2619,19 +2528,16 @@ def main():
 
     st.markdown("<div style='margin-bottom:20px'></div>", unsafe_allow_html=True)
 
-    # ── INFLATION: CPI · Core CPI · PPI · Core PCE ───────────────────────
     st.markdown(
         '<div class="section-header"><span class="section-icon">▲</span>INFLATION</div>',
         unsafe_allow_html=True
     )
-    # Row 1: CPI · Core CPI · PPI (BLS)
     cols_price = st.columns(3, gap="medium")
     for col, key in zip(cols_price, ["cpi", "corecpi", "ppi"]):
         with col:
             with st.container(border=True):
                 render_card(key, SERIES[key], all_data.get(key))
     st.markdown("<div style='margin-top:10px'></div>", unsafe_allow_html=True)
-    # Row 2: Core PCE (BEA via FRED) — Fed's preferred inflation measure
     cols_pce = st.columns(3, gap="medium")
     with cols_pce[0]:
         with st.container(border=True):
@@ -2639,12 +2545,10 @@ def main():
 
     st.markdown("<div style='margin-top:24px'></div>", unsafe_allow_html=True)
 
-    # ── LABOR: Unemployment · NFP · Initial Claims · ADP ──────────────────
     st.markdown(
         '<div class="section-header"><span class="section-icon">●</span>LABOR MARKET</div>',
         unsafe_allow_html=True
     )
-    # Row 1: Unemployment + NFP (BLS)
     cols_labor = st.columns(2, gap="medium")
     for col, key in zip(cols_labor, ["unemp", "nfp"]):
         with col:
@@ -2652,16 +2556,11 @@ def main():
                 render_card(key, SERIES[key], all_data.get(key))
 
     st.markdown("<div style='margin-top:10px'></div>", unsafe_allow_html=True)
-
-    # Row 2: Initial Claims (FRED)
     cols_labor2 = st.columns(2, gap="medium")
     with cols_labor2[0]:
         with st.container(border=True):
             render_fred_card("claims", FRED_SERIES["claims"], fred_data.get("claims"))
 
-
-
-    # ── Footer ─────────────────────────────────────────────────────────────
     st.markdown("<hr style='margin-top:32px'>", unsafe_allow_html=True)
     st.markdown(
         "<p style='font-size:11px;color:#4D6080;font-family:IBM Plex Mono,monospace;text-align:center'>"
