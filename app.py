@@ -1924,19 +1924,26 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
         now_et   = datetime.now(et)
         today_et = now_et.date()
 
+        # Convert cutoff times to UTC for safe comparison with yfinance index
+        # yfinance returns timestamps in UTC regardless of local timezone
+        utc = timezone.utc
         if session == "pre":
-            # Today's pre-market only: midnight ET → 9:30am ET today
-            # This excludes yesterday's after-hours bars which also appear
-            # in period='1d' prepost=True data
-            day_start  = datetime(today_et.year, today_et.month, today_et.day,
-                                  0, 0, tzinfo=et)
-            day_cutoff = datetime(today_et.year, today_et.month, today_et.day,
-                                  9, 30, tzinfo=et)
-            def in_session(idx): return day_start <= idx < day_cutoff
+            # Today's pre-market only: midnight ET → 9:30am ET
+            day_start_utc  = datetime(today_et.year, today_et.month, today_et.day,
+                                      0, 0, tzinfo=et).astimezone(utc)
+            day_cutoff_utc = datetime(today_et.year, today_et.month, today_et.day,
+                                      9, 30, tzinfo=et).astimezone(utc)
+            def in_session(idx):
+                ts = idx if idx.tzinfo else idx.replace(tzinfo=utc)
+                ts = ts.astimezone(utc)
+                return day_start_utc <= ts < day_cutoff_utc
         else:
-            cutoff = datetime(today_et.year, today_et.month, today_et.day,
-                              16, 0, tzinfo=et)
-            def in_session(idx): return idx >= cutoff
+            cutoff_utc = datetime(today_et.year, today_et.month, today_et.day,
+                                  16, 0, tzinfo=et).astimezone(utc)
+            def in_session(idx):
+                ts = idx if idx.tzinfo else idx.replace(tzinfo=utc)
+                ts = ts.astimezone(utc)
+                return ts >= cutoff_utc
 
         prev_close_map = _fetch_prev_close(list(tickers))
         if not prev_close_map:
