@@ -1189,9 +1189,13 @@ def get_market_state() -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # PRICE FETCH — HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
-def _fetch_prev_close(tickers: list, use_completed: bool = False) -> dict:
+def _fetch_prev_close(tickers: tuple, use_completed: bool = False) -> dict:
     """
     Fetch the baseline close price for Chg % / Chg $ calculations.
+    Not decorated with @st.cache_data because it is called from inside other
+    @st.cache_data functions — Streamlit forbids nested cached calls.
+    The outer price functions (TTL=300 or 3600) already prevent this from
+    running more often than their own cache allows.
 
     use_completed=True  → iloc[-2]: last *completed* session close.
                           Needed for live hours: yfinance includes today's
@@ -1205,7 +1209,7 @@ def _fetch_prev_close(tickers: list, use_completed: bool = False) -> dict:
     """
     try:
         raw = yf.download(
-            tickers, period="5d", interval="1d",
+            list(tickers), period="5d", interval="1d",
             auto_adjust=True, progress=False, threads=True,
         )
         if raw.empty or len(raw["Close"]) < 2:
@@ -1249,7 +1253,7 @@ def fetch_price_data_live(tickers: tuple) -> pd.DataFrame:
         # use_completed=True → iloc[-2] = yesterday's confirmed close.
         # iloc[-1] during live hours = today's partial bar with NaN for many
         # tickers, causing them to drop from the active count entirely.
-        prev_close_map = _fetch_prev_close(list(tickers), use_completed=True)
+        prev_close_map = _fetch_prev_close(tickers, use_completed=True)
         if not prev_close_map:
             return fetch_price_data_eod(tickers)
 
@@ -1343,7 +1347,7 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
                 return ts.astimezone(utc) >= regular_open_utc
 
         # use_completed=False is correct for both extended sessions (see docstring).
-        prev_close_map = _fetch_prev_close(list(tickers), use_completed=False)
+        prev_close_map = _fetch_prev_close(tickers, use_completed=False)
         if not prev_close_map:
             return fetch_price_data_eod(tickers)
 
@@ -1448,28 +1452,28 @@ def fmt_volume(v) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MARKET CAP  — shares cached 24h, multiplied by displayed price at render time
-# ThreadPoolExecutor makes the cold-load on 500+ tickers ~20× faster.
+# MARKET CAP  — fetched directly from fast_info.market_cap (pre-computed by
+# Yahoo Finance), cached 24h, parallelised across 20 threads.
+# Using market_cap directly avoids a separate shares × price multiplication
+# and is more accurate than shares_outstanding × delayed display price.
 # ─────────────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=86400, show_spinner=False)
-def fetch_shares_outstanding(tickers: tuple) -> dict:
+def fetch_market_caps(tickers: tuple) -> dict:
     """
-    Cache shares outstanding for 24 hours (changes rarely).
-    Market cap = these shares × the price already shown in df["price"],
-    so it is always consistent with the displayed session price.
-    Uses 20 parallel threads to fetch fast_info for large universes.
+    Cache market caps for 24 hours.  Uses 20 parallel threads so cold-loading
+    50 tickers takes ~2-3 s instead of ~25 s sequentially.
     """
     def _get(tk):
         try:
-            shares = yf.Ticker(tk).fast_info.shares
-            return tk, float(shares) if shares and not pd.isna(shares) else None
+            mc = yf.Ticker(tk).fast_info.market_cap
+            return tk, float(mc) if mc and not pd.isna(mc) else None
         except Exception:
             return tk, None
 
     result = {}
     with ThreadPoolExecutor(max_workers=20) as ex:
-        for tk, shares in ex.map(_get, tickers):
-            result[tk] = shares
+        for tk, mc in ex.map(_get, tickers):
+            result[tk] = mc
     return result
 
 
@@ -1532,7 +1536,7 @@ def render_screener() -> None:
           <div class="data-hover-divider"></div>
           <div class="data-hover-item">
             <span class="data-hover-label">Mkt Cap</span>
-            <span class="data-hover-val">Displayed price × shares outstanding</span>
+            <span class="data-hover-val">fast_info.market_cap · Yahoo Finance · 24hr cache</span>
           </div>
           <div class="data-hover-divider"></div>
           <div class="data-hover-item">
@@ -1679,7 +1683,7 @@ def render_screener() -> None:
             st.session_state["view_sel"] = "Losers"; st.rerun()
     with col_topn:
         if "top_n" not in st.session_state:
-            st.session_state["top_n"] = 50
+            st.session_state["top_n"] = total_sorted   # default: show full universe
         # Clamp stored value to valid range in case the universe shrank
         current_n = max(1, min(int(st.session_state["top_n"]), max(total_sorted, 1)))
         top_n = st.number_input(
@@ -1695,16 +1699,12 @@ def render_screener() -> None:
     df = df_sorted.head(int(top_n)).reset_index(drop=True)
     actual_n = len(df)
 
-    # ── Market cap: displayed price × shares outstanding (threaded, 24h cache)
+    # ── Market cap: fast_info.market_cap direct from Yahoo Finance (24h cache) ─
     display_tickers = tuple(df["ticker"].tolist())
-    with st.spinner("Fetching shares outstanding…"):
-        shares_map = fetch_shares_outstanding(display_tickers)
+    with st.spinner("Fetching market caps…"):
+        mktcap_map = fetch_market_caps(display_tickers)
 
-    df["mkt_cap"] = df.apply(
-        lambda row: row["price"] * shares_map[row["ticker"]]
-        if shares_map.get(row["ticker"]) is not None else None,
-        axis=1,
-    )
+    df["mkt_cap"] = df["ticker"].map(mktcap_map)
 
     # ── Summary stats — uses full universe (ignores sector filter) ─────────
     all_active = constituents.merge(prices, on="ticker", how="inner")
