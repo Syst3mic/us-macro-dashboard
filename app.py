@@ -9,6 +9,7 @@ import requests
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime, timezone, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import yfinance as yf
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -247,6 +248,11 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     font-size: 9px; padding: 2px 7px; border-radius: 3px;
     background: rgba(255,255,255,.05); border: 1px solid rgba(120,140,200,.1);
     color: #FFFFFF; white-space: nowrap;
+}
+.weight-tag {
+    font-size: 9px; padding: 2px 7px; border-radius: 3px;
+    background: rgba(91,141,239,.07); border: 1px solid rgba(91,141,239,.15);
+    color: #7BA4F5; white-space: nowrap; font-family: 'IBM Plex Mono', monospace;
 }
 </style>
 
@@ -776,9 +782,13 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
     st.caption(cfg["full"])
     st.markdown("</div>", unsafe_allow_html=True)
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# END OF PART 1  —  continue in app_part2.py
+# ═══════════════════════════════════════════════════════════════════════════════
+
 
 # ─────────────────────────────────────────────────────────────────────────────
-# S&P 500 FALLBACK DATA
+# S&P 500 FALLBACK DATA  (used only when both IVV and Wikipedia fail)
 # ─────────────────────────────────────────────────────────────────────────────
 _SP500_FALLBACK_DATA = [
     ("AAPL","Apple Inc.","Information Technology"),("MSFT","Microsoft Corp.","Information Technology"),
@@ -977,32 +987,180 @@ _NDX100_DATA = [
     ("MDLZ","Mondelez International","Consumer Staples"),("RIVN","Rivian Automotive","Consumer Discretionary"),
 ]
 
-_SP500_CSV = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
+# ─────────────────────────────────────────────────────────────────────────────
+# CONSTITUENT FETCH  —  iShares IVV (S&P 500) / Invesco QQQ (Nasdaq 100)
+# Primary:  ETF holdings CSV  → ticker + company + sector + weight (%)
+# Fallback: Wikipedia HTML table → ticker + company + sector, weight = None
+# Final:    hardcoded lists above → weight = None
+# ─────────────────────────────────────────────────────────────────────────────
+_IVV_URL  = (
+    "https://www.ishares.com/us/products/239726/ishares-core-sp-500-etf/"
+    "1467271812596.ajax?fileType=csv&fileName=IVV_holdings&dataType=fund"
+)
+_QQQ_URL  = (
+    "https://www.invesco.com/us/financial-products/etfs/holdings/main/"
+    "holdings/0?audienceType=Investor&action=download&ticker=QQQ"
+)
+_SP500_WIKI_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+_NDX_WIKI_URL   = "https://en.wikipedia.org/wiki/Nasdaq-100"
+
+_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; MacroDashboard/1.0)"}
+
+
+def _find_csv_header(lines: list[str], required: list[str]) -> int | None:
+    """Return the index of the first line containing all required field names."""
+    for i, line in enumerate(lines):
+        fields = [f.strip().lower() for f in line.split(",")]
+        if all(any(r in f for f in fields) for r in required):
+            return i
+    return None
+
+
+def _normalise_cols(df: pd.DataFrame) -> pd.DataFrame:
+    """Rename ETF-holding CSV columns to our standard names."""
+    remap = {}
+    for c in df.columns:
+        cl = c.strip().lower()
+        if cl == "ticker":
+            remap[c] = "ticker"
+        elif cl in ("name", "holding name", "security"):
+            remap[c] = "company"
+        elif "weight" in cl:          # "Weight (%)" or "Weight"
+            remap[c] = "weight"
+        elif cl == "sector":
+            remap[c] = "sector"
+    return df.rename(columns=remap)
+
+
+def _clean_tickers(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df["ticker"] = df["ticker"].astype(str).str.strip().str.replace(".", "-", regex=False)
+    # Keep only rows that look like real equity tickers (1–5 uppercase letters/hyphens)
+    mask = df["ticker"].str.match(r"^[A-Z][A-Z0-9\-]{0,6}$", na=False)
+    return df[mask].reset_index(drop=True)
+
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_sp500_constituents() -> pd.DataFrame:
+    # ── Tier 1: iShares IVV holdings CSV (has exact weights) ─────────────────
     try:
-        r = requests.get(_SP500_CSV, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        r = requests.get(_IVV_URL, headers=_HEADERS, timeout=25)
         r.raise_for_status()
-        df = pd.read_csv(pd.io.common.StringIO(r.text))
-        df = df[["Symbol", "Security", "GICS Sector"]].copy()
-        df.columns = ["ticker", "company", "sector"]
-        df["ticker"] = df["ticker"].str.replace(".", "-", regex=False)
-        df["index"]  = "S&P 500"
-        return df.reset_index(drop=True)
+        lines = r.text.splitlines()
+        hi = _find_csv_header(lines, ["ticker", "weight"])
+        if hi is not None:
+            df = pd.read_csv(pd.io.common.StringIO("\n".join(lines[hi:])), low_memory=False)
+            df = _normalise_cols(df)
+            # Keep only equity rows; drop cash/futures lines
+            if "asset class" in [c.lower() for c in df.columns]:
+                ac_col = next(c for c in df.columns if c.lower() == "asset class")
+                df = df[df[ac_col].astype(str).str.strip() == "Equity"]
+            needed = [c for c in ("ticker", "company", "weight", "sector") if c in df.columns]
+            df = df[needed].copy()
+            if "weight" in df.columns:
+                df["weight"] = pd.to_numeric(df["weight"], errors="coerce") / 100.0
+            if "sector" not in df.columns:
+                df["sector"] = "Unknown"
+            if "company" not in df.columns:
+                df["company"] = df["ticker"]
+            df = _clean_tickers(df)
+            df["index"] = "S&P 500"
+            if len(df) >= 400:
+                return df.reset_index(drop=True)
     except Exception as e:
-        print(f"SP500 CSV fetch failed: {e} — using fallback")
-        return _sp500_fallback()
+        print(f"IVV fetch failed: {e}")
 
-def _sp500_fallback() -> pd.DataFrame:
+    # ── Tier 2: Wikipedia  (no weights) ──────────────────────────────────────
+    try:
+        r = requests.get(_SP500_WIKI_URL, headers=_HEADERS, timeout=20)
+        r.raise_for_status()
+        tables = pd.read_html(pd.io.common.StringIO(r.text))
+        for t in tables:
+            cols_l = [str(c).lower() for c in t.columns]
+            if any("symbol" in c for c in cols_l) and any("sector" in c for c in cols_l):
+                col_map = {}
+                for c in t.columns:
+                    cl = str(c).lower()
+                    if "symbol" in cl:   col_map[c] = "ticker"
+                    elif "security" in cl or "name" in cl: col_map[c] = "company"
+                    elif "sector" in cl: col_map[c] = "sector"
+                df = t.rename(columns=col_map)
+                needed = [c for c in ("ticker", "company", "sector") if c in df.columns]
+                df = df[needed].copy()
+                df["weight"] = None
+                df["index"]  = "S&P 500"
+                df = _clean_tickers(df)
+                if len(df) >= 400:
+                    return df.reset_index(drop=True)
+    except Exception as e:
+        print(f"Wikipedia S&P 500 fetch failed: {e}")
+
+    # ── Tier 3: hardcoded fallback ────────────────────────────────────────────
+    print("SP500: using hardcoded fallback")
     df = pd.DataFrame(_SP500_FALLBACK_DATA, columns=["ticker", "company", "sector"])
-    df["index"] = "S&P 500"
-    return df
+    df["weight"] = None
+    df["index"]  = "S&P 500"
+    return df.reset_index(drop=True)
 
+
+@st.cache_data(ttl=86400, show_spinner=False)
 def fetch_ndx_constituents() -> pd.DataFrame:
+    # ── Tier 1: Invesco QQQ holdings CSV (has exact weights) ─────────────────
+    try:
+        r = requests.get(_QQQ_URL, headers=_HEADERS, timeout=25)
+        r.raise_for_status()
+        lines = r.text.splitlines()
+        hi = _find_csv_header(lines, ["ticker", "weight"])
+        if hi is not None:
+            df = pd.read_csv(pd.io.common.StringIO("\n".join(lines[hi:])), low_memory=False)
+            df = _normalise_cols(df)
+            needed = [c for c in ("ticker", "company", "weight", "sector") if c in df.columns]
+            df = df[needed].copy()
+            if "weight" in df.columns:
+                df["weight"] = pd.to_numeric(df["weight"], errors="coerce") / 100.0
+            if "sector" not in df.columns:
+                df["sector"] = "Unknown"
+            if "company" not in df.columns:
+                df["company"] = df["ticker"]
+            df = _clean_tickers(df)
+            df["index"] = "Nasdaq 100"
+            if len(df) >= 90:
+                return df.reset_index(drop=True)
+    except Exception as e:
+        print(f"QQQ fetch failed: {e}")
+
+    # ── Tier 2: Wikipedia  (no weights) ──────────────────────────────────────
+    try:
+        r = requests.get(_NDX_WIKI_URL, headers=_HEADERS, timeout=20)
+        r.raise_for_status()
+        tables = pd.read_html(pd.io.common.StringIO(r.text))
+        for t in tables:
+            cols_l = [str(c).lower() for c in t.columns]
+            if any("ticker" in c or "symbol" in c for c in cols_l):
+                col_map = {}
+                for c in t.columns:
+                    cl = str(c).lower()
+                    if "ticker" in cl or "symbol" in cl: col_map[c] = "ticker"
+                    elif "company" in cl or "name" in cl: col_map[c] = "company"
+                    elif "sector" in cl: col_map[c] = "sector"
+                df = t.rename(columns=col_map)
+                needed = [c for c in ("ticker", "company", "sector") if c in df.columns]
+                df = df[needed].copy()
+                df["weight"] = None
+                df["index"]  = "Nasdaq 100"
+                df = _clean_tickers(df)
+                if len(df) >= 90:
+                    return df.reset_index(drop=True)
+    except Exception as e:
+        print(f"Wikipedia Nasdaq 100 fetch failed: {e}")
+
+    # ── Tier 3: hardcoded fallback ────────────────────────────────────────────
+    print("NDX: using hardcoded fallback")
     df = pd.DataFrame(_NDX100_DATA, columns=["ticker", "company", "sector"])
-    df["index"] = "Nasdaq 100"
-    return df
+    df["weight"] = None
+    df["index"]  = "Nasdaq 100"
+    return df.reset_index(drop=True)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MARKET STATE
@@ -1026,6 +1184,7 @@ def get_market_state() -> str:
     elif mins < 960:  return "closed"
     elif mins < 1290: return "pre"
     else:             return "open"
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PRICE FETCH — HELPERS
@@ -1287,8 +1446,10 @@ def fmt_volume(v) -> str:
     if v >= 1_000:         return f"{v/1_000:.0f}K"
     return str(v)
 
+
 # ─────────────────────────────────────────────────────────────────────────────
 # MARKET CAP  — shares cached 24h, multiplied by displayed price at render time
+# ThreadPoolExecutor makes the cold-load on 500+ tickers ~20× faster.
 # ─────────────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_shares_outstanding(tickers: tuple) -> dict:
@@ -1296,15 +1457,21 @@ def fetch_shares_outstanding(tickers: tuple) -> dict:
     Cache shares outstanding for 24 hours (changes rarely).
     Market cap = these shares × the price already shown in df["price"],
     so it is always consistent with the displayed session price.
+    Uses 20 parallel threads to fetch fast_info for large universes.
     """
-    result = {}
-    for tk in tickers:
+    def _get(tk):
         try:
             shares = yf.Ticker(tk).fast_info.shares
-            result[tk] = float(shares) if shares and not pd.isna(shares) else None
+            return tk, float(shares) if shares and not pd.isna(shares) else None
         except Exception:
-            result[tk] = None
+            return tk, None
+
+    result = {}
+    with ThreadPoolExecutor(max_workers=20) as ex:
+        for tk, shares in ex.map(_get, tickers):
+            result[tk] = shares
     return result
+
 
 def fmt_mktcap(v) -> str:
     if v is None or (isinstance(v, float) and pd.isna(v)): return "—"
@@ -1313,15 +1480,38 @@ def fmt_mktcap(v) -> str:
     if v >= 1_000_000:         return f"${v/1_000_000:.0f}M"
     return f"${v:,.0f}"
 
+
+def fmt_weight(w) -> str:
+    if w is None or (isinstance(w, float) and pd.isna(w)): return "—"
+    return f"{w*100:.3f}%"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# END OF PART 2  —  continue in app_part3.py
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # MARKETS SCREENER — RENDERER
 # ─────────────────────────────────────────────────────────────────────────────
 def render_screener() -> None:
     sgt = timezone(timedelta(hours=8))
 
+    # ── Local helper: weighted avg of chg_pct, falls back to simple mean ──
+    def _weighted_avg(subset: pd.DataFrame) -> float:
+        if subset.empty:
+            return 0.0
+        if "weight" not in subset.columns:
+            return float(subset["chg_pct"].mean())
+        valid = subset.dropna(subset=["weight"])
+        if valid.empty or valid["weight"].sum() == 0:
+            return float(subset["chg_pct"].mean())
+        return float((valid["chg_pct"] * valid["weight"]).sum() / valid["weight"].sum())
+
+    # ── Title + data tooltip ──────────────────────────────────────────────
     st.markdown("""
     <div style="margin-bottom:16px">
-      <div class="screener-title">📈 Markets Screener — Top 50 Movers</div>
+      <div class="screener-title">📈 Markets Screener</div>
       <div class="data-hover-wrap" style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(120,140,200,.08)">
         <div class="data-hover-trigger">DATA <span class="data-q">?</span></div>
         <div class="data-hover-bar">
@@ -1336,13 +1526,18 @@ def render_screener() -> None:
           </div>
           <div class="data-hover-divider"></div>
           <div class="data-hover-item">
+            <span class="data-hover-label">Weights</span>
+            <span class="data-hover-val">iShares IVV / Invesco QQQ · daily</span>
+          </div>
+          <div class="data-hover-divider"></div>
+          <div class="data-hover-item">
             <span class="data-hover-label">Mkt Cap</span>
-            <span class="data-hover-val">Displayed price × shares (top 50)</span>
+            <span class="data-hover-val">Displayed price × shares outstanding</span>
           </div>
           <div class="data-hover-divider"></div>
           <div class="data-hover-item">
             <span class="data-hover-label">Cache</span>
-            <span class="data-hover-val">Prices: 5 min · Shares: 24 hr</span>
+            <span class="data-hover-val">Prices: 5 min · Shares / Weights: 24 hr</span>
           </div>
         </div>
       </div>
@@ -1379,9 +1574,13 @@ def render_screener() -> None:
         if st.button("Nasdaq 100", key="btn_ndx100", use_container_width=True):
             st.session_state["idx_choice"] = "Nasdaq 100"; st.rerun()
 
-    # ── Load constituents ─────────────────────────────────────────────────
+    # ── Load constituents (now includes weight column from ETF holdings) ──
     with st.spinner("Loading constituent list…"):
-        constituents = fetch_sp500_constituents() if st.session_state["idx_choice"] == "S&P 500" else fetch_ndx_constituents()
+        constituents = (
+            fetch_sp500_constituents()
+            if st.session_state["idx_choice"] == "S&P 500"
+            else fetch_ndx_constituents()
+        )
     if constituents.empty:
         st.error("Failed to load constituent list.")
         return
@@ -1413,35 +1612,53 @@ def render_screener() -> None:
     active_count = len(df)
     now_sgt_str  = datetime.now(sgt).strftime("%H:%M SGT")
 
+    # ── Market state status bar ───────────────────────────────────────────
     if market_state == "open":
-        state_html = (f"<span style='color:#0FD68A;font-weight:700'>● LIVE</span>"
-                      f"<span style='color:#4D6080'> (~15min delay) · {active_count} of {total_universe} stocks active · as of {now_sgt_str}</span>")
+        state_html = (
+            f"<span style='color:#0FD68A;font-weight:700'>● LIVE</span>"
+            f"<span style='color:#4D6080'> (~15min delay) · {active_count} of {total_universe} stocks active · as of {now_sgt_str}</span>"
+        )
     elif market_state == "pre":
-        state_html = (f"<span style='color:#F59E0B;font-weight:700'>● PRE-MARKET</span>"
-                      f"<span style='color:#4D6080'> (~15min delay) · {active_count} of {total_universe} stocks active · as of {now_sgt_str}</span>")
+        state_html = (
+            f"<span style='color:#F59E0B;font-weight:700'>● PRE-MARKET</span>"
+            f"<span style='color:#4D6080'> (~15min delay) · {active_count} of {total_universe} stocks active · as of {now_sgt_str}</span>"
+        )
     elif market_state == "after_hours":
-        state_html = (f"<span style='color:#A78BFA;font-weight:700'>● AFTER-HOURS</span>"
-                      f"<span style='color:#4D6080'> (~15min delay) · {active_count} of {total_universe} stocks active · as of {now_sgt_str}</span>")
+        state_html = (
+            f"<span style='color:#A78BFA;font-weight:700'>● AFTER-HOURS</span>"
+            f"<span style='color:#4D6080'> (~15min delay) · {active_count} of {total_universe} stocks active · as of {now_sgt_str}</span>"
+        )
     else:
-        state_html = (f"<span style='color:#F0485A;font-weight:700'>● CLOSED</span>"
-                      f"<span style='color:#4D6080'> · showing {trade_date} official close · {active_count} stocks</span>")
+        state_html = (
+            f"<span style='color:#F0485A;font-weight:700'>● CLOSED</span>"
+            f"<span style='color:#4D6080'> · showing {trade_date} official close · {active_count} stocks</span>"
+        )
 
     st.markdown(
         f"<div style='font-family:IBM Plex Mono,monospace;font-size:11px;margin-bottom:14px'>✓ {state_html}</div>",
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
     # ── Sector filter ─────────────────────────────────────────────────────
     sectors    = ["All"] + sorted(df["sector"].dropna().unique().tolist())
-    sector_sel = st.selectbox("Filter by Sector", sectors, key="sector_sel", label_visibility="collapsed")
+    sector_sel = st.selectbox(
+        "Filter by Sector", sectors, key="sector_sel", label_visibility="collapsed"
+    )
     if sector_sel != "All":
         df = df[df["sector"] == sector_sel]
 
-    # ── Gainers / Losers toggle ───────────────────────────────────────────
+    # ── Pre-sort for current view so we know total_sorted before rendering ─
     if "view_sel" not in st.session_state:
         st.session_state["view_sel"] = "Gainers"
     is_gainers = st.session_state["view_sel"] == "Gainers"
 
+    if is_gainers:
+        df_sorted = df[df["chg_pct"] > 0].sort_values("chg_pct", ascending=False)
+    else:
+        df_sorted = df[df["chg_pct"] < 0].sort_values("chg_pct", ascending=True)
+    total_sorted = len(df_sorted)
+
+    # ── Gainers / Losers toggle  +  Show top N input ──────────────────────
     g_bg = "rgba(15,214,138,.15)"  if is_gainers else "transparent"
     g_bd = "rgba(15,214,138,.5)"   if is_gainers else "rgba(15,214,138,.2)"
     l_bg = "rgba(240,72,90,.15)"   if not is_gainers else "transparent"
@@ -1449,35 +1666,39 @@ def render_screener() -> None:
 
     st.markdown(f"""
     <style>
-    button[aria-label="Top 50 Gainers"] {{ background:{g_bg}!important; border-color:{g_bd}!important; color:#0FD68A!important; font-weight:{'700' if is_gainers else '400'}!important; }}
-    button[aria-label="Top 50 Losers"]  {{ background:{l_bg}!important; border-color:{l_bd}!important; color:#F0485A!important; font-weight:{'700' if not is_gainers else '400'}!important; }}
+    button[aria-label="Gainers"] {{ background:{g_bg}!important; border-color:{g_bd}!important; color:#0FD68A!important; font-weight:{'700' if is_gainers else '400'}!important; }}
+    button[aria-label="Losers"]  {{ background:{l_bg}!important; border-color:{l_bd}!important; color:#F0485A!important; font-weight:{'700' if not is_gainers else '400'}!important; }}
     </style>""", unsafe_allow_html=True)
 
-    col_g, col_l, _ = st.columns([1, 1, 8])
+    col_g, col_l, col_spacer, col_topn = st.columns([1.3, 1.3, 5.0, 2.4])
     with col_g:
-        if st.button("Top 50 Gainers", key="btn_gainers", use_container_width=True):
+        if st.button("Gainers", key="btn_gainers", use_container_width=True):
             st.session_state["view_sel"] = "Gainers"; st.rerun()
     with col_l:
-        if st.button("Top 50 Losers", key="btn_losers", use_container_width=True):
+        if st.button("Losers", key="btn_losers", use_container_width=True):
             st.session_state["view_sel"] = "Losers"; st.rerun()
+    with col_topn:
+        if "top_n" not in st.session_state:
+            st.session_state["top_n"] = 50
+        # Clamp stored value to valid range in case the universe shrank
+        current_n = max(1, min(int(st.session_state["top_n"]), max(total_sorted, 1)))
+        top_n = st.number_input(
+            "Show top N",
+            min_value=1,
+            max_value=max(total_sorted, 1),
+            value=current_n,
+            step=10,
+        )
+        st.session_state["top_n"] = int(top_n)
 
-    view = st.session_state["view_sel"]
-    if view == "Gainers":
-        df = df[df["chg_pct"] > 0].sort_values("chg_pct", ascending=False)
-    else:
-        df = df[df["chg_pct"] < 0].sort_values("chg_pct", ascending=True)
+    # ── Slice to top N ────────────────────────────────────────────────────
+    df = df_sorted.head(int(top_n)).reset_index(drop=True)
+    actual_n = len(df)
 
-    df = df.head(50).reset_index(drop=True)
-
-    top50_avg_chg = df["chg_pct"].mean() if not df.empty else 0.0
-    top50_label   = "Top 50 Gainers Avg" if view == "Gainers" else "Top 50 Losers Avg"
-
-    # ── Market cap: displayed price × shares outstanding (cached 24h) ─────
-    # Uses df["price"] directly — the same price shown in the table — so
-    # market cap is always consistent with the current session's prices.
-    top50_tickers = tuple(df["ticker"].tolist())
+    # ── Market cap: displayed price × shares outstanding (threaded, 24h cache)
+    display_tickers = tuple(df["ticker"].tolist())
     with st.spinner("Fetching shares outstanding…"):
-        shares_map = fetch_shares_outstanding(top50_tickers)
+        shares_map = fetch_shares_outstanding(display_tickers)
 
     df["mkt_cap"] = df.apply(
         lambda row: row["price"] * shares_map[row["ticker"]]
@@ -1485,20 +1706,34 @@ def render_screener() -> None:
         axis=1,
     )
 
-    # ── Summary stats ─────────────────────────────────────────────────────
-    all_active  = constituents.merge(prices, on="ticker", how="inner")
-    gainers     = (all_active["chg_pct"] > 0).sum()
-    losers      = (all_active["chg_pct"] < 0).sum()
-    unchanged   = (all_active["chg_pct"] == 0).sum()
-    overall_avg = all_active["chg_pct"].mean()
+    # ── Summary stats — uses full universe (ignores sector filter) ─────────
+    all_active = constituents.merge(prices, on="ticker", how="inner")
+    gainers_n   = (all_active["chg_pct"] > 0).sum()
+    losers_n    = (all_active["chg_pct"] < 0).sum()
+    unchanged_n = (all_active["chg_pct"] == 0).sum()
+
+    # Detect whether real weights loaded (vs fallback mode with all None)
+    has_weights = (
+        "weight" in all_active.columns
+        and all_active["weight"].notna().any()
+    )
+
+    top_n_return   = _weighted_avg(df)
+    overall_return = _weighted_avg(all_active)
+
+    top_n_label   = (
+        f"Top {actual_n} {'Gainers' if is_gainers else 'Losers'}"
+        + (" (Wtd)" if has_weights else "")
+    )
+    overall_label = "Index Return (Wtd)" if has_weights else "Overall Avg"
 
     c1, c2, c3, c4, c5 = st.columns(5)
     for col, label, val, color in [
-        (c1, "Gainers",     f"{gainers}",              "#0FD68A"),
-        (c2, "Losers",      f"{losers}",               "#F0485A"),
-        (c3, "Unchanged",   f"{unchanged}",            "#8898BB"),
-        (c4, top50_label,   f"{top50_avg_chg:+.2f}%", "#0FD68A" if top50_avg_chg >= 0 else "#F0485A"),
-        (c5, "Overall Avg", f"{overall_avg:+.2f}%",   "#0FD68A" if overall_avg   >= 0 else "#F0485A"),
+        (c1, "Gainers",      f"{gainers_n}",               "#0FD68A"),
+        (c2, "Losers",       f"{losers_n}",                "#F0485A"),
+        (c3, "Unchanged",    f"{unchanged_n}",             "#8898BB"),
+        (c4, top_n_label,    f"{top_n_return:+.2f}%",      "#0FD68A" if top_n_return   >= 0 else "#F0485A"),
+        (c5, overall_label,  f"{overall_return:+.2f}%",    "#0FD68A" if overall_return >= 0 else "#F0485A"),
     ]:
         with col:
             st.markdown(f"""
@@ -1516,18 +1751,23 @@ def render_screener() -> None:
     for i, row in df.iterrows():
         chg_cls  = "chg-pos" if row["chg_pct"] >= 0 else "chg-neg"
         chg_sign = "▲" if row["chg_pct"] >= 0 else "▼"
+        w_cell   = fmt_weight(row.get("weight"))
         rows_html += f"""
         <tr>
           <td style="color:#4D6080;width:36px">{i+1}</td>
           <td><span class="ticker-badge">{row['ticker']}</span></td>
-          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{row['company']}</td>
+          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{row['company']}</td>
           <td><span class="sector-tag">{row['sector']}</span></td>
+          <td style="text-align:right"><span class="weight-tag">{w_cell}</span></td>
           <td style="text-align:right">${row['price']:,.2f}</td>
           <td class="{chg_cls}" style="text-align:right">{chg_sign} {abs(row['chg_pct']):.2f}%</td>
-          <td class="{chg_cls}" style="text-align:right">{'+' if row['chg_abs']>=0 else ''}{row['chg_abs']:.2f}</td>
+          <td class="{chg_cls}" style="text-align:right">{'+' if row['chg_abs'] >= 0 else ''}{row['chg_abs']:.2f}</td>
           <td style="text-align:right;color:#FFFFFF">{fmt_volume(row['volume'])}</td>
           <td style="text-align:right;color:#FFFFFF">{fmt_mktcap(row.get('mkt_cap'))}</td>
         </tr>"""
+
+    weight_src = "iShares IVV" if st.session_state["idx_choice"] == "S&P 500" else "Invesco QQQ"
+    weight_note = f"Weights: {weight_src} holdings" if has_weights else "Weights: unavailable (fallback mode)"
 
     st.markdown(f"""
     <div style="background:#0B1020;border:1px solid rgba(120,140,200,.1);
@@ -1536,6 +1776,7 @@ def render_screener() -> None:
         <thead>
           <tr>
             <th>#</th><th>Ticker</th><th>Company</th><th>Sector</th>
+            <th style="text-align:right">Weight</th>
             <th style="text-align:right">Price</th>
             <th style="text-align:right">Chg %</th>
             <th style="text-align:right">Chg $</th>
@@ -1548,7 +1789,7 @@ def render_screener() -> None:
     </div>
     <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#4D6080;
         margin-top:8px;text-align:right">
-      Data: Yahoo Finance · Mkt cap: displayed price × shares · Top {len(df)} of {active_count}
+      Data: Yahoo Finance · {weight_note} · Showing {actual_n} of {active_count} active stocks
     </div>
     """, unsafe_allow_html=True)
 
@@ -1712,7 +1953,7 @@ def main():
         st.markdown(
             f"<span class='{cls}'>✓ {total_loaded}/{total_series} series loaded "
             f"(BLS: {bls_loaded}/{len(SERIES)} · FRED: {fred_loaded}/{len(FRED_SERIES)})</span>",
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
     with c_btn:
         if st.button("↻", help="Refresh data", key="refresh_main"):
@@ -1755,8 +1996,9 @@ def main():
         "BLS data: CUSR0000SA0 · CUSR0000SA0L1E · WPSFD4 · LNS14000000 · CES0000000001 &nbsp;·&nbsp; "
         "FRED data: PCEPILFE (BEA) · ICSA (DOL)"
         "</p>",
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
+
 
 if __name__ == "__main__":
     main()
