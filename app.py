@@ -1898,68 +1898,73 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
             prepost=True,
             progress=False,
             threads=True,
+            group_by="ticker",
         )
-        if raw.empty or raw["Close"].empty:
+        if raw.empty:
             return fetch_price_data_eod(tickers)
 
-        close  = raw["Close"]
-        volume = raw["Volume"]
+        # ── Normalise to a flat {ticker: DataFrame} dict ──────────────────
+        # yfinance with group_by="ticker" returns a MultiIndex column
+        # structure: (ticker, field). Flatten it so we can iterate reliably.
+        ticker_data = {}
+        for tk in tickers:
+            try:
+                if tk in raw.columns.get_level_values(0):
+                    tk_df = raw[tk][["Close", "Volume"]].copy()
+                    tk_df.columns = ["close", "volume"]
+                    ticker_data[tk] = tk_df
+            except Exception:
+                continue
 
-        # Filter to extended-hours bars only (exclude regular session)
-        sgt      = timezone(timedelta(hours=8))
+        if not ticker_data:
+            return fetch_price_data_eod(tickers)
+
+        # ── Time filter: keep only extended-hours bars ─────────────────────
         et       = timezone(timedelta(hours=-4))   # EDT
         now_et   = datetime.now(et)
         today_et = now_et.date()
 
         if session == "pre":
-            # Keep bars before 9:30am ET today
             cutoff = datetime(today_et.year, today_et.month, today_et.day,
                               9, 30, tzinfo=et)
-            mask = close.index < cutoff
+            def in_session(idx): return idx < cutoff
         else:
-            # after_hours: keep bars after 4:00pm ET today
             cutoff = datetime(today_et.year, today_et.month, today_et.day,
                               16, 0, tzinfo=et)
-            mask = close.index >= cutoff
-
-        close_ext  = close[mask]
-        volume_ext = volume[mask]
-
-        if close_ext.empty:
-            return fetch_price_data_eod(tickers)
+            def in_session(idx): return idx >= cutoff
 
         prev_close_map = _fetch_prev_close(list(tickers))
         if not prev_close_map:
             return fetch_price_data_eod(tickers)
 
-        last_price = close_ext.iloc[-1]
-        cum_volume = volume_ext.sum(axis=0)
-        trade_date = close_ext.index[-1].date()
-
         rows = []
-        for ticker in tickers:
-            if ticker not in close_ext.columns:
+        for tk, df_tk in ticker_data.items():
+            # Filter to session window
+            df_ext = df_tk[df_tk.index.map(in_session)]
+            df_ext = df_ext.dropna(subset=["close"])
+            if df_ext.empty:
                 continue
-            lp = last_price[ticker]
-            pc = prev_close_map.get(ticker)
-            if lp is None or pd.isna(lp) or pc is None or pc == 0:
+
+            pc = prev_close_map.get(tk)
+            if pc is None or pc == 0:
                 continue
-            # Only include tickers with actual extended-hours activity
-            ticker_bars = close_ext[ticker].dropna()
-            if ticker_bars.empty:
-                continue
-            chg_pct = (float(lp) / pc - 1) * 100
-            chg_abs = float(lp) - pc
-            vol_raw = cum_volume[ticker] if ticker in cum_volume.index else 0
+
+            lp      = float(df_ext["close"].iloc[-1])
+            chg_pct = (lp / pc - 1) * 100
+            chg_abs = lp - pc
+
+            vol_raw = df_ext["volume"].sum()
             vol     = int(vol_raw) if not pd.isna(vol_raw) and vol_raw > 0 else None
+
             rows.append({
-                "ticker":     ticker,
-                "price":      round(float(lp), 2),
+                "ticker":     tk,
+                "price":      round(lp, 2),
                 "chg_pct":    round(chg_pct, 2),
                 "chg_abs":    round(chg_abs, 2),
-                "volume":     vol,          # None → renders as '—'
-                "trade_date": str(trade_date),
+                "volume":     vol,
+                "trade_date": str(df_ext.index[-1].date()),
             })
+
         if not rows:
             return fetch_price_data_eod(tickers)
         return pd.DataFrame(rows)
