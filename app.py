@@ -1762,17 +1762,110 @@ def fetch_ndx_constituents() -> pd.DataFrame:
     df["index"] = "Nasdaq 100"
     return df
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def fetch_price_data(tickers: tuple) -> pd.DataFrame:
+def get_market_state() -> str:
     """
-    Batch fetch last 5 days OHLCV for all tickers via yfinance.
-    Compute % change and $ change vs prior close.
-    Returns one row per ticker with latest close data.
+    Returns 'pre', 'open', or 'closed' based on current ET time.
+    US market hours: Mon-Fri 09:30-16:00 ET.
+    """
+    et = timezone(timedelta(hours=-4))  # EDT (UTC-4); EST is UTC-5
+    now_et = datetime.now(et)
+    if now_et.weekday() >= 5:  # Saturday=5, Sunday=6
+        return "closed"
+    market_open  = now_et.replace(hour=9,  minute=30, second=0, microsecond=0)
+    market_close = now_et.replace(hour=16, minute=0,  second=0, microsecond=0)
+    if now_et < market_open:
+        return "pre"
+    elif now_et >= market_close:
+        return "closed"
+    return "open"
+
+
+@st.cache_data(ttl=300, show_spinner=False)   # 5-min cache during market hours
+def fetch_price_data_live(tickers: tuple) -> pd.DataFrame:
+    """
+    Intraday fetch: 2-min bars for today (~15min delayed).
+    Used during market hours only.
+    Also fetches previous day's close for chg % baseline.
+    Falls back to EOD if intraday data is empty (holiday etc).
+    """
+    try:
+        # Intraday bars for today
+        raw_intra = yf.download(
+            list(tickers),
+            period="1d",
+            interval="2m",
+            auto_adjust=True,
+            progress=False,
+            threads=True,
+        )
+        # If empty (holiday / unexpected close) fall back to EOD
+        if raw_intra.empty or len(raw_intra) == 0:
+            return fetch_price_data_eod(tickers)
+
+        close_intra  = raw_intra["Close"]
+        volume_intra = raw_intra["Volume"]
+
+        if close_intra.empty:
+            return fetch_price_data_eod(tickers)
+
+        # Previous day's close — for chg % baseline
+        raw_prev = yf.download(
+            list(tickers),
+            period="5d",
+            interval="1d",
+            auto_adjust=True,
+            progress=False,
+            threads=True,
+        )
+        if raw_prev.empty or len(raw_prev) < 2:
+            return fetch_price_data_eod(tickers)
+
+        close_prev = raw_prev["Close"]
+        prev_close = close_prev.iloc[-2]   # yesterday's close
+
+        # Latest intraday bar = current delayed price
+        last_price = close_intra.iloc[-1]
+        # Cumulative intraday volume = sum of all bars so far today
+        cum_volume = volume_intra.sum(axis=0)
+        trade_date = close_intra.index[-1].date()
+
+        rows = []
+        for ticker in tickers:
+            if ticker not in close_intra.columns:
+                continue
+            lp = last_price[ticker]
+            pc = prev_close[ticker] if ticker in prev_close.index else None
+            if pd.isna(lp) or pc is None or pd.isna(pc) or pc == 0:
+                continue
+            chg_pct = (lp / pc - 1) * 100
+            chg_abs = lp - pc
+            vol     = cum_volume[ticker] if ticker in cum_volume.index else 0
+            rows.append({
+                "ticker":     ticker,
+                "price":      round(float(lp), 2),
+                "chg_pct":    round(float(chg_pct), 2),
+                "chg_abs":    round(float(chg_abs), 2),
+                "volume":     int(vol) if not pd.isna(vol) else 0,
+                "trade_date": str(trade_date),
+                "is_live":    True,
+            })
+        return pd.DataFrame(rows)
+    except Exception as e:
+        print(f"Live price fetch failed: {e} — falling back to EOD")
+        return fetch_price_data_eod(tickers)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)  # 1-hr cache for EOD
+def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
+    """
+    End-of-day fetch: daily bars.
+    Used pre-market, after close, weekends, holidays.
     """
     try:
         raw = yf.download(
             list(tickers),
             period="5d",
+            interval="1d",
             auto_adjust=True,
             progress=False,
             threads=True,
@@ -1780,10 +1873,9 @@ def fetch_price_data(tickers: tuple) -> pd.DataFrame:
         if raw.empty:
             return pd.DataFrame()
 
-        close = raw["Close"]
+        close  = raw["Close"]
         volume = raw["Volume"]
 
-        # Need at least 2 days
         if len(close) < 2:
             return pd.DataFrame()
 
@@ -1804,18 +1896,30 @@ def fetch_price_data(tickers: tuple) -> pd.DataFrame:
             chg_abs = lc - pc
             vol     = last_vol[ticker] if ticker in last_vol.index else 0
             rows.append({
-                "ticker":    ticker,
-                "price":     round(lc, 2),
-                "chg_pct":   round(chg_pct, 2),
-                "chg_abs":   round(chg_abs, 2),
-                "volume":    int(vol) if not pd.isna(vol) else 0,
+                "ticker":     ticker,
+                "price":      round(float(lc), 2),
+                "chg_pct":    round(float(chg_pct), 2),
+                "chg_abs":    round(float(chg_abs), 2),
+                "volume":     int(vol) if not pd.isna(vol) else 0,
                 "trade_date": str(last_date),
+                "is_live":    False,
             })
-
         return pd.DataFrame(rows)
     except Exception as e:
-        print(f"Price fetch failed: {e}")
+        print(f"EOD price fetch failed: {e}")
         return pd.DataFrame()
+
+
+def fetch_price_data(tickers: tuple) -> tuple[pd.DataFrame, str]:
+    """
+    Router: picks live or EOD fetch based on market state.
+    Returns (dataframe, market_state).
+    """
+    state = get_market_state()
+    if state == "open":
+        return fetch_price_data_live(tickers), state
+    else:
+        return fetch_price_data_eod(tickers), state
 
 
 def fmt_volume(v: int) -> str:
@@ -1840,17 +1944,25 @@ def fmt_mktcap(v) -> str:
         return f"${v/1_000_000:.0f}M"
     return f"${v:,.0f}"
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def fetch_market_caps(tickers: tuple) -> dict:
+
+@st.cache_data(ttl=86400, show_spinner=False)  # 24-hr cache — shares outstanding barely changes
+def fetch_market_caps(tickers: tuple, prices_map: tuple) -> dict:
     """
-    Fetch live market cap for a small list of tickers (top 50 movers).
-    Uses yf.Ticker.fast_info.market_cap — one call per ticker.
-    Cached 1 hour since market cap changes slowly.
+    Compute previous-day market cap = prev_close × shares_outstanding.
+    prices_map: tuple of (ticker, prev_close_price) pairs passed in from EOD data.
+    Uses fast_info.shares for shares outstanding (one call per ticker).
+    Falls back to None if unavailable.
     """
+    prev_prices = dict(prices_map)
     result = {}
     for tk in tickers:
         try:
-            result[tk] = yf.Ticker(tk).fast_info.market_cap
+            shares = yf.Ticker(tk).fast_info.shares
+            pc     = prev_prices.get(tk)
+            if shares and pc and not pd.isna(shares) and not pd.isna(pc):
+                result[tk] = shares * pc
+            else:
+                result[tk] = None
         except Exception:
             result[tk] = None
     return result
@@ -1940,9 +2052,15 @@ def render_screener() -> None:
 
     tickers_tuple = tuple(constituents["ticker"].tolist())
 
-    # ── Load price data ───────────────────────────────────────────────────
-    with st.spinner(f"Fetching prices for {len(tickers_tuple)} stocks…"):
-        prices = fetch_price_data(tickers_tuple)
+    # ── Load price data (market-state-aware) ──────────────────────────────
+    market_state = get_market_state()
+    spinner_msg  = (
+        f"Fetching live prices for {len(tickers_tuple)} stocks (~15min delay)…"
+        if market_state == "open"
+        else f"Fetching EOD prices for {len(tickers_tuple)} stocks…"
+    )
+    with st.spinner(spinner_msg):
+        prices, market_state = fetch_price_data(tickers_tuple)
 
     if prices.empty:
         st.error("Failed to fetch price data from Yahoo Finance.")
@@ -1954,13 +2072,22 @@ def render_screener() -> None:
         st.error("No matching price data found.")
         return
 
-    trade_date  = df["trade_date"].iloc[0] if "trade_date" in df.columns else "—"
+    trade_date   = df["trade_date"].iloc[0] if "trade_date" in df.columns else "—"
     total_loaded = len(df)
+
+    # Market state badge
+    if market_state == "open":
+        state_badge = "<span style='color:#0FD68A;font-weight:700'>● LIVE</span> <span style='color:#4D6080'>(~15min delay)</span>"
+    elif market_state == "pre":
+        state_badge = "<span style='color:#F59E0B;font-weight:700'>● PRE-MARKET</span> <span style='color:#4D6080'>· showing previous close</span>"
+    else:
+        state_badge = "<span style='color:#F0485A;font-weight:700'>● CLOSED</span>"
 
     st.markdown(
         f"<div style='font-family:IBM Plex Mono,monospace;font-size:11px;"
         f"color:#4D6080;margin-bottom:14px'>"
-        f"✓ {total_loaded} stocks loaded · Last trading day: <b style='color:#FFFFFF'>{trade_date}</b>"
+        f"✓ {total_loaded} stocks loaded · {state_badge} · "
+        f"As of: <b style='color:#FFFFFF'>{trade_date}</b>"
         f"</div>",
         unsafe_allow_html=True
     )
@@ -2017,10 +2144,30 @@ def render_screener() -> None:
     top50_avg_chg = df["chg_pct"].mean() if not df.empty else 0.0
     top50_label   = "Top 50 Gainers Avg" if view == "Gainers" else "Top 50 Losers Avg"
 
-    # ── Fetch live market cap for top 50 only ─────────────────────────────
-    top50_tickers = tuple(df["ticker"].tolist())
-    with st.spinner("Fetching live market caps…"):
-        mktcap_map = fetch_market_caps(top50_tickers)
+    # ── Fetch prev-day market cap for top 50 (shares × prev close) ────────
+    # Build prev_close map from EOD data (always available regardless of state)
+    eod_prices  = fetch_price_data_eod(tickers_tuple)
+    prev_prices = {}
+    if not eod_prices.empty:
+        # prev close = price column from EOD fetch (yesterday's close)
+        # For mkt cap we want yesterday's close specifically
+        # Re-fetch just to get prev close safely
+        try:
+            raw_prev = yf.download(
+                df["ticker"].tolist(),
+                period="5d", interval="1d",
+                auto_adjust=True, progress=False, threads=True,
+            )
+            if not raw_prev.empty and len(raw_prev) >= 2:
+                pc_series = raw_prev["Close"].iloc[-2]
+                prev_prices = {tk: float(pc_series[tk]) for tk in df["ticker"] if tk in pc_series.index and not pd.isna(pc_series[tk])}
+        except Exception:
+            pass
+
+    top50_tickers  = tuple(df["ticker"].tolist())
+    prev_prices_t  = tuple(prev_prices.items())
+    with st.spinner("Fetching market caps (prev close)…"):
+        mktcap_map = fetch_market_caps(top50_tickers, prev_prices_t)
     df["mkt_cap"] = df["ticker"].map(mktcap_map)
 
     # ── Summary stats row ─────────────────────────────────────────────────
@@ -2032,11 +2179,11 @@ def render_screener() -> None:
 
     c1, c2, c3, c4, c5 = st.columns(5)
     for col, label, val, color in [
-        (c1, "Gainers",       f"{gainers}",               "#0FD68A"),
-        (c2, "Losers",        f"{losers}",                "#F0485A"),
-        (c3, "Unchanged",     f"{unchanged}",             "#8898BB"),
-        (c4, top50_label,     f"{top50_avg_chg:+.2f}%",  "#0FD68A" if top50_avg_chg >= 0 else "#F0485A"),
-        (c5, "Overall Avg",   f"{overall_avg:+.2f}%",    "#0FD68A" if overall_avg   >= 0 else "#F0485A"),
+        (c1, "Gainers",     f"{gainers}",              "#0FD68A"),
+        (c2, "Losers",      f"{losers}",               "#F0485A"),
+        (c3, "Unchanged",   f"{unchanged}",            "#8898BB"),
+        (c4, top50_label,   f"{top50_avg_chg:+.2f}%", "#0FD68A" if top50_avg_chg >= 0 else "#F0485A"),
+        (c5, "Overall Avg", f"{overall_avg:+.2f}%",   "#0FD68A" if overall_avg   >= 0 else "#F0485A"),
     ]:
         with col:
             st.markdown(f"""
