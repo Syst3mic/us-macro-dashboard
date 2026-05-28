@@ -1004,7 +1004,7 @@ def render_card(key: str, cfg: dict, df) -> None:
         col_chart, col_btn = st.columns([10, 1])
         with col_chart:
             st.plotly_chart(
-                fig_direct, use_container_width=True,
+                fig_direct, width='stretch',
                 config={"displayModeBar": False},
                 key=f"plt_direct_{key}"
             )
@@ -1027,7 +1027,7 @@ def render_card(key: str, cfg: dict, df) -> None:
             col_chart, col_btn = st.columns([10, 1])
             with col_chart:
                 st.plotly_chart(
-                    fig_mom, use_container_width=True,
+                    fig_mom, width='stretch',
                     config={"displayModeBar": False},
                     key=f"plt_mom_{key}"
                 )
@@ -1046,7 +1046,7 @@ def render_card(key: str, cfg: dict, df) -> None:
             col_chart2, col_btn2 = st.columns([10, 1])
             with col_chart2:
                 st.plotly_chart(
-                    fig_yoy, use_container_width=True,
+                    fig_yoy, width='stretch',
                     config={"displayModeBar": False},
                     key=f"plt_yoy_{key}"
                 )
@@ -1130,7 +1130,7 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
             fig_mom = make_chart(df_c, cfg, "mom", height=200)
             col_chart, col_btn = st.columns([10, 1])
             with col_chart:
-                st.plotly_chart(fig_mom, use_container_width=True, config={"displayModeBar": False}, key=f"plt_mom_{key}")
+                st.plotly_chart(fig_mom, width='stretch', config={"displayModeBar": False}, key=f"plt_mom_{key}")
             with col_btn:
                 if st.button("⛶", key=f"exp_mom_{key}", help="Expand chart"):
                     st.session_state["expanded"] = {"key": key, "which": "mom", "title": f"{cfg['name']} — Month-over-Month", "cfg": cfg, "df_c": df_c}
@@ -1140,7 +1140,7 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
             fig_yoy = make_chart(df_c, cfg, "yoy", height=200)
             col_chart2, col_btn2 = st.columns([10, 1])
             with col_chart2:
-                st.plotly_chart(fig_yoy, use_container_width=True, config={"displayModeBar": False}, key=f"plt_yoy_{key}")
+                st.plotly_chart(fig_yoy, width='stretch', config={"displayModeBar": False}, key=f"plt_yoy_{key}")
             with col_btn2:
                 if st.button("⛶", key=f"exp_yoy_{key}", help="Expand chart"):
                     st.session_state["expanded"] = {"key": key, "which": "yoy", "title": f"{cfg['name']} — Year-over-Year", "cfg": cfg, "df_c": df_c}
@@ -1321,7 +1321,7 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
 
     col_chart, col_btn = st.columns([10, 1])
     with col_chart:
-        st.plotly_chart(fig, use_container_width=True,
+        st.plotly_chart(fig, width='stretch',
                         config={"displayModeBar": False}, key=f"plt_fred_{key}")
     with col_btn:
         if st.button("⛶", key=f"exp_fred_{key}", help="Expand chart"):
@@ -2337,11 +2337,11 @@ def render_screener() -> None:
 
     col_sp, col_ndx, col_rest = st.columns([1, 1, 8])
     with col_sp:
-        if st.button("S&P 500", key="btn_sp500", use_container_width=True):
+        if st.button("S&P 500", key="btn_sp500", width='stretch'):
             st.session_state["idx_choice"] = "S&P 500"
             st.rerun()
     with col_ndx:
-        if st.button("Nasdaq 100", key="btn_ndx100", use_container_width=True):
+        if st.button("Nasdaq 100", key="btn_ndx100", width='stretch'):
             st.session_state["idx_choice"] = "Nasdaq 100"
             st.rerun()
     idx_choice = st.session_state["idx_choice"]
@@ -2516,11 +2516,11 @@ def render_screener() -> None:
 
     col_g, col_l, col_vrest = st.columns([1, 1, 8])
     with col_g:
-        if st.button("Gainers", key="btn_gainers", use_container_width=True):
+        if st.button("Gainers", key="btn_gainers", width='stretch'):
             st.session_state["view_sel"] = "Gainers"
             st.rerun()
     with col_l:
-        if st.button("Losers", key="btn_losers", use_container_width=True):
+        if st.button("Losers", key="btn_losers", width='stretch'):
             st.session_state["view_sel"] = "Losers"
             st.rerun()
 
@@ -2741,11 +2741,11 @@ def main():
     st.markdown("<div style='padding:20px 0 0'>", unsafe_allow_html=True)
     col_macro, col_markets, col_spacer = st.columns([1, 1, 8])
     with col_macro:
-        if st.button("📊  MACRO", key="btn_macro", use_container_width=True):
+        if st.button("📊  MACRO", key="btn_macro", width='stretch'):
             st.session_state["page"] = "MACRO"
             st.rerun()
     with col_markets:
-        if st.button("📈  MARKETS", key="btn_markets", use_container_width=True):
+        if st.button("📈  MARKETS", key="btn_markets", width='stretch'):
             st.session_state["page"] = "MARKETS"
             st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
@@ -2837,7 +2837,7 @@ def main():
             fig_exp = make_chart(df_e, cfg_e, which_e, height=550)
 
         st.plotly_chart(
-            fig_exp, use_container_width=True,
+            fig_exp, width='stretch',
             config={
                 "displayModeBar": True,
                 "modeBarButtonsToRemove": ["lasso2d", "select2d"],
