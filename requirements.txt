@@ -4,3 +4,4 @@ pandas
 plotly==5.24.1
 yfinance
 lxml
+openpyxl
