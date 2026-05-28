@@ -1756,7 +1756,7 @@ def fetch_sp500_constituents() -> pd.DataFrame:
     """
     Fetch SPY (SPDR S&P 500 ETF) daily holdings XLSX from State Street.
     Returns columns: ticker, company, sector, weight (%), index.
-    Falls back to hardcoded list if the XLSX is unreachable.
+    Falls back to hardcoded list if the XLSX is unreachable or malformed.
     """
     try:
         import io
@@ -1767,10 +1767,13 @@ def fetch_sp500_constituents() -> pd.DataFrame:
         r = requests.get(_SPY_HOLDINGS_URL, headers=headers, timeout=30)
         r.raise_for_status()
 
+        # If we got HTML instead of an XLSX binary, bail immediately
+        content_type = r.headers.get("Content-Type", "")
+        if "html" in content_type or b"<html" in r.content[:200].lower():
+            raise ValueError(f"Got HTML instead of XLSX (Content-Type: {content_type})")
+
         # The XLSX has a few header rows before the actual data table.
-        # Read without header, then find the row that contains "Ticker" or "Name".
         xls = pd.read_excel(io.BytesIO(r.content), header=None, engine="openpyxl")
-        # Locate the header row
         header_row = None
         for i, row in xls.iterrows():
             vals = [str(v).strip().lower() for v in row.values]
@@ -1781,14 +1784,9 @@ def fetch_sp500_constituents() -> pd.DataFrame:
         if header_row is None:
             raise ValueError("Could not find header row in SPY XLSX")
 
-        df = pd.read_excel(
-            io.BytesIO(r.content),
-            header=header_row,
-            engine="openpyxl",
-        )
+        df = pd.read_excel(io.BytesIO(r.content), header=header_row, engine="openpyxl")
         df.columns = [str(c).strip() for c in df.columns]
 
-        # Identify relevant columns (State Street uses varied naming)
         col_map = {}
         for col in df.columns:
             cl = col.lower()
@@ -1807,7 +1805,6 @@ def fetch_sp500_constituents() -> pd.DataFrame:
         out = pd.DataFrame()
         out["ticker"]  = df[col_map["ticker"]].astype(str).str.strip()
         out["company"] = df[col_map["company"]].astype(str).str.strip() if "company" in col_map else ""
-        # Sector may be numeric GICS code — map to name
         if "sector" in col_map:
             raw_sec = df[col_map["sector"]].astype(str).str.strip()
             out["sector"] = raw_sec.map(lambda s: _GICS_SECTOR_MAP.get(s[:2], s))
@@ -1815,15 +1812,18 @@ def fetch_sp500_constituents() -> pd.DataFrame:
             out["sector"] = "Unknown"
         out["weight"] = pd.to_numeric(df[col_map["weight"]], errors="coerce") if "weight" in col_map else None
 
-        # Drop cash / non-equity rows (ticker is blank, "-", or too long)
         out = out[
             out["ticker"].str.len().between(1, 5) &
             ~out["ticker"].isin(["-", "nan", "", "CASH", "CASH_USD"])
         ].copy()
-        # yfinance dot-to-dash: BRK.B → BRK-B
         out["ticker"] = out["ticker"].str.replace(".", "-", regex=False)
         out["index"]  = "S&P 500"
-        return out.reset_index(drop=True)
+        out = out.reset_index(drop=True)
+
+        if len(out) < 400:   # sanity check: S&P 500 should have ~503 entries
+            raise ValueError(f"Only {len(out)} rows after parse — likely malformed XLSX")
+
+        return out
 
     except Exception as e:
         print(f"SPY XLSX fetch failed: {e} — falling back to hardcoded list")
@@ -1841,69 +1841,85 @@ def _sp500_fallback() -> pd.DataFrame:
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_ndx_constituents() -> pd.DataFrame:
     """
-    Fetch QQQ (Invesco Nasdaq-100 ETF) daily holdings CSV from Invesco.
-    Returns columns: ticker, company, sector, weight (%), index.
-    Falls back to hardcoded list if unreachable.
+    Fetch QQQ (Invesco Nasdaq-100 ETF) holdings with weight data.
+    Tries multiple sources; always falls back to hardcoded list on any failure.
     """
-    try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "text/csv,text/plain,*/*",
-            "Referer": "https://www.invesco.com/",
-        }
-        r = requests.get(_QQQ_HOLDINGS_URL, headers=headers, timeout=30)
-        r.raise_for_status()
+    # Try Invesco's direct download endpoint
+    urls_to_try = [
+        "https://www.invesco.com/us/financial-products/etfs/holdings/main/holdings/0?audienceType=Investor&action=download&ticker=QQQ",
+        "https://www.invesco.com/us/financial-products/etfs/holdings/main/holdings/0?audienceType=Investor&action=download&ticker=QQQM",
+    ]
+    for url in urls_to_try:
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "text/csv,text/plain,application/csv,*/*",
+                "Referer": "https://www.invesco.com/us/financial-products/etfs/product-detail?audienceType=Investor&ticker=QQQ",
+            }
+            r = requests.get(url, headers=headers, timeout=30, allow_redirects=True)
+            r.raise_for_status()
 
-        # Invesco CSV has a couple of preamble lines before the actual table.
-        # Skip blank/header lines and find the data.
-        from io import StringIO
-        lines = r.text.splitlines()
-        # Find the line that starts the data table (has "Holding Ticker" or "Fund Ticker")
-        start = 0
-        for i, line in enumerate(lines):
-            if "ticker" in line.lower() or "symbol" in line.lower():
-                start = i
-                break
-        csv_text = "\n".join(lines[start:])
-        df = pd.read_csv(StringIO(csv_text))
-        df.columns = [str(c).strip() for c in df.columns]
+            # Invesco returns CSV but with preamble rows — find the header row
+            content = r.text
+            # If we got HTML instead of CSV, skip this URL
+            if "<html" in content[:200].lower():
+                continue
 
-        col_map = {}
-        for col in df.columns:
-            cl = col.lower()
-            if ("ticker" in cl or "symbol" in cl) and "ticker" not in col_map:
-                col_map["ticker"] = col
-            elif "name" in cl and "sector" not in cl and "company" not in col_map:
-                col_map["company"] = col
-            elif "sector" in cl and "sector" not in col_map:
-                col_map["sector"] = col
-            elif ("weight" in cl or "% of" in cl or "market value" in cl) and "weight" not in col_map:
-                col_map["weight"] = col
+            from io import StringIO
+            lines = content.splitlines()
+            start = 0
+            for i, line in enumerate(lines):
+                ll = line.lower()
+                if "ticker" in ll or "holding ticker" in ll or "fund ticker" in ll:
+                    start = i
+                    break
+            csv_text = "\n".join(lines[start:])
+            df = pd.read_csv(StringIO(csv_text))
+            df.columns = [str(c).strip() for c in df.columns]
 
-        if "ticker" not in col_map:
-            raise ValueError(f"Ticker column not found. Columns: {list(df.columns)}")
+            col_map = {}
+            for col in df.columns:
+                cl = col.lower()
+                if ("ticker" in cl or "holding ticker" in cl) and "ticker" not in col_map:
+                    col_map["ticker"] = col
+                elif ("name" in cl or "security name" in cl) and "sector" not in cl and "company" not in col_map:
+                    col_map["company"] = col
+                elif "sector" in cl and "sector" not in col_map:
+                    col_map["sector"] = col
+                elif ("weight" in cl or "% of" in cl) and "weight" not in col_map:
+                    col_map["weight"] = col
 
-        out = pd.DataFrame()
-        out["ticker"]  = df[col_map["ticker"]].astype(str).str.strip()
-        out["company"] = df[col_map["company"]].astype(str).str.strip() if "company" in col_map else ""
-        out["sector"]  = df[col_map["sector"]].astype(str).str.strip() if "sector" in col_map else "Unknown"
-        out["weight"]  = pd.to_numeric(df[col_map["weight"]], errors="coerce") if "weight" in col_map else None
+            if "ticker" not in col_map:
+                continue  # try next URL
 
-        out = out[
-            out["ticker"].str.len().between(1, 5) &
-            ~out["ticker"].isin(["-", "nan", "", "CASH", "CASH_USD"])
-        ].copy()
-        out["ticker"] = out["ticker"].str.replace(".", "-", regex=False)
-        out["index"]  = "Nasdaq 100"
-        return out.reset_index(drop=True)
+            out = pd.DataFrame()
+            out["ticker"]  = df[col_map["ticker"]].astype(str).str.strip()
+            out["company"] = df[col_map["company"]].astype(str).str.strip() if "company" in col_map else ""
+            out["sector"]  = df[col_map["sector"]].astype(str).str.strip() if "sector" in col_map else "Unknown"
+            out["weight"]  = pd.to_numeric(df[col_map["weight"]], errors="coerce") if "weight" in col_map else None
 
-    except Exception as e:
-        print(f"QQQ CSV fetch failed: {e} — falling back to hardcoded list")
-        return _ndx_fallback()
+            out = out[
+                out["ticker"].str.len().between(1, 5) &
+                ~out["ticker"].isin(["-", "nan", "", "CASH", "CASH_USD", "USD"])
+            ].copy()
+            out["ticker"] = out["ticker"].str.replace(".", "-", regex=False)
+            out["index"]  = "Nasdaq 100"
+            out = out.reset_index(drop=True)
+
+            if len(out) >= 90:   # sanity check: NDX100 should have ~101 entries
+                return out
+
+        except Exception as e:
+            print(f"QQQ fetch failed [{url}]: {e}")
+            continue
+
+    # All live fetches failed — use hardcoded list
+    print("All QQQ sources failed — using hardcoded Nasdaq 100 list")
+    return _ndx_fallback()
 
 
 def _ndx_fallback() -> pd.DataFrame:
-    """Fallback: hardcoded Nasdaq 100 list if ETF holdings are unreachable."""
+    """Hardcoded Nasdaq 100 list used when all live ETF fetches fail."""
     df = pd.DataFrame(_NDX100_DATA, columns=["ticker", "company", "sector"])
     df["weight"] = None
     df["index"]  = "Nasdaq 100"
@@ -2337,10 +2353,18 @@ def render_screener() -> None:
 
     # ── Load constituents ─────────────────────────────────────────────────
     with st.spinner("Loading constituent list…"):
-        if idx_choice == "S&P 500":
-            constituents = fetch_sp500_constituents()
-        else:
-            constituents = fetch_ndx_constituents()
+        try:
+            if idx_choice == "S&P 500":
+                constituents = fetch_sp500_constituents()
+            else:
+                constituents = fetch_ndx_constituents()
+            # Belt-and-suspenders: if the cached function returned empty for any reason,
+            # fall through to hardcoded immediately rather than showing an error.
+            if constituents is None or constituents.empty:
+                constituents = _sp500_fallback() if idx_choice == "S&P 500" else _ndx_fallback()
+        except Exception as e:
+            print(f"Constituent fetch error: {e}")
+            constituents = _sp500_fallback() if idx_choice == "S&P 500" else _ndx_fallback()
 
     if constituents.empty:
         st.error("Failed to load constituent list. Check network connectivity.")
@@ -2557,29 +2581,27 @@ def render_screener() -> None:
           {wt_td}
         </tr>"""
 
-    st.markdown(f"""
-    <div style="background:#0B1020;border:1px solid rgba(120,140,200,.1);
-        border-radius:10px;overflow:hidden;overflow-x:auto">
-      <table class="stock-table">
-        <thead>
-          <tr>
-            <th>#</th><th>Ticker</th><th>Company</th><th>Sector</th>
-            <th style="text-align:right">Price</th>
-            <th style="text-align:right">Chg %</th>
-            <th style="text-align:right">Chg $</th>
-            <th style="text-align:right">Volume</th>
-            <th style="text-align:right">Mkt Cap</th>
-            {weight_th}
-          </tr>
-        </thead>
-        <tbody>{rows_html}</tbody>
-      </table>
-    </div>
-    <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#4D6080;
-        margin-top:8px;text-align:right">
-      Data: Yahoo Finance · Weights: {'SPY' if idx_choice == 'S&P 500' else 'QQQ'} ETF holdings · Top {len(df)} of {active_count}
-    </div>
-    """, unsafe_allow_html=True)
+    etf_label  = "SPY" if idx_choice == "S&P 500" else "QQQ"
+    top_n      = len(df)
+    table_html = (
+        '<div style="background:#0B1020;border:1px solid rgba(120,140,200,.1);'
+        'border-radius:10px;overflow:hidden;overflow-x:auto">'
+        '<table class="stock-table"><thead><tr>'
+        '<th>#</th><th>Ticker</th><th>Company</th><th>Sector</th>'
+        '<th style="text-align:right">Price</th>'
+        '<th style="text-align:right">Chg %</th>'
+        '<th style="text-align:right">Chg $</th>'
+        '<th style="text-align:right">Volume</th>'
+        '<th style="text-align:right">Mkt Cap</th>'
+        + weight_th +
+        '</tr></thead><tbody>'
+        + rows_html +
+        '</tbody></table></div>'
+        '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:9px;color:#4D6080;'
+        f'margin-top:8px;text-align:right">Data: Yahoo Finance · Weights: {etf_label} ETF holdings'
+        f' · Top {top_n} of {active_count}</div>'
+    )
+    st.markdown(table_html, unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
