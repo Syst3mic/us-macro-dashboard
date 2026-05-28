@@ -2562,46 +2562,34 @@ def render_screener() -> None:
     for i, row in df.iterrows():
         chg_cls  = "chg-pos" if row["chg_pct"] >= 0 else "chg-neg"
         chg_sign = "▲" if row["chg_pct"] >= 0 else "▼"
-        wt_val   = row.get("weight")
-        wt_td    = f"<td style='text-align:right;color:#8898BB'>{wt_val:.2f}%</td>" if show_weight and wt_val is not None and not pd.isna(wt_val) else ("<td style='text-align:right;color:#4D6080'>—</td>" if show_weight else "")
-        rows_html += f"""
-        <tr>
-          <td style="color:#4D6080;width:36px">{i+1}</td>
-          <td><span class="ticker-badge">{row['ticker']}</span></td>
-          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;
-              white-space:nowrap">{row['company']}</td>
-          <td><span class="sector-tag">{row['sector']}</span></td>
-          <td style="text-align:right">${row['price']:,.2f}</td>
-          <td class="{chg_cls}" style="text-align:right">
-              {chg_sign} {abs(row['chg_pct']):.2f}%</td>
-          <td class="{chg_cls}" style="text-align:right">
-              {'+' if row['chg_abs']>=0 else ''}{row['chg_abs']:.2f}</td>
-          <td style="text-align:right;color:#FFFFFF">{fmt_volume(row['volume'])}</td>
-          <td style="text-align:right;color:#FFFFFF">{fmt_mktcap(row.get('mkt_cap'))}</td>
-          {wt_td}
-        </tr>"""
+        chg_sign_str = "+" if row["chg_abs"] >= 0 else ""
+        wt_val = row.get("weight")
+        if show_weight:
+            if wt_val is not None and not pd.isna(wt_val):
+                wt_td = f'<td style="text-align:right;color:#8898BB">{wt_val:.2f}%</td>'
+            else:
+                wt_td = '<td style="text-align:right;color:#4D6080">—</td>'
+        else:
+            wt_td = ""
+        rows_html += (
+            f'<tr>'
+            f'<td style="color:#4D6080;width:36px">{i+1}</td>'
+            f'<td><span class="ticker-badge">{row["ticker"]}</span></td>'
+            f'<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{row["company"]}</td>'
+            f'<td><span class="sector-tag">{row["sector"]}</span></td>'
+            f'<td style="text-align:right">${row["price"]:,.2f}</td>'
+            f'<td class="{chg_cls}" style="text-align:right">{chg_sign} {abs(row["chg_pct"]):.2f}%</td>'
+            f'<td class="{chg_cls}" style="text-align:right">{chg_sign_str}{row["chg_abs"]:.2f}</td>'
+            f'<td style="text-align:right;color:#FFFFFF">{fmt_volume(row["volume"])}</td>'
+            f'<td style="text-align:right;color:#FFFFFF">{fmt_mktcap(row.get("mkt_cap"))}</td>'
+            f'{wt_td}'
+            f'</tr>'
+        )
 
-    etf_label  = "SPY" if idx_choice == "S&P 500" else "QQQ"
-    top_n      = len(df)
-    table_html = (
-        '<div style="background:#0B1020;border:1px solid rgba(120,140,200,.1);'
-        'border-radius:10px;overflow:hidden;overflow-x:auto">'
-        '<table class="stock-table"><thead><tr>'
-        '<th>#</th><th>Ticker</th><th>Company</th><th>Sector</th>'
-        '<th style="text-align:right">Price</th>'
-        '<th style="text-align:right">Chg %</th>'
-        '<th style="text-align:right">Chg $</th>'
-        '<th style="text-align:right">Volume</th>'
-        '<th style="text-align:right">Mkt Cap</th>'
-        + weight_th +
-        '</tr></thead><tbody>'
-        + rows_html +
-        '</tbody></table></div>'
-        '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:9px;color:#4D6080;'
-        f'margin-top:8px;text-align:right">Data: Yahoo Finance · Weights: {etf_label} ETF holdings'
-        f' · Top {top_n} of {active_count}</div>'
-    )
-    st.markdown(table_html, unsafe_allow_html=True)
+    etf_label = "SPY" if idx_choice == "S&P 500" else "QQQ"
+    top_n     = len(df)
+
+    st.markdown(f"""<div style="background:#0B1020;border:1px solid rgba(120,140,200,.1);border-radius:10px;overflow:hidden;overflow-x:auto"><table class="stock-table"><thead><tr><th>#</th><th>Ticker</th><th>Company</th><th>Sector</th><th style="text-align:right">Price</th><th style="text-align:right">Chg %</th><th style="text-align:right">Chg $</th><th style="text-align:right">Volume</th><th style="text-align:right">Mkt Cap</th>{weight_th}</tr></thead><tbody>{rows_html}</tbody></table></div><div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#4D6080;margin-top:8px;text-align:right">Data: Yahoo Finance · Weights: {etf_label} ETF holdings · Top {top_n} of {active_count}</div>""", unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
