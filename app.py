@@ -1728,38 +1728,185 @@ _NDX100_DATA = [
     ("RIVN","Rivian Automotive","Consumer Discretionary"),
 ]
 
-# ── S&P 500: fetch full 503-name list from GitHub CSV (reliable, no bot blocks) ──
-_SP500_CSV = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
+# ── ETF holdings URLs ────────────────────────────────────────────────────────
+# SPY (SPDR S&P 500 ETF) and QQQ (Invesco Nasdaq-100 ETF) publish full daily
+# holdings CSVs including actual index weights. These are the most authoritative
+# and self-updating constituent + weight sources available without a paid API.
+_SPY_HOLDINGS_URL = "https://www.ssga.com/us/en/intermediary/etfs/library-content/products/fund-data/etfs/us/holdings-daily-us-en-spy.xlsx"
+_QQQ_HOLDINGS_URL = "https://www.invesco.com/us/financial-products/etfs/holdings/main/holdings/0?audienceType=Investor&action=download&ticker=QQQ"
+
+# GICS sector code → name mapping for SPY XLSX (uses numeric codes)
+_GICS_SECTOR_MAP = {
+    "10": "Energy",
+    "15": "Materials",
+    "20": "Industrials",
+    "25": "Consumer Discretionary",
+    "30": "Consumer Staples",
+    "35": "Health Care",
+    "40": "Financials",
+    "45": "Information Technology",
+    "50": "Communication Services",
+    "55": "Utilities",
+    "60": "Real Estate",
+}
+
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_sp500_constituents() -> pd.DataFrame:
-    """Fetch full S&P 500 constituent list (503 stocks) from GitHub-hosted CSV."""
+    """
+    Fetch SPY (SPDR S&P 500 ETF) daily holdings XLSX from State Street.
+    Returns columns: ticker, company, sector, weight (%), index.
+    Falls back to hardcoded list if the XLSX is unreachable.
+    """
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get(_SP500_CSV, headers=headers, timeout=15)
+        import io
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*",
+        }
+        r = requests.get(_SPY_HOLDINGS_URL, headers=headers, timeout=30)
         r.raise_for_status()
-        df = pd.read_csv(pd.io.common.StringIO(r.text))
-        df = df[["Symbol", "Security", "GICS Sector"]].copy()
-        df.columns = ["ticker", "company", "sector"]
-        # yfinance uses dashes not dots: BRK.B → BRK-B
-        df["ticker"] = df["ticker"].str.replace(".", "-", regex=False)
-        df["index"] = "S&P 500"
-        return df.reset_index(drop=True)
+
+        # The XLSX has a few header rows before the actual data table.
+        # Read without header, then find the row that contains "Ticker" or "Name".
+        xls = pd.read_excel(io.BytesIO(r.content), header=None, engine="openpyxl")
+        # Locate the header row
+        header_row = None
+        for i, row in xls.iterrows():
+            vals = [str(v).strip().lower() for v in row.values]
+            if any(v in ("ticker", "symbol") for v in vals):
+                header_row = i
+                break
+
+        if header_row is None:
+            raise ValueError("Could not find header row in SPY XLSX")
+
+        df = pd.read_excel(
+            io.BytesIO(r.content),
+            header=header_row,
+            engine="openpyxl",
+        )
+        df.columns = [str(c).strip() for c in df.columns]
+
+        # Identify relevant columns (State Street uses varied naming)
+        col_map = {}
+        for col in df.columns:
+            cl = col.lower()
+            if cl in ("ticker", "symbol") and "ticker" not in col_map:
+                col_map["ticker"] = col
+            elif "name" in cl and "sector" not in cl and "company" not in col_map:
+                col_map["company"] = col
+            elif "sector" in cl and "sector" not in col_map:
+                col_map["sector"] = col
+            elif cl in ("weight", "weight (%)", "% of fund") and "weight" not in col_map:
+                col_map["weight"] = col
+
+        if "ticker" not in col_map:
+            raise ValueError(f"Ticker column not found. Columns: {list(df.columns)}")
+
+        out = pd.DataFrame()
+        out["ticker"]  = df[col_map["ticker"]].astype(str).str.strip()
+        out["company"] = df[col_map["company"]].astype(str).str.strip() if "company" in col_map else ""
+        # Sector may be numeric GICS code — map to name
+        if "sector" in col_map:
+            raw_sec = df[col_map["sector"]].astype(str).str.strip()
+            out["sector"] = raw_sec.map(lambda s: _GICS_SECTOR_MAP.get(s[:2], s))
+        else:
+            out["sector"] = "Unknown"
+        out["weight"] = pd.to_numeric(df[col_map["weight"]], errors="coerce") if "weight" in col_map else None
+
+        # Drop cash / non-equity rows (ticker is blank, "-", or too long)
+        out = out[
+            out["ticker"].str.len().between(1, 5) &
+            ~out["ticker"].isin(["-", "nan", "", "CASH", "CASH_USD"])
+        ].copy()
+        # yfinance dot-to-dash: BRK.B → BRK-B
+        out["ticker"] = out["ticker"].str.replace(".", "-", regex=False)
+        out["index"]  = "S&P 500"
+        return out.reset_index(drop=True)
+
     except Exception as e:
-        print(f"SP500 CSV fetch failed: {e} — falling back to hardcoded list")
+        print(f"SPY XLSX fetch failed: {e} — falling back to hardcoded list")
         return _sp500_fallback()
 
+
 def _sp500_fallback() -> pd.DataFrame:
-    """Fallback: ~270 well-known S&P 500 names if GitHub CSV is unreachable."""
-    data = _SP500_FALLBACK_DATA
-    df = pd.DataFrame(data, columns=["ticker", "company", "sector"])
-    df["index"] = "S&P 500"
+    """Fallback: ~270 well-known S&P 500 names if ETF holdings are unreachable."""
+    df = pd.DataFrame(_SP500_FALLBACK_DATA, columns=["ticker", "company", "sector"])
+    df["weight"] = None
+    df["index"]  = "S&P 500"
     return df
 
-# ── Nasdaq 100: hardcoded (100 stocks, easy to maintain) ─────────────────────
+
+@st.cache_data(ttl=86400, show_spinner=False)
 def fetch_ndx_constituents() -> pd.DataFrame:
+    """
+    Fetch QQQ (Invesco Nasdaq-100 ETF) daily holdings CSV from Invesco.
+    Returns columns: ticker, company, sector, weight (%), index.
+    Falls back to hardcoded list if unreachable.
+    """
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "text/csv,text/plain,*/*",
+            "Referer": "https://www.invesco.com/",
+        }
+        r = requests.get(_QQQ_HOLDINGS_URL, headers=headers, timeout=30)
+        r.raise_for_status()
+
+        # Invesco CSV has a couple of preamble lines before the actual table.
+        # Skip blank/header lines and find the data.
+        from io import StringIO
+        lines = r.text.splitlines()
+        # Find the line that starts the data table (has "Holding Ticker" or "Fund Ticker")
+        start = 0
+        for i, line in enumerate(lines):
+            if "ticker" in line.lower() or "symbol" in line.lower():
+                start = i
+                break
+        csv_text = "\n".join(lines[start:])
+        df = pd.read_csv(StringIO(csv_text))
+        df.columns = [str(c).strip() for c in df.columns]
+
+        col_map = {}
+        for col in df.columns:
+            cl = col.lower()
+            if ("ticker" in cl or "symbol" in cl) and "ticker" not in col_map:
+                col_map["ticker"] = col
+            elif "name" in cl and "sector" not in cl and "company" not in col_map:
+                col_map["company"] = col
+            elif "sector" in cl and "sector" not in col_map:
+                col_map["sector"] = col
+            elif ("weight" in cl or "% of" in cl or "market value" in cl) and "weight" not in col_map:
+                col_map["weight"] = col
+
+        if "ticker" not in col_map:
+            raise ValueError(f"Ticker column not found. Columns: {list(df.columns)}")
+
+        out = pd.DataFrame()
+        out["ticker"]  = df[col_map["ticker"]].astype(str).str.strip()
+        out["company"] = df[col_map["company"]].astype(str).str.strip() if "company" in col_map else ""
+        out["sector"]  = df[col_map["sector"]].astype(str).str.strip() if "sector" in col_map else "Unknown"
+        out["weight"]  = pd.to_numeric(df[col_map["weight"]], errors="coerce") if "weight" in col_map else None
+
+        out = out[
+            out["ticker"].str.len().between(1, 5) &
+            ~out["ticker"].isin(["-", "nan", "", "CASH", "CASH_USD"])
+        ].copy()
+        out["ticker"] = out["ticker"].str.replace(".", "-", regex=False)
+        out["index"]  = "Nasdaq 100"
+        return out.reset_index(drop=True)
+
+    except Exception as e:
+        print(f"QQQ CSV fetch failed: {e} — falling back to hardcoded list")
+        return _ndx_fallback()
+
+
+def _ndx_fallback() -> pd.DataFrame:
+    """Fallback: hardcoded Nasdaq 100 list if ETF holdings are unreachable."""
     df = pd.DataFrame(_NDX100_DATA, columns=["ticker", "company", "sector"])
-    df["index"] = "Nasdaq 100"
+    df["weight"] = None
+    df["index"]  = "Nasdaq 100"
     return df
 
 def get_market_state() -> str:
@@ -1796,6 +1943,10 @@ def _fetch_prev_close(tickers: list) -> dict:
     Fetch previous trading day's closing prices for all tickers.
     Used as chg % baseline for all non-EOD modes.
     Returns {ticker: prev_close_price}.
+
+    IMPORTANT: during market hours yf.download(period='5d', interval='1d')
+    includes today's incomplete bar as iloc[-1]. We always want iloc[-2]
+    (the last fully-settled close) as the baseline for intraday chg%.
     """
     try:
         raw = yf.download(
@@ -1806,9 +1957,12 @@ def _fetch_prev_close(tickers: list) -> dict:
             progress=False,
             threads=True,
         )
-        if raw.empty or len(raw["Close"]) < 2:
+        close = raw["Close"] if "Close" in raw.columns else raw.xs("Close", axis=1, level=0)
+        if close.empty or len(close) < 2:
             return {}
-        pc_series = raw["Close"].iloc[-1]
+        # Always use second-to-last row: last fully-settled session close.
+        # iloc[-1] during market hours is today's partial/incomplete bar.
+        pc_series = close.iloc[-2]
         return {
             tk: float(pc_series[tk])
             for tk in tickers
@@ -1823,7 +1977,7 @@ def _fetch_prev_close(tickers: list) -> dict:
 def fetch_price_data_live(tickers: tuple) -> pd.DataFrame:
     """
     Market hours: 2-min intraday bars (~15min delayed).
-    Chg % vs previous day's close.
+    Chg % vs previous day's settled close (iloc[-2] of a 5d daily download).
     Volume = cumulative intraday volume so far.
     Falls back to EOD if intraday data is empty.
     """
@@ -1836,13 +1990,21 @@ def fetch_price_data_live(tickers: tuple) -> pd.DataFrame:
             progress=False,
             threads=True,
         )
-        if raw.empty or raw["Close"].empty:
+        if raw.empty:
             return fetch_price_data_eod(tickers)
 
-        close  = raw["Close"]
-        volume = raw["Volume"]
+        # Normalise MultiIndex columns (field, ticker) produced by yfinance
+        if isinstance(raw.columns, pd.MultiIndex):
+            close  = raw["Close"]
+            volume = raw["Volume"]
+        else:
+            close  = raw[["Close"]].rename(columns={"Close": tickers[0]})
+            volume = raw[["Volume"]].rename(columns={"Volume": tickers[0]})
 
-        if len(close) == 0:
+        close  = close.dropna(how="all")
+        volume = volume.dropna(how="all")
+
+        if close.empty:
             return fetch_price_data_eod(tickers)
 
         prev_close_map = _fetch_prev_close(list(tickers))
@@ -1857,13 +2019,13 @@ def fetch_price_data_live(tickers: tuple) -> pd.DataFrame:
         for ticker in tickers:
             if ticker not in close.columns:
                 continue
-            lp = last_price[ticker]
+            lp = last_price.get(ticker)
             pc = prev_close_map.get(ticker)
             if lp is None or pd.isna(lp) or pc is None or pc == 0:
                 continue
-            chg_pct = (float(lp) / pc - 1) * 100
-            chg_abs = float(lp) - pc
-            vol     = cum_volume[ticker] if ticker in cum_volume.index else 0
+            chg_pct = (float(lp) / float(pc) - 1) * 100
+            chg_abs = float(lp) - float(pc)
+            vol     = cum_volume.get(ticker, 0)
             rows.append({
                 "ticker":     ticker,
                 "price":      round(float(lp), 2),
@@ -2110,12 +2272,17 @@ def render_screener() -> None:
           <div class="data-hover-bar">
             <div class="data-hover-item">
               <span class="data-hover-label">Source</span>
-              <span class="data-hover-val">Yahoo Finance</span>
+              <span class="data-hover-val">Yahoo Finance · SPY/QQQ ETF Holdings</span>
             </div>
             <div class="data-hover-divider"></div>
             <div class="data-hover-item">
               <span class="data-hover-label">Prices</span>
-              <span class="data-hover-val">End-of-Day · Last Trading Session</span>
+              <span class="data-hover-val">Live Intraday · ~15min Delayed</span>
+            </div>
+            <div class="data-hover-divider"></div>
+            <div class="data-hover-item">
+              <span class="data-hover-label">Weights</span>
+              <span class="data-hover-val">SPY (S&P 500) · QQQ (Nasdaq 100) · Daily</span>
             </div>
             <div class="data-hover-divider"></div>
             <div class="data-hover-item">
@@ -2125,7 +2292,7 @@ def render_screener() -> None:
             <div class="data-hover-divider"></div>
             <div class="data-hover-item">
               <span class="data-hover-label">Cache</span>
-              <span class="data-hover-val">Refreshes Every Hour</span>
+              <span class="data-hover-val">Prices: 5min · Holdings: 24hr</span>
             </div>
           </div>
         </div>
@@ -2327,13 +2494,27 @@ def render_screener() -> None:
     unchanged   = (all_active["chg_pct"] == 0).sum()
     overall_avg = all_active["chg_pct"].mean()
 
+    # Weighted index return: sum(weight_i * chg_pct_i) / sum(weight_i of matched stocks)
+    # Only computed when weight data is available (ETF holdings fetch succeeded).
+    has_weights = "weight" in all_active.columns and all_active["weight"].notna().any()
+    if has_weights:
+        matched_w = all_active.dropna(subset=["weight", "chg_pct"])
+        total_w   = matched_w["weight"].sum()
+        wtd_return = (matched_w["weight"] * matched_w["chg_pct"]).sum() / total_w if total_w > 0 else None
+    else:
+        wtd_return = None
+
+    wtd_label = f"{idx_choice} Wtd Ret" if wtd_return is not None else "Overall Avg"
+    wtd_val   = f"{wtd_return:+.2f}%" if wtd_return is not None else f"{overall_avg:+.2f}%"
+    wtd_col   = "#0FD68A" if (wtd_return or overall_avg) >= 0 else "#F0485A"
+
     c1, c2, c3, c4, c5 = st.columns(5)
     for col, label, val, color in [
         (c1, "Gainers",     f"{gainers}",              "#0FD68A"),
         (c2, "Losers",      f"{losers}",               "#F0485A"),
         (c3, "Unchanged",   f"{unchanged}",            "#8898BB"),
         (c4, top50_label,   f"{top50_avg_chg:+.2f}%", "#0FD68A" if top50_avg_chg >= 0 else "#F0485A"),
-        (c5, "Overall Avg", f"{overall_avg:+.2f}%",   "#0FD68A" if overall_avg   >= 0 else "#F0485A"),
+        (c5, wtd_label,     wtd_val,                   wtd_col),
     ]:
         with col:
             st.markdown(f"""
@@ -2350,10 +2531,15 @@ def render_screener() -> None:
     st.markdown("<div style='margin-top:16px'></div>", unsafe_allow_html=True)
 
     # ── Stock table ───────────────────────────────────────────────────────
+    show_weight = has_weights and "weight" in df.columns and df["weight"].notna().any()
+    weight_th   = "<th style='text-align:right'>Wt %</th>" if show_weight else ""
+
     rows_html = ""
     for i, row in df.iterrows():
         chg_cls  = "chg-pos" if row["chg_pct"] >= 0 else "chg-neg"
         chg_sign = "▲" if row["chg_pct"] >= 0 else "▼"
+        wt_val   = row.get("weight")
+        wt_td    = f"<td style='text-align:right;color:#8898BB'>{wt_val:.2f}%</td>" if show_weight and wt_val is not None and not pd.isna(wt_val) else ("<td style='text-align:right;color:#4D6080'>—</td>" if show_weight else "")
         rows_html += f"""
         <tr>
           <td style="color:#4D6080;width:36px">{i+1}</td>
@@ -2368,6 +2554,7 @@ def render_screener() -> None:
               {'+' if row['chg_abs']>=0 else ''}{row['chg_abs']:.2f}</td>
           <td style="text-align:right;color:#FFFFFF">{fmt_volume(row['volume'])}</td>
           <td style="text-align:right;color:#FFFFFF">{fmt_mktcap(row.get('mkt_cap'))}</td>
+          {wt_td}
         </tr>"""
 
     st.markdown(f"""
@@ -2382,6 +2569,7 @@ def render_screener() -> None:
             <th style="text-align:right">Chg $</th>
             <th style="text-align:right">Volume</th>
             <th style="text-align:right">Mkt Cap</th>
+            {weight_th}
           </tr>
         </thead>
         <tbody>{rows_html}</tbody>
@@ -2389,7 +2577,7 @@ def render_screener() -> None:
     </div>
     <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#4D6080;
         margin-top:8px;text-align:right">
-      Data: Yahoo Finance · Market cap: prev-day close · Top {len(df)} of {active_count}
+      Data: Yahoo Finance · Weights: {'SPY' if idx_choice == 'S&P 500' else 'QQQ'} ETF holdings · Top {len(df)} of {active_count}
     </div>
     """, unsafe_allow_html=True)
 
