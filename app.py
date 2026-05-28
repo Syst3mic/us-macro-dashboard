@@ -2283,7 +2283,7 @@ def render_screener() -> None:
     st.markdown("""
     <div class="screener-header">
       <div>
-        <div class="screener-title">📈 Markets Screener — Full Constituents</div>
+        <div class="screener-title">📈 Markets Screener — S&P 500 &amp; Nasdaq 100 (SPY &amp; QQQ as Proxies)</div>
         <div class="data-hover-wrap" style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(120,140,200,.08)">
           <div class="data-hover-trigger">DATA <span class="data-q">?</span></div>
           <div class="data-hover-bar">
@@ -2453,33 +2453,33 @@ def render_screener() -> None:
     if market_state == "open":
         state_html = (
             f"<span style='color:#0FD68A;font-weight:700'>● LIVE</span>"
-            f"<span style='color:#4D6080'> (~15min delay) · "
+            f"<span style='color:#FFFFFF'> (~15min delay) · "
             f"{active_count} of {total_universe} stocks active · "
             f"as of {now_sgt_str}</span>"
         )
     elif market_state == "pre":
         state_html = (
             f"<span style='color:#F59E0B;font-weight:700'>● PRE-MARKET</span>"
-            f"<span style='color:#4D6080'> (~15min delay) · "
+            f"<span style='color:#FFFFFF'> (~15min delay) · "
             f"{active_count} of {total_universe} stocks active · "
             f"as of {now_sgt_str}</span>"
         )
     elif market_state == "after_hours":
         state_html = (
             f"<span style='color:#A78BFA;font-weight:700'>● AFTER-HOURS</span>"
-            f"<span style='color:#4D6080'> (~15min delay) · "
+            f"<span style='color:#FFFFFF'> (~15min delay) · "
             f"{active_count} of {total_universe} stocks active · "
             f"as of {now_sgt_str}</span>"
         )
     else:
         state_html = (
             f"<span style='color:#F0485A;font-weight:700'>● CLOSED</span>"
-            f"<span style='color:#4D6080'> · showing {trade_date} official close · "
+            f"<span style='color:#FFFFFF'> · showing {trade_date} official close · "
             f"{active_count} stocks</span>"
         )
 
     st.markdown(
-        f"<div style='font-family:IBM Plex Mono,monospace;font-size:11px;margin-bottom:14px'>"
+        f"<div style='font-family:IBM Plex Mono,monospace;font-size:14px;margin-bottom:14px'>"
         f"✓ {state_html}"
         f"</div>",
         unsafe_allow_html=True
