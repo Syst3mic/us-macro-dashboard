@@ -1737,10 +1737,35 @@ _NDX100_DATA = [
 import os
 import re as _re
 
-_HERE      = os.path.dirname(os.path.abspath(__file__))
+try:
+    _HERE = os.path.dirname(os.path.abspath(__file__))
+except NameError:                       # __file__ undefined in some runners
+    _HERE = os.getcwd()
+
+
+def _find_data_file(filename: str) -> str:
+    """
+    Locate a holdings file across the layouts the app might run under
+    (script dir, ./data, ./markets_data, CWD, repo root). Returns the first
+    existing path, or the primary ./data path (for a clear error message)
+    if none are found.
+    """
+    candidates = [
+        os.path.join(_HERE, "data", filename),
+        os.path.join(_HERE, filename),
+        os.path.join(_HERE, "markets_data", filename),
+        os.path.join(os.getcwd(), "data", filename),
+        os.path.join(os.getcwd(), filename),
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    return candidates[0]
+
+
 _DATA_DIR  = os.path.join(_HERE, "data")
-_SPY_FILE  = os.path.join(_DATA_DIR, "SPY.xlsx")
-_QQQ_FILE  = os.path.join(_DATA_DIR, "QQQ.csv")
+_SPY_FILE  = _find_data_file("SPY.xlsx")
+_QQQ_FILE  = _find_data_file("QQQ.csv")
 
 # Authoritative GICS sector source: full S&P 500 constituents CSV (covers all SPY
 # names + most QQQ names). Non-S&P Nasdaq-100 names are filled from _EXTRA_GICS.
@@ -1840,27 +1865,32 @@ def _load_holdings(path: str, index_name: str) -> pd.DataFrame:
 
     gmap = _load_gics_map()
     df["sector"] = df["ticker"].map(gmap).fillna("—")
+    df["source"] = "file"
 
-    keep = ["ticker", "ticker_raw", "company", "shares", "sector", "index", "priceable"]
+    keep = ["ticker", "ticker_raw", "company", "shares", "sector", "index", "priceable", "source"]
     return df[keep].reset_index(drop=True)
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
+def _load_sp500_cached() -> pd.DataFrame:
+    """Cached file load only — raises on failure so the caller can fall back uncached."""
+    return _load_holdings(_SPY_FILE, "S&P 500")
+
+
 def fetch_sp500_constituents() -> pd.DataFrame:
     """SPY holdings as the S&P 500 constituent universe (priceable equities only)."""
     try:
-        df = _load_holdings(_SPY_FILE, "S&P 500")
+        df = _load_sp500_cached()
         return df[df["priceable"]].reset_index(drop=True)
     except Exception as e:
         print(f"SPY holdings load failed: {e} — falling back to legacy list")
         return _sp500_fallback()
 
 
-@st.cache_data(ttl=86400, show_spinner=False)
 def fetch_sp500_holdings_full() -> pd.DataFrame:
     """Full SPY holdings incl. non-priceable rows (for cash bucketing)."""
     try:
-        return _load_holdings(_SPY_FILE, "S&P 500")
+        return _load_sp500_cached()
     except Exception as e:
         print(f"SPY full holdings load failed: {e}")
         return _sp500_fallback()
@@ -1874,25 +1904,30 @@ def _sp500_fallback() -> pd.DataFrame:
     df["index"]     = "S&P 500"
     df["shares"]    = float("nan")
     df["priceable"] = True
+    df["source"]    = "fallback"
     return df
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
+def _load_ndx_cached() -> pd.DataFrame:
+    """Cached file load only — raises on failure so the caller can fall back uncached."""
+    return _load_holdings(_QQQ_FILE, "Nasdaq 100")
+
+
 def fetch_ndx_constituents() -> pd.DataFrame:
     """QQQ holdings as the Nasdaq 100 constituent universe (priceable equities only)."""
     try:
-        df = _load_holdings(_QQQ_FILE, "Nasdaq 100")
+        df = _load_ndx_cached()
         return df[df["priceable"]].reset_index(drop=True)
     except Exception as e:
         print(f"QQQ holdings load failed: {e} — falling back to legacy list")
         return _ndx_fallback()
 
 
-@st.cache_data(ttl=86400, show_spinner=False)
 def fetch_ndx_holdings_full() -> pd.DataFrame:
     """Full QQQ holdings incl. non-priceable rows (for cash bucketing)."""
     try:
-        return _load_holdings(_QQQ_FILE, "Nasdaq 100")
+        return _load_ndx_cached()
     except Exception as e:
         print(f"QQQ full holdings load failed: {e}")
         return _ndx_fallback()
@@ -1905,6 +1940,7 @@ def _ndx_fallback() -> pd.DataFrame:
     df["index"]     = "Nasdaq 100"
     df["shares"]    = float("nan")
     df["priceable"] = True
+    df["source"]    = "fallback"
     return df
 
 
@@ -2322,6 +2358,18 @@ def render_screener() -> None:
         st.error("Failed to load constituent list. Check that the holdings file is present in ./data/.")
         return
 
+    # ── Diagnostic: warn loudly if we silently fell back to the legacy list ─
+    on_fallback = (holdings_full.get("source") == "fallback").any() \
+        if "source" in holdings_full.columns else True
+    if on_fallback:
+        expected = _SPY_FILE if idx_choice == "S&P 500" else _QQQ_FILE
+        st.warning(
+            f"⚠️ Holdings file not found — showing the legacy built-in list "
+            f"(~{len(holdings_full)} names, no live weights). "
+            f"Expected file at: `{expected}`. "
+            f"Place SPY.xlsx / QQQ.csv in a `data/` folder next to app.py."
+        )
+
     constituents   = holdings_full[holdings_full["priceable"]].reset_index(drop=True)
     non_priceable  = holdings_full[~holdings_full["priceable"]].reset_index(drop=True)
     tickers_tuple  = tuple(constituents["ticker"].tolist())
@@ -2342,14 +2390,26 @@ def render_screener() -> None:
         st.error("Failed to fetch price data from Yahoo Finance.")
         return
 
-    # ── Merge constituents + prices (this is the live priced universe) ─────
-    priced = constituents.merge(prices, on="ticker", how="inner")
-    if priced.empty:
+    # ── Merge constituents + prices ───────────────────────────────────────
+    # LEFT join keeps ALL constituents, including names with no current print
+    # (common pre-market / after-hours, when only liquid names trade). Without
+    # this, an inner join would drop them and the weight base would shrink to
+    # only the names that traded — over-weighting them and pushing the index
+    # return away from the ETF's true move.
+    priced = constituents.merge(prices, on="ticker", how="left")
+    if priced["price"].notna().sum() == 0:
         st.error("No matching price data found.")
         return
 
-    # ── Live weights: w_i = shares_i * price_i / Σ(shares * price) ─────────
-    priced["mkt_val"] = priced["shares"] * priced["price"]
+    # ── Stable weight base: shares × prev_close over the FULL universe ─────
+    # We need a previous-close anchor for every constituent so the denominator
+    # doesn't depend on which names happen to be trading right now.
+    prev_close_map = _fetch_prev_close(list(tickers_tuple))
+    priced["prev_close"] = priced["ticker"].map(prev_close_map)
+    # Fall back to current price where prev close is unavailable.
+    priced["prev_close"] = priced["prev_close"].fillna(priced["price"])
+
+    priced["mkt_val"] = priced["shares"] * priced["prev_close"]
     total_mkt_val     = priced["mkt_val"].sum()
     if total_mkt_val and total_mkt_val > 0:
         priced["weight"] = priced["mkt_val"] / total_mkt_val
@@ -2357,10 +2417,21 @@ def render_screener() -> None:
         priced["weight"] = 0.0
 
     # ── Weighted index return (true SPY/QQQ move) ─────────────────────────
-    # Each name contributes weight_i × chg_pct_i. Non-priceable cash holdings
-    # contribute 0% change and are excluded from the weight base, so the
-    # weighted figure reflects the priced-equity portion of the ETF.
-    weighted_return = float((priced["weight"] * priced["chg_pct"]).sum())
+    # Each name contributes weight_i × chg_pct_i over the FULL-universe weight
+    # base. Names with no current print are treated as flat (0% change) — the
+    # same way the ETF's own price treats a constituent that hasn't traded yet.
+    # Non-priceable cash holdings contribute 0% and are excluded from the base,
+    # so this tracks the priced-equity portion of the ETF.
+    priced["chg_for_idx"] = priced["chg_pct"].fillna(0.0)
+    weighted_return = float((priced["weight"] * priced["chg_for_idx"]).sum())
+
+    # Count of names actually carrying a live print (for the status line).
+    priced_with_quote = int(priced["price"].notna().sum())
+    # Share of total index weight that is actually quoted right now. Pre-market
+    # this is < 100% (illiquid names don't trade); the un-quoted remainder is
+    # assumed flat, which is the main reason a bottom-up figure can differ from
+    # the ETF's own live quote.
+    quoted_weight = float(priced.loc[priced["price"].notna(), "weight"].sum()) * 100
 
     # ── Cash & Other exposure (non-priceable holdings) ────────────────────
     # Estimate notional from prev-close-based market value where shares exist;
@@ -2368,8 +2439,13 @@ def render_screener() -> None:
     cash_names  = non_priceable["company"].tolist()
     cash_count  = len(non_priceable)
 
-    trade_date    = priced["trade_date"].iloc[0] if "trade_date" in priced.columns else "—"
-    active_count  = len(priced)
+    # Names carrying an actual live/EOD quote — used for the table, the
+    # gainers/losers counts, and the Top-N pool. The weighted index return
+    # above still uses the full-universe weight base.
+    quoted = priced[priced["price"].notna()].copy()
+
+    trade_date    = quoted["trade_date"].iloc[0] if ("trade_date" in quoted.columns and not quoted.empty) else "—"
+    active_count  = len(quoted)
     sgt           = timezone(timedelta(hours=8))
     now_sgt_str   = datetime.now(sgt).strftime("%H:%M SGT")
 
@@ -2410,8 +2486,8 @@ def render_screener() -> None:
     )
 
     # ── Sector filter (applies to the displayed table only) ───────────────
-    sectors    = ["All"] + sorted([s for s in priced["sector"].dropna().unique().tolist() if s != "—"])
-    if (priced["sector"] == "—").any():
+    sectors    = ["All"] + sorted([s for s in quoted["sector"].dropna().unique().tolist() if s != "—"])
+    if (quoted["sector"] == "—").any():
         sectors = sectors + ["—"]
     sector_sel = st.selectbox("Filter by Sector", sectors, key="sector_sel",
                               label_visibility="collapsed")
@@ -2451,7 +2527,7 @@ def render_screener() -> None:
     view = st.session_state["view_sel"]
 
     # ── Build the directional pool (used for both the table and Top-N) ─────
-    df = priced.copy()
+    df = quoted.copy()
     if sector_sel != "All":
         df = df[df["sector"] == sector_sel]
 
@@ -2488,9 +2564,9 @@ def render_screener() -> None:
     top_n_label  = f"Top {top_n} {view} Avg"
 
     # ── Summary stats: Gainers · Losers · Unchanged · Top-N Avg · Overall ──
-    gainers   = (priced["chg_pct"] > 0).sum()
-    losers    = (priced["chg_pct"] < 0).sum()
-    unchanged = (priced["chg_pct"] == 0).sum()
+    gainers   = (quoted["chg_pct"] > 0).sum()
+    losers    = (quoted["chg_pct"] < 0).sum()
+    unchanged = (quoted["chg_pct"] == 0).sum()
 
     c1, c2, c3, c4, c5 = st.columns(5)
     for col, label, val, color in [
@@ -2512,12 +2588,24 @@ def render_screener() -> None:
             </div>
             """, unsafe_allow_html=True)
 
+    # ── Coverage caption for the index-return figure ─────────────────────
+    st.markdown(
+        f"<div style='font-family:IBM Plex Mono,monospace;font-size:10px;"
+        f"color:#8898BB;margin-top:10px'>"
+        f"ⓘ {etf_label} Return = Σ(weightᵢ × chgᵢ) over the full {total_universe}-name base; "
+        f"{quoted_weight:.1f}% of index weight is currently quoted "
+        f"({priced_with_quote}/{total_universe} names), the rest assumed flat. "
+        f"Pre/after-hours figures will differ from the ETF's own live quote due to "
+        f"thin, unsynchronized constituent prints.</div>",
+        unsafe_allow_html=True
+    )
+
     # ── Cash & Other note ─────────────────────────────────────────────────
     if cash_count > 0:
         names_str = ", ".join(cash_names[:6]) + ("…" if cash_count > 6 else "")
         st.markdown(
             f"<div style='font-family:IBM Plex Mono,monospace;font-size:10px;"
-            f"color:#8898BB;margin-top:10px'>"
+            f"color:#8898BB;margin-top:6px'>"
             f"⊘ {cash_count} non-priceable holding(s) treated as Cash &amp; Other "
             f"(excluded from weighted return): {names_str}</div>",
             unsafe_allow_html=True
