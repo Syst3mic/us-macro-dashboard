@@ -2563,18 +2563,28 @@ def render_screener() -> None:
     top_n_avg    = top_n_slice["chg_pct"].mean() if not top_n_slice.empty else 0.0
     top_n_label  = f"Top {top_n} {view} Avg"
 
+    # Index-return contribution of those same Top N names: Σ(weightᵢ × chgᵢ).
+    # weight is a fraction and chg_pct is in %, so the product is in % units;
+    # ×100 expresses it in basis points (the readable unit for a contribution).
+    if not top_n_slice.empty:
+        top_n_contrib_bps = float((top_n_slice["weight"] * top_n_slice["chg_pct"]).sum()) * 100
+    else:
+        top_n_contrib_bps = 0.0
+    top_n_contrib_label = f"Top {top_n} {view} Contrib"
+
     # ── Summary stats: Gainers · Losers · Unchanged · Top-N Avg · Overall ──
     gainers   = (quoted["chg_pct"] > 0).sum()
     losers    = (quoted["chg_pct"] < 0).sum()
     unchanged = (quoted["chg_pct"] == 0).sum()
 
-    c1, c2, c3, c4, c5 = st.columns(5)
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
     for col, label, val, color in [
         (c1, "Gainers",       f"{gainers}",               "#0FD68A"),
         (c2, "Losers",        f"{losers}",                "#F0485A"),
         (c3, "Unchanged",     f"{unchanged}",             "#8898BB"),
-        (c4, top_n_label,     f"{top_n_avg:+.2f}%",       "#0FD68A" if top_n_avg       >= 0 else "#F0485A"),
-        (c5, f"{etf_label} Return", f"{weighted_return:+.2f}%", "#0FD68A" if weighted_return >= 0 else "#F0485A"),
+        (c4, top_n_label,     f"{top_n_avg:+.2f}%",       "#0FD68A" if top_n_avg          >= 0 else "#F0485A"),
+        (c5, top_n_contrib_label, f"{top_n_contrib_bps:+.1f}bps", "#0FD68A" if top_n_contrib_bps >= 0 else "#F0485A"),
+        (c6, f"{etf_label} Return", f"{weighted_return:+.2f}%", "#0FD68A" if weighted_return    >= 0 else "#F0485A"),
     ]:
         with col:
             st.markdown(f"""
@@ -2595,6 +2605,8 @@ def render_screener() -> None:
         f"ⓘ {etf_label} Return = Σ(weightᵢ × chgᵢ) over the full {total_universe}-name base; "
         f"{quoted_weight:.1f}% of index weight is currently quoted "
         f"({priced_with_quote}/{total_universe} names), the rest assumed flat. "
+        f"Top {top_n} {view} Contrib = those same {top_n} names' share of that move, "
+        f"in basis points (Σ weightᵢ × chgᵢ). "
         f"Pre/after-hours figures will differ from the ETF's own live quote due to "
         f"thin, unsynchronized constituent prints.</div>",
         unsafe_allow_html=True
