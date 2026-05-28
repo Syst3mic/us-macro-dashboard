@@ -1728,39 +1728,185 @@ _NDX100_DATA = [
     ("RIVN","Rivian Automotive","Consumer Discretionary"),
 ]
 
-# ── S&P 500: fetch full 503-name list from GitHub CSV (reliable, no bot blocks) ──
-_SP500_CSV = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
+# ─────────────────────────────────────────────────────────────────────────────
+# ETF HOLDINGS — constituent lists driven by SPY / QQQ holdings files
+# ─────────────────────────────────────────────────────────────────────────────
+# Holdings files (as of 27 May 2026) live alongside this script in ./data/.
+# Weights are recomputed live as shares_i * price_i / Σ(shares * price); the
+# Weight column in the files is only a fallback for display before prices load.
+import os
+import re as _re
+
+_HERE      = os.path.dirname(os.path.abspath(__file__))
+_DATA_DIR  = os.path.join(_HERE, "data")
+_SPY_FILE  = os.path.join(_DATA_DIR, "SPY.xlsx")
+_QQQ_FILE  = os.path.join(_DATA_DIR, "QQQ.csv")
+
+# Authoritative GICS sector source: full S&P 500 constituents CSV (covers all SPY
+# names + most QQQ names). Non-S&P Nasdaq-100 names are filled from _EXTRA_GICS.
+_SP500_GICS_CSV = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
+
+# GICS sectors for Nasdaq-100 constituents that are NOT in the S&P 500
+# (and therefore absent from the GICS CSV above).
+_EXTRA_GICS = {
+    "MRVL": "Information Technology",
+    "ASML": "Information Technology",
+    "SHOP": "Information Technology",
+    "MELI": "Consumer Discretionary",
+    "PDD":  "Consumer Discretionary",
+    "FER":  "Industrials",
+    "MSTR": "Information Technology",
+    "ARM":  "Information Technology",
+    "CCEP": "Consumer Staples",
+    "ALNY": "Health Care",
+    "TRI":  "Industrials",
+    "ZS":   "Information Technology",
+    "INSM": "Health Care",
+}
+
+
+def _to_yf(t: str) -> str:
+    """Yahoo Finance ticker convention: dots become dashes (BRK.B -> BRK-B)."""
+    return str(t).strip().upper().replace(".", "-")
+
+
+def _is_priceable(raw: str) -> bool:
+    """
+    True if the holding is a normal listed equity Yahoo can price.
+    Filters out cash (USD, '--'), index futures (NQM6, NQM6_), and Bloomberg
+    placeholder tickers containing digits (e.g. 2602335D). These are summed
+    and reported as 'Cash & Other' instead.
+    """
+    t = _to_yf(raw)
+    if t in ("USD", "--", "-", "", "NAN", "NONE"):
+        return False
+    if _re.search(r"\d", t):          # futures / placeholder codes
+        return False
+    return bool(_re.match(r"^[A-Z][A-Z\-]{0,6}$", t))
+
+
+def _parse_shares(x) -> float:
+    """Shares Held may be a comma-formatted string ('114,012,363.00') or a number."""
+    if pd.isna(x):
+        return float("nan")
+    return float(str(x).replace(",", "").strip())
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _load_gics_map() -> dict:
+    """
+    Build {yf_ticker: GICS Sector}. Primary source: S&P 500 GICS CSV (GitHub).
+    Falls back to the hardcoded GICS pulled from the legacy lists if the CSV
+    is unreachable. _EXTRA_GICS is layered on top for non-S&P Nasdaq names.
+    """
+    gmap = {}
+    try:
+        r = requests.get(_SP500_GICS_CSV, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        r.raise_for_status()
+        csv = pd.read_csv(pd.io.common.StringIO(r.text))
+        for sym, sec in zip(csv["Symbol"], csv["GICS Sector"]):
+            gmap[_to_yf(sym)] = sec
+    except Exception as e:
+        print(f"GICS CSV fetch failed: {e} — using built-in GICS fallback")
+        for tk, _co, sec in _SP500_FALLBACK_DATA + _NDX100_DATA:
+            gmap[_to_yf(tk)] = sec
+    # Layer Nasdaq-only names on top (do not overwrite CSV entries)
+    for tk, sec in _EXTRA_GICS.items():
+        gmap.setdefault(_to_yf(tk), sec)
+    return gmap
+
+
+def _load_holdings(path: str, index_name: str) -> pd.DataFrame:
+    """
+    Read a holdings file (SPY .xlsx or QQQ .csv) into a normalised frame:
+      ticker (yf), company, shares, sector, index, priceable
+    Non-priceable rows (cash, futures, placeholders) are retained with
+    priceable=False so their exposure can be bucketed as cash.
+    """
+    if path.lower().endswith(".csv"):
+        df = pd.read_csv(path, encoding="utf-8-sig")
+    else:
+        df = pd.read_excel(path, sheet_name="holdings")
+
+    df = df.rename(columns={
+        "Name": "company", "Ticker": "ticker_raw",
+        "Weight": "weight_file", "Shares Held": "shares_raw",
+    })
+    df["ticker_raw"] = df["ticker_raw"].astype(str)
+    df["ticker"]     = df["ticker_raw"].apply(_to_yf)
+    df["shares"]     = df["shares_raw"].apply(_parse_shares)
+    df["priceable"]  = df["ticker_raw"].apply(_is_priceable)
+    df["index"]      = index_name
+
+    gmap = _load_gics_map()
+    df["sector"] = df["ticker"].map(gmap).fillna("—")
+
+    keep = ["ticker", "ticker_raw", "company", "shares", "sector", "index", "priceable"]
+    return df[keep].reset_index(drop=True)
+
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_sp500_constituents() -> pd.DataFrame:
-    """Fetch full S&P 500 constituent list (503 stocks) from GitHub-hosted CSV."""
+    """SPY holdings as the S&P 500 constituent universe (priceable equities only)."""
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get(_SP500_CSV, headers=headers, timeout=15)
-        r.raise_for_status()
-        df = pd.read_csv(pd.io.common.StringIO(r.text))
-        df = df[["Symbol", "Security", "GICS Sector"]].copy()
-        df.columns = ["ticker", "company", "sector"]
-        # yfinance uses dashes not dots: BRK.B → BRK-B
-        df["ticker"] = df["ticker"].str.replace(".", "-", regex=False)
-        df["index"] = "S&P 500"
-        return df.reset_index(drop=True)
+        df = _load_holdings(_SPY_FILE, "S&P 500")
+        return df[df["priceable"]].reset_index(drop=True)
     except Exception as e:
-        print(f"SP500 CSV fetch failed: {e} — falling back to hardcoded list")
+        print(f"SPY holdings load failed: {e} — falling back to legacy list")
         return _sp500_fallback()
 
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def fetch_sp500_holdings_full() -> pd.DataFrame:
+    """Full SPY holdings incl. non-priceable rows (for cash bucketing)."""
+    try:
+        return _load_holdings(_SPY_FILE, "S&P 500")
+    except Exception as e:
+        print(f"SPY full holdings load failed: {e}")
+        return _sp500_fallback()
+
+
 def _sp500_fallback() -> pd.DataFrame:
-    """Fallback: ~270 well-known S&P 500 names if GitHub CSV is unreachable."""
-    data = _SP500_FALLBACK_DATA
-    df = pd.DataFrame(data, columns=["ticker", "company", "sector"])
-    df["index"] = "S&P 500"
+    """Fallback: legacy hardcoded S&P 500 names if the holdings file is unreachable."""
+    df = pd.DataFrame(_SP500_FALLBACK_DATA, columns=["ticker", "company", "sector"])
+    df["ticker"]    = df["ticker"].apply(_to_yf)
+    df["ticker_raw"] = df["ticker"]
+    df["index"]     = "S&P 500"
+    df["shares"]    = float("nan")
+    df["priceable"] = True
     return df
 
-# ── Nasdaq 100: hardcoded (100 stocks, easy to maintain) ─────────────────────
+
+@st.cache_data(ttl=86400, show_spinner=False)
 def fetch_ndx_constituents() -> pd.DataFrame:
+    """QQQ holdings as the Nasdaq 100 constituent universe (priceable equities only)."""
+    try:
+        df = _load_holdings(_QQQ_FILE, "Nasdaq 100")
+        return df[df["priceable"]].reset_index(drop=True)
+    except Exception as e:
+        print(f"QQQ holdings load failed: {e} — falling back to legacy list")
+        return _ndx_fallback()
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def fetch_ndx_holdings_full() -> pd.DataFrame:
+    """Full QQQ holdings incl. non-priceable rows (for cash bucketing)."""
+    try:
+        return _load_holdings(_QQQ_FILE, "Nasdaq 100")
+    except Exception as e:
+        print(f"QQQ full holdings load failed: {e}")
+        return _ndx_fallback()
+
+
+def _ndx_fallback() -> pd.DataFrame:
     df = pd.DataFrame(_NDX100_DATA, columns=["ticker", "company", "sector"])
-    df["index"] = "Nasdaq 100"
+    df["ticker"]    = df["ticker"].apply(_to_yf)
+    df["ticker_raw"] = df["ticker"]
+    df["index"]     = "Nasdaq 100"
+    df["shares"]    = float("nan")
+    df["priceable"] = True
     return df
+
 
 def get_market_state() -> str:
     """
@@ -1793,55 +1939,89 @@ def get_market_state() -> str:
 
 def _fetch_prev_close(tickers: list) -> dict:
     """
-    Fetch previous trading day's closing prices for all tickers.
-    Used as chg % baseline for all non-EOD modes.
-    Returns {ticker: prev_close_price}.
+    Previous COMPLETED session's official close for each ticker, used as the
+    chg% baseline in all intraday/extended modes.
+
+    Bug fix: do NOT use Close.iloc[-1] of a multi-day frame — during market
+    hours the last daily row is the in-progress session, so iloc[-1] would be
+    today's price and every chg% would collapse toward 0. We take each
+    ticker's own last *completed* daily close instead (the row before today
+    when a partial bar exists), via per-column last-valid logic.
     """
     try:
         raw = yf.download(
-            tickers,
-            period="5d",
-            interval="1d",
-            auto_adjust=True,
-            progress=False,
-            threads=True,
+            tickers, period="7d", interval="1d",
+            auto_adjust=True, progress=False, threads=True,
         )
-        if raw.empty or len(raw["Close"]) < 2:
+        if raw.empty:
             return {}
-        pc_series = raw["Close"].iloc[-1]
-        return {
-            tk: float(pc_series[tk])
-            for tk in tickers
-            if tk in pc_series.index and not pd.isna(pc_series[tk])
-        }
+        close = raw["Close"]
+        # Identify whether the final row is today's (partial) session in ET.
+        et       = timezone(timedelta(hours=-4))
+        today_et = datetime.now(et).date()
+        idx_dates = [ts.date() for ts in close.index]
+
+        out = {}
+        for tk in tickers:
+            if tk not in close.columns:
+                continue
+            col = close[tk].dropna()
+            if col.empty:
+                continue
+            # Drop today's in-progress bar if present, then take last close.
+            completed = col[[d != today_et for d in
+                             (col.index.map(lambda x: x.date()))]]
+            series = completed if not completed.empty else col
+            out[tk] = float(series.iloc[-1])
+        return out
     except Exception as e:
         print(f"Prev close fetch failed: {e}")
         return {}
+
+
+def _last_valid_per_ticker(frame: pd.DataFrame, tickers) -> dict:
+    """
+    For a wide intraday Close frame (index = timestamps, columns = tickers),
+    return {ticker: last non-NaN price}.
+
+    Bug fix: the previous code used frame.iloc[-1], a single shared timestamp
+    row. Thinly-traded names have no print in that exact final 2-min bar, so
+    their cell is NaN and they were dropped or computed to a stale 0.00%
+    ('Unchanged'). Forward-filling per column and taking the last value gives
+    each ticker its own genuine latest traded price during market hours.
+    """
+    if frame is None or frame.empty:
+        return {}
+    ff = frame.ffill()
+    last_row = ff.iloc[-1]
+    out = {}
+    for tk in tickers:
+        if tk in last_row.index:
+            v = last_row[tk]
+            if pd.notna(v):
+                out[tk] = float(v)
+    return out
 
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_price_data_live(tickers: tuple) -> pd.DataFrame:
     """
     Market hours: 2-min intraday bars (~15min delayed).
-    Chg % vs previous day's close.
-    Volume = cumulative intraday volume so far.
-    Falls back to EOD if intraday data is empty.
+    Last price = each ticker's own last valid intraday print (forward-filled),
+    NOT the shared final timestamp row — this fixes the spurious 'Unchanged'
+    bucket for less-active names during live trading.
+    Chg % vs previous completed session's close. Volume = cumulative intraday.
     """
     try:
         raw = yf.download(
-            list(tickers),
-            period="1d",
-            interval="2m",
-            auto_adjust=True,
-            progress=False,
-            threads=True,
+            list(tickers), period="1d", interval="2m",
+            auto_adjust=True, progress=False, threads=True,
         )
         if raw.empty or raw["Close"].empty:
             return fetch_price_data_eod(tickers)
 
         close  = raw["Close"]
         volume = raw["Volume"]
-
         if len(close) == 0:
             return fetch_price_data_eod(tickers)
 
@@ -1849,24 +2029,22 @@ def fetch_price_data_live(tickers: tuple) -> pd.DataFrame:
         if not prev_close_map:
             return fetch_price_data_eod(tickers)
 
-        last_price = close.iloc[-1]
-        cum_volume = volume.sum(axis=0)
-        trade_date = close.index[-1].date()
+        last_price_map = _last_valid_per_ticker(close, tickers)
+        cum_volume     = volume.sum(axis=0)
+        trade_date     = close.index[-1].date()
 
         rows = []
         for ticker in tickers:
-            if ticker not in close.columns:
-                continue
-            lp = last_price[ticker]
+            lp = last_price_map.get(ticker)
             pc = prev_close_map.get(ticker)
-            if lp is None or pd.isna(lp) or pc is None or pc == 0:
+            if lp is None or pc is None or pc == 0:
                 continue
-            chg_pct = (float(lp) / pc - 1) * 100
-            chg_abs = float(lp) - pc
+            chg_pct = (lp / pc - 1) * 100
+            chg_abs = lp - pc
             vol     = cum_volume[ticker] if ticker in cum_volume.index else 0
             rows.append({
                 "ticker":     ticker,
-                "price":      round(float(lp), 2),
+                "price":      round(lp, 2),
                 "chg_pct":    round(chg_pct, 2),
                 "chg_abs":    round(chg_abs, 2),
                 "volume":     int(vol) if not pd.isna(vol) else 0,
@@ -1884,28 +2062,18 @@ def fetch_price_data_live(tickers: tuple) -> pd.DataFrame:
 def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
     """
     Pre-market and after-hours: 1-min bars with prepost=True (~15min delayed).
-    Only returns tickers that have actual extended-hours bars.
-    Volume = None if zero/missing → renders as '—' in table.
-    Chg % vs previous day's close.
-    session: 'pre' or 'after_hours' — used only for logging.
+    Chg % vs previous completed session's close.
+    session: 'pre' or 'after_hours'.
     """
     try:
         raw = yf.download(
-            list(tickers),
-            period="1d",
-            interval="1m",
-            auto_adjust=True,
-            prepost=True,
-            progress=False,
-            threads=True,
-            group_by="ticker",
+            list(tickers), period="1d", interval="1m",
+            auto_adjust=True, prepost=True, progress=False,
+            threads=True, group_by="ticker",
         )
         if raw.empty:
             return fetch_price_data_eod(tickers)
 
-        # ── Normalise to a flat {ticker: DataFrame} dict ──────────────────
-        # yfinance with group_by="ticker" returns a MultiIndex column
-        # structure: (ticker, field). Flatten it so we can iterate reliably.
         ticker_data = {}
         for tk in tickers:
             try:
@@ -1915,27 +2083,19 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
                     ticker_data[tk] = tk_df
             except Exception:
                 continue
-
         if not ticker_data:
             return fetch_price_data_eod(tickers)
 
-        # ── Time filter: keep only extended-hours bars ─────────────────────
         et       = timezone(timedelta(hours=-4))   # EDT
         now_et   = datetime.now(et)
         today_et = now_et.date()
 
         if session == "pre":
-            # Today's pre-market only: midnight ET → 9:30am ET today
-            # This excludes yesterday's after-hours bars which also appear
-            # in period='1d' prepost=True data
-            day_start  = datetime(today_et.year, today_et.month, today_et.day,
-                                  0, 0, tzinfo=et)
-            day_cutoff = datetime(today_et.year, today_et.month, today_et.day,
-                                  9, 30, tzinfo=et)
+            day_start  = datetime(today_et.year, today_et.month, today_et.day, 0, 0, tzinfo=et)
+            day_cutoff = datetime(today_et.year, today_et.month, today_et.day, 9, 30, tzinfo=et)
             def in_session(idx): return day_start <= idx < day_cutoff
         else:
-            cutoff = datetime(today_et.year, today_et.month, today_et.day,
-                              16, 0, tzinfo=et)
+            cutoff = datetime(today_et.year, today_et.month, today_et.day, 16, 0, tzinfo=et)
             def in_session(idx): return idx >= cutoff
 
         prev_close_map = _fetch_prev_close(list(tickers))
@@ -1944,23 +2104,17 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
 
         rows = []
         for tk, df_tk in ticker_data.items():
-            # Filter to session window
-            df_ext = df_tk[df_tk.index.map(in_session)]
-            df_ext = df_ext.dropna(subset=["close"])
+            df_ext = df_tk[df_tk.index.map(in_session)].dropna(subset=["close"])
             if df_ext.empty:
                 continue
-
             pc = prev_close_map.get(tk)
             if pc is None or pc == 0:
                 continue
-
             lp      = float(df_ext["close"].iloc[-1])
             chg_pct = (lp / pc - 1) * 100
             chg_abs = lp - pc
-
             vol_raw = df_ext["volume"].sum()
             vol     = int(vol_raw) if not pd.isna(vol_raw) and vol_raw > 0 else None
-
             rows.append({
                 "ticker":     tk,
                 "price":      round(lp, 2),
@@ -1969,7 +2123,6 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
                 "volume":     vol,
                 "trade_date": str(df_ext.index[-1].date()),
             })
-
         if not rows:
             return fetch_price_data_eod(tickers)
         return pd.DataFrame(rows)
@@ -1982,51 +2135,44 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
 def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
     """
     EOD / closed / fallback: daily bars.
-    last_close = most recent session's official close.
-    prev_close = session before that.
-    Volume = full session volume.
+    last_close = most recent session's official close; prev_close = the one before.
     """
     try:
         raw = yf.download(
-            list(tickers),
-            period="5d",
-            interval="1d",
-            auto_adjust=True,
-            progress=False,
-            threads=True,
+            list(tickers), period="5d", interval="1d",
+            auto_adjust=True, progress=False, threads=True,
         )
         if raw.empty:
             return pd.DataFrame()
-
         close  = raw["Close"]
         volume = raw["Volume"]
-
         if len(close) < 2:
             return pd.DataFrame()
-
-        last_close = close.iloc[-1]
-        prev_close = close.iloc[-2]
-        last_vol   = volume.iloc[-1]
-        last_date  = close.index[-1].date()
 
         rows = []
         for ticker in tickers:
             if ticker not in close.columns:
                 continue
-            lc = last_close[ticker]
-            pc = prev_close[ticker]
-            if pd.isna(lc) or pd.isna(pc) or pc == 0:
+            col = close[ticker].dropna()
+            if len(col) < 2:
                 continue
-            chg_pct = (float(lc) / float(pc) - 1) * 100
-            chg_abs = float(lc) - float(pc)
-            vol     = last_vol[ticker] if ticker in last_vol.index else 0
+            lc = float(col.iloc[-1])
+            pc = float(col.iloc[-2])
+            if pc == 0:
+                continue
+            chg_pct = (lc / pc - 1) * 100
+            chg_abs = lc - pc
+            try:
+                vol = volume[ticker].dropna().iloc[-1]
+            except Exception:
+                vol = 0
             rows.append({
                 "ticker":     ticker,
-                "price":      round(float(lc), 2),
+                "price":      round(lc, 2),
                 "chg_pct":    round(chg_pct, 2),
                 "chg_abs":    round(chg_abs, 2),
                 "volume":     int(vol) if not pd.isna(vol) else 0,
-                "trade_date": str(last_date),
+                "trade_date": str(col.index[-1].date()),
             })
         return pd.DataFrame(rows)
     except Exception as e:
@@ -2035,10 +2181,7 @@ def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
 
 
 def fetch_price_data(tickers: tuple) -> tuple:
-    """
-    Router: picks correct fetch based on market state.
-    Returns (DataFrame, market_state_str).
-    """
+    """Router: picks correct fetch based on market state. Returns (DataFrame, state)."""
     state = get_market_state()
     if state == "open":
         return fetch_price_data_live(tickers), state
@@ -2104,28 +2247,28 @@ def render_screener() -> None:
     st.markdown("""
     <div class="screener-header">
       <div>
-        <div class="screener-title">📈 Markets Screener — Top 50 Movers</div>
+        <div class="screener-title">📈 Markets Screener — Full Constituents</div>
         <div class="data-hover-wrap" style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(120,140,200,.08)">
           <div class="data-hover-trigger">DATA <span class="data-q">?</span></div>
           <div class="data-hover-bar">
             <div class="data-hover-item">
-              <span class="data-hover-label">Source</span>
-              <span class="data-hover-val">Yahoo Finance</span>
+              <span class="data-hover-label">Universe</span>
+              <span class="data-hover-val">SPY / QQQ Holdings · 27 May 2026</span>
             </div>
             <div class="data-hover-divider"></div>
             <div class="data-hover-item">
               <span class="data-hover-label">Prices</span>
-              <span class="data-hover-val">End-of-Day · Last Trading Session</span>
+              <span class="data-hover-val">Yahoo Finance · Market-State Aware</span>
             </div>
             <div class="data-hover-divider"></div>
             <div class="data-hover-item">
-              <span class="data-hover-label">Market Cap</span>
-              <span class="data-hover-val">Live · Top 50 Only</span>
+              <span class="data-hover-label">Weights</span>
+              <span class="data-hover-val">Live · shares × price</span>
             </div>
             <div class="data-hover-divider"></div>
             <div class="data-hover-item">
               <span class="data-hover-label">Cache</span>
-              <span class="data-hover-val">Refreshes Every Hour</span>
+              <span class="data-hover-val">Prices 5min · Mkt Cap 24h</span>
             </div>
           </div>
         </div>
@@ -2140,7 +2283,6 @@ def render_screener() -> None:
     is_sp  = st.session_state["idx_choice"] == "S&P 500"
     is_ndx = not is_sp
 
-    # Active = bright white filled. Inactive = dimmed.
     sp_bg   = "rgba(255,255,255,.14)"  if is_sp  else "transparent"
     sp_bd   = "rgba(255,255,255,.55)"  if is_sp  else "rgba(120,140,200,.18)"
     sp_col  = "#FFFFFF"                if is_sp  else "rgba(255,255,255,.3)"
@@ -2167,18 +2309,21 @@ def render_screener() -> None:
             st.session_state["idx_choice"] = "Nasdaq 100"
             st.rerun()
     idx_choice = st.session_state["idx_choice"]
+    etf_label  = "SPY" if idx_choice == "S&P 500" else "QQQ"
 
-    # ── Load constituents ─────────────────────────────────────────────────
+    # ── Load holdings (full, incl. non-priceable for cash bucketing) ───────
     with st.spinner("Loading constituent list…"):
         if idx_choice == "S&P 500":
-            constituents = fetch_sp500_constituents()
+            holdings_full = fetch_sp500_holdings_full()
         else:
-            constituents = fetch_ndx_constituents()
+            holdings_full = fetch_ndx_holdings_full()
 
-    if constituents.empty:
-        st.error("Failed to load constituent list. Check network connectivity.")
+    if holdings_full.empty:
+        st.error("Failed to load constituent list. Check that the holdings file is present in ./data/.")
         return
 
+    constituents   = holdings_full[holdings_full["priceable"]].reset_index(drop=True)
+    non_priceable  = holdings_full[~holdings_full["priceable"]].reset_index(drop=True)
     tickers_tuple  = tuple(constituents["ticker"].tolist())
     total_universe = len(tickers_tuple)
 
@@ -2197,14 +2342,34 @@ def render_screener() -> None:
         st.error("Failed to fetch price data from Yahoo Finance.")
         return
 
-    # ── Merge constituents + prices ───────────────────────────────────────
-    df = constituents.merge(prices, on="ticker", how="inner")
-    if df.empty:
+    # ── Merge constituents + prices (this is the live priced universe) ─────
+    priced = constituents.merge(prices, on="ticker", how="inner")
+    if priced.empty:
         st.error("No matching price data found.")
         return
 
-    trade_date    = df["trade_date"].iloc[0] if "trade_date" in df.columns else "—"
-    active_count  = len(df)
+    # ── Live weights: w_i = shares_i * price_i / Σ(shares * price) ─────────
+    priced["mkt_val"] = priced["shares"] * priced["price"]
+    total_mkt_val     = priced["mkt_val"].sum()
+    if total_mkt_val and total_mkt_val > 0:
+        priced["weight"] = priced["mkt_val"] / total_mkt_val
+    else:
+        priced["weight"] = 0.0
+
+    # ── Weighted index return (true SPY/QQQ move) ─────────────────────────
+    # Each name contributes weight_i × chg_pct_i. Non-priceable cash holdings
+    # contribute 0% change and are excluded from the weight base, so the
+    # weighted figure reflects the priced-equity portion of the ETF.
+    weighted_return = float((priced["weight"] * priced["chg_pct"]).sum())
+
+    # ── Cash & Other exposure (non-priceable holdings) ────────────────────
+    # Estimate notional from prev-close-based market value where shares exist;
+    # fall back to reporting count when shares are unusable (e.g. futures).
+    cash_names  = non_priceable["company"].tolist()
+    cash_count  = len(non_priceable)
+
+    trade_date    = priced["trade_date"].iloc[0] if "trade_date" in priced.columns else "—"
+    active_count  = len(priced)
     sgt           = timezone(timedelta(hours=8))
     now_sgt_str   = datetime.now(sgt).strftime("%H:%M SGT")
 
@@ -2244,14 +2409,14 @@ def render_screener() -> None:
         unsafe_allow_html=True
     )
 
-    # ── Sector filter ─────────────────────────────────────────────────────
-    sectors    = ["All"] + sorted(df["sector"].dropna().unique().tolist())
+    # ── Sector filter (applies to the displayed table only) ───────────────
+    sectors    = ["All"] + sorted([s for s in priced["sector"].dropna().unique().tolist() if s != "—"])
+    if (priced["sector"] == "—").any():
+        sectors = sectors + ["—"]
     sector_sel = st.selectbox("Filter by Sector", sectors, key="sector_sel",
                               label_visibility="collapsed")
-    if sector_sel != "All":
-        df = df[df["sector"] == sector_sel]
 
-    # ── View toggle: Top 50 Gainers / Top 50 Losers ───────────────────────
+    # ── View toggle: Gainers / Losers ─────────────────────────────────────
     if "view_sel" not in st.session_state:
         st.session_state["view_sel"] = "Gainers"
     is_gainers = st.session_state["view_sel"] == "Gainers"
@@ -2268,72 +2433,72 @@ def render_screener() -> None:
 
     st.markdown(f"""
     <style>
-    button[aria-label="Top 50 Gainers"] {{ background:{g_bg}!important; border-color:{g_bd}!important; color:{g_col}!important; font-weight:{g_fw}!important; }}
-    button[aria-label="Top 50 Losers"]  {{ background:{l_bg}!important; border-color:{l_bd}!important; color:{l_col}!important; font-weight:{l_fw}!important; }}
+    button[aria-label="Gainers"] {{ background:{g_bg}!important; border-color:{g_bd}!important; color:{g_col}!important; font-weight:{g_fw}!important; }}
+    button[aria-label="Losers"]  {{ background:{l_bg}!important; border-color:{l_bd}!important; color:{l_col}!important; font-weight:{l_fw}!important; }}
     </style>
     """, unsafe_allow_html=True)
 
     col_g, col_l, col_vrest = st.columns([1, 1, 8])
     with col_g:
-        if st.button("Top 50 Gainers", key="btn_gainers", use_container_width=True):
+        if st.button("Gainers", key="btn_gainers", use_container_width=True):
             st.session_state["view_sel"] = "Gainers"
             st.rerun()
     with col_l:
-        if st.button("Top 50 Losers", key="btn_losers", use_container_width=True):
+        if st.button("Losers", key="btn_losers", use_container_width=True):
             st.session_state["view_sel"] = "Losers"
             st.rerun()
 
     view = st.session_state["view_sel"]
+
+    # ── Build the directional pool (used for both the table and Top-N) ─────
+    df = priced.copy()
+    if sector_sel != "All":
+        df = df[df["sector"] == sector_sel]
+
     if view == "Gainers":
-        df = df[df["chg_pct"] > 0].sort_values("chg_pct", ascending=False)
+        direction_pool = df[df["chg_pct"] > 0].sort_values("chg_pct", ascending=False).reset_index(drop=True)
     else:
-        df = df[df["chg_pct"] < 0].sort_values("chg_pct", ascending=True)
+        direction_pool = df[df["chg_pct"] < 0].sort_values("chg_pct", ascending=True).reset_index(drop=True)
 
-    # ── Slice top 50 BEFORE fetching market cap ───────────────────────────
-    df = df.head(50).reset_index(drop=True)
+    pool_size = len(direction_pool)
 
-    # ── Top 50 avg (computed after slice) ────────────────────────────────
-    top50_avg_chg = df["chg_pct"].mean() if not df.empty else 0.0
-    top50_label   = "Top 50 Gainers Avg" if view == "Gainers" else "Top 50 Losers Avg"
-
-    # ── Prev-day market cap for top 50 (shares × prev close) ─────────────
-    top50_tickers = tuple(df["ticker"].tolist())
-    try:
-        raw_prev = yf.download(
-            list(top50_tickers),
-            period="5d", interval="1d",
-            auto_adjust=True, progress=False, threads=True,
-        )
-        if not raw_prev.empty and len(raw_prev["Close"]) >= 2:
-            pc_row      = raw_prev["Close"].iloc[-2]
-            prev_prices = tuple(
-                (tk, float(pc_row[tk]))
-                for tk in top50_tickers
-                if tk in pc_row.index and not pd.isna(pc_row[tk])
+    # ── Dynamic Top-N scroller ────────────────────────────────────────────
+    if pool_size >= 1:
+        default_n = min(10, pool_size)
+        if pool_size == 1:
+            top_n = 1
+            st.markdown(
+                "<div style='font-family:IBM Plex Mono,monospace;font-size:11px;"
+                "color:#4D6080;margin:4px 0 10px'>Only 1 "
+                f"{view.lower()[:-1]} in pool</div>",
+                unsafe_allow_html=True,
             )
         else:
-            prev_prices = tuple()
-    except Exception:
-        prev_prices = tuple()
+            top_n = st.slider(
+                f"Top N {view}",
+                min_value=1, max_value=pool_size, value=default_n, step=1,
+                key=f"topn_{idx_choice}_{view}",
+                help=f"Average return of the top N {view.lower()} by % change",
+            )
+    else:
+        top_n = 0
 
-    with st.spinner("Fetching market caps (prev close)…"):
-        mktcap_map = fetch_market_caps(top50_tickers, prev_prices)
-    df["mkt_cap"] = df["ticker"].map(mktcap_map)
+    top_n_slice  = direction_pool.head(top_n) if top_n > 0 else direction_pool.head(0)
+    top_n_avg    = top_n_slice["chg_pct"].mean() if not top_n_slice.empty else 0.0
+    top_n_label  = f"Top {top_n} {view} Avg"
 
-    # ── Summary stats row — dynamic to active pool ────────────────────────
-    all_active  = constituents.merge(prices, on="ticker", how="inner")
-    gainers     = (all_active["chg_pct"] > 0).sum()
-    losers      = (all_active["chg_pct"] < 0).sum()
-    unchanged   = (all_active["chg_pct"] == 0).sum()
-    overall_avg = all_active["chg_pct"].mean()
+    # ── Summary stats: Gainers · Losers · Unchanged · Top-N Avg · Overall ──
+    gainers   = (priced["chg_pct"] > 0).sum()
+    losers    = (priced["chg_pct"] < 0).sum()
+    unchanged = (priced["chg_pct"] == 0).sum()
 
     c1, c2, c3, c4, c5 = st.columns(5)
     for col, label, val, color in [
-        (c1, "Gainers",     f"{gainers}",              "#0FD68A"),
-        (c2, "Losers",      f"{losers}",               "#F0485A"),
-        (c3, "Unchanged",   f"{unchanged}",            "#8898BB"),
-        (c4, top50_label,   f"{top50_avg_chg:+.2f}%", "#0FD68A" if top50_avg_chg >= 0 else "#F0485A"),
-        (c5, "Overall Avg", f"{overall_avg:+.2f}%",   "#0FD68A" if overall_avg   >= 0 else "#F0485A"),
+        (c1, "Gainers",       f"{gainers}",               "#0FD68A"),
+        (c2, "Losers",        f"{losers}",                "#F0485A"),
+        (c3, "Unchanged",     f"{unchanged}",             "#8898BB"),
+        (c4, top_n_label,     f"{top_n_avg:+.2f}%",       "#0FD68A" if top_n_avg       >= 0 else "#F0485A"),
+        (c5, f"{etf_label} Return", f"{weighted_return:+.2f}%", "#0FD68A" if weighted_return >= 0 else "#F0485A"),
     ]:
         with col:
             st.markdown(f"""
@@ -2347,13 +2512,60 @@ def render_screener() -> None:
             </div>
             """, unsafe_allow_html=True)
 
+    # ── Cash & Other note ─────────────────────────────────────────────────
+    if cash_count > 0:
+        names_str = ", ".join(cash_names[:6]) + ("…" if cash_count > 6 else "")
+        st.markdown(
+            f"<div style='font-family:IBM Plex Mono,monospace;font-size:10px;"
+            f"color:#8898BB;margin-top:10px'>"
+            f"⊘ {cash_count} non-priceable holding(s) treated as Cash &amp; Other "
+            f"(excluded from weighted return): {names_str}</div>",
+            unsafe_allow_html=True
+        )
+
     st.markdown("<div style='margin-top:16px'></div>", unsafe_allow_html=True)
 
-    # ── Stock table ───────────────────────────────────────────────────────
+    # ── Market caps for the full displayed pool (prev-close × shares) ──────
+    # Cached 24h; computed once per day across the whole universe.
+    pool_tickers = tuple(direction_pool["ticker"].tolist())
+    if pool_tickers:
+        try:
+            raw_prev = yf.download(
+                list(pool_tickers), period="7d", interval="1d",
+                auto_adjust=True, progress=False, threads=True,
+            )
+            prev_prices = tuple()
+            if not raw_prev.empty:
+                pc_close = raw_prev["Close"]
+                et       = timezone(timedelta(hours=-4))
+                today_et = datetime.now(et).date()
+                pp = []
+                for tk in pool_tickers:
+                    if tk not in pc_close.columns:
+                        continue
+                    colp = pc_close[tk].dropna()
+                    completed = colp[[d != today_et for d in colp.index.map(lambda x: x.date())]]
+                    series = completed if not completed.empty else colp
+                    if not series.empty:
+                        pp.append((tk, float(series.iloc[-1])))
+                prev_prices = tuple(pp)
+        except Exception:
+            prev_prices = tuple()
+
+        with st.spinner("Fetching market caps (prev close)…"):
+            mktcap_map = fetch_market_caps(pool_tickers, prev_prices)
+        direction_pool = direction_pool.copy()
+        direction_pool["mkt_cap"] = direction_pool["ticker"].map(mktcap_map)
+    else:
+        direction_pool = direction_pool.copy()
+        direction_pool["mkt_cap"] = None
+
+    # ── Stock table — ALL constituents in the directional pool ────────────
     rows_html = ""
-    for i, row in df.iterrows():
+    for i, row in direction_pool.iterrows():
         chg_cls  = "chg-pos" if row["chg_pct"] >= 0 else "chg-neg"
         chg_sign = "▲" if row["chg_pct"] >= 0 else "▼"
+        wt_pct   = row.get("weight", 0.0) * 100
         rows_html += f"""
         <tr>
           <td style="color:#4D6080;width:36px">{i+1}</td>
@@ -2366,6 +2578,7 @@ def render_screener() -> None:
               {chg_sign} {abs(row['chg_pct']):.2f}%</td>
           <td class="{chg_cls}" style="text-align:right">
               {'+' if row['chg_abs']>=0 else ''}{row['chg_abs']:.2f}</td>
+          <td style="text-align:right;color:#FFFFFF">{wt_pct:.2f}%</td>
           <td style="text-align:right;color:#FFFFFF">{fmt_volume(row['volume'])}</td>
           <td style="text-align:right;color:#FFFFFF">{fmt_mktcap(row.get('mkt_cap'))}</td>
         </tr>"""
@@ -2380,6 +2593,7 @@ def render_screener() -> None:
             <th style="text-align:right">Price</th>
             <th style="text-align:right">Chg %</th>
             <th style="text-align:right">Chg $</th>
+            <th style="text-align:right">Weight</th>
             <th style="text-align:right">Volume</th>
             <th style="text-align:right">Mkt Cap</th>
           </tr>
@@ -2389,7 +2603,8 @@ def render_screener() -> None:
     </div>
     <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#4D6080;
         margin-top:8px;text-align:right">
-      Data: Yahoo Finance · Market cap: prev-day close · Top {len(df)} of {active_count}
+      Data: Yahoo Finance · Weights: live shares × price · Market cap: prev-day close ·
+      Showing all {len(direction_pool)} {view.lower()} of {active_count} priced
     </div>
     """, unsafe_allow_html=True)
 
