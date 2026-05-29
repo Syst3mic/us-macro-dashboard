@@ -2572,93 +2572,6 @@ def render_screener() -> None:
         top_n_contrib_bps = 0.0
     top_n_contrib_label = f"Top {top_n} {view} Contrib"
 
-    # ── Sector heatmap — sized by sector weight, colored by sector return ──
-    # Aggregates the same `priced` frame used for the headline metrics, so the
-    # 11 sector contributions sum (modulo the unmapped '—' bucket and cash) to
-    # the {ETF} Return card below. Tile size uses sqrt scaling so smaller
-    # sectors (Real Estate, Materials) stay legible next to Tech / Financials.
-    sec_df = priced[priced["sector"] != "—"].copy()
-    sec_df["contrib_pct"] = sec_df["weight"] * sec_df["chg_for_idx"]
-    agg = sec_df.groupby("sector", as_index=False).agg(
-        sec_weight=("weight",      "sum"),
-        sec_contrib=("contrib_pct", "sum"),
-        n_names=("ticker",         "count"),
-    )
-    # Cap-weighted sector return: sector_contrib / sector_weight gives the
-    # return of a portfolio holding only that sector at its in-index weights.
-    agg["sec_return_pct"] = (agg["sec_contrib"] / agg["sec_weight"]).fillna(0)
-    agg["sec_contrib_bps"] = agg["sec_contrib"] * 100
-    agg["sec_weight_pct"]  = agg["sec_weight"]  * 100
-    # Square-root sizing for visual balance (large sectors still dominate
-    # but tiny sectors remain readable).
-    agg["size"] = agg["sec_weight"].pow(0.5)
-    agg = agg.sort_values("sec_weight", ascending=False).reset_index(drop=True)
-
-    if not agg.empty:
-        # Custom label: sector name, return %, contribution bps
-        agg["label"] = (
-            agg["sector"] + "<br>"
-            + agg["sec_return_pct"].apply(lambda v: f"{v:+.2f}%") + "<br>"
-            + agg["sec_contrib_bps"].apply(lambda v: f"{v:+.1f} bps")
-        )
-
-        heatmap = go.Figure(go.Treemap(
-            labels=agg["label"],
-            parents=[""] * len(agg),
-            values=agg["size"],
-            customdata=agg[["sec_weight_pct", "sec_return_pct",
-                            "sec_contrib_bps", "n_names"]].values,
-            marker=dict(
-                colors=agg["sec_return_pct"],
-                colorscale="RdYlGn",
-                cmid=0,
-                cmin=-2, cmax=2,
-                line=dict(color="#06080F", width=2),
-            ),
-            textinfo="label",
-            textfont=dict(family="IBM Plex Mono, monospace",
-                          size=12, color="#06080F"),
-            hovertemplate=(
-                "<b>%{customdata[0]:.1f}% of index</b><br>"
-                "Weighted return: <b>%{customdata[1]:+.2f}%</b><br>"
-                "Contribution: <b>%{customdata[2]:+.1f} bps</b><br>"
-                "%{customdata[3]:.0f} constituents"
-                "<extra></extra>"
-            ),
-            tiling=dict(packing="squarify", squarifyratio=2.5),
-        ))
-        heatmap.update_layout(
-            height=240,
-            margin=dict(l=0, r=0, t=4, b=4),
-            paper_bgcolor="#06080F",
-            plot_bgcolor="#06080F",
-            font=dict(family="IBM Plex Mono, monospace"),
-            hoverlabel=dict(
-                bgcolor="#0E1428",
-                bordercolor="rgba(91,141,239,.3)",
-                font=dict(family="IBM Plex Mono, monospace",
-                          size=12, color="#FFFFFF"),
-            ),
-        )
-        st.markdown(
-            "<div style='font-family:\"Sora\",sans-serif;font-size:13px;"
-            "font-weight:700;letter-spacing:.4px;text-transform:uppercase;"
-            "color:#FFFFFF;margin:8px 0 6px'>Sector Heatmap "
-            "<span style='font-family:\"IBM Plex Mono\",monospace;font-size:10px;"
-            "font-weight:400;color:#8898BB;letter-spacing:.3px;text-transform:none;"
-            "margin-left:8px'>"
-            "tile size = sector weight · color = weighted return · "
-            "bps = contribution to index return</span></div>",
-            unsafe_allow_html=True,
-        )
-        st.plotly_chart(
-            heatmap, width="stretch",
-            config={"displayModeBar": False},
-            key=f"heatmap_{etf_label}",
-        )
-        st.markdown("<div style='margin-bottom:6px'></div>",
-                    unsafe_allow_html=True)
-
     # ── Summary stats: Gainers · Losers · Unchanged · Top-N Avg · Overall ──
     gainers   = (quoted["chg_pct"] > 0).sum()
     losers    = (quoted["chg_pct"] < 0).sum()
@@ -2746,6 +2659,73 @@ def render_screener() -> None:
     else:
         direction_pool = direction_pool.copy()
         direction_pool["mkt_cap"] = None
+
+    # ── Excel export — current view, plain data ────────────────────────────
+    # Mirrors the on-screen table exactly: same column order, same row order,
+    # same filtering (sector + Gainers/Losers). Built lazily and only when the
+    # user clicks the download button (no cost on normal page renders).
+    import io
+    export_df = pd.DataFrame({
+        "Rank":       range(1, len(direction_pool) + 1),
+        "Ticker":     direction_pool["ticker"].values,
+        "Company":    direction_pool["company"].values,
+        "Sector":     direction_pool["sector"].values,
+        "Price":      direction_pool["price"].values,
+        "Chg %":      direction_pool["chg_pct"].values,
+        "Chg $":      direction_pool["chg_abs"].values,
+        "Weight %":   (direction_pool["weight"] * 100).values,
+        "Volume":     direction_pool["volume"].values,
+        "Market Cap": direction_pool["mkt_cap"].values,
+    })
+    xlsx_buf = io.BytesIO()
+    with pd.ExcelWriter(xlsx_buf, engine="openpyxl") as writer:
+        export_df.to_excel(writer, sheet_name=f"{etf_label} {view}", index=False)
+    xlsx_buf.seek(0)
+    fname = (
+        f"{etf_label}_{view.lower()}_"
+        f"{('all' if sector_sel == 'All' else sector_sel.replace(' ', '_'))}_"
+        f"{datetime.now(sgt).strftime('%Y%m%d_%H%M')}.xlsx"
+    )
+    col_dl, col_pad = st.columns([2, 8])
+    with col_dl:
+        # Scoped styling so the download button reads clearly on the dark
+        # theme (default Streamlit renders white-on-white here). Targets
+        # only this button by its unique key via [data-testid] selector.
+        st.markdown("""
+        <style>
+        div[data-testid="stDownloadButton"] button {
+            background: #0D1628 !important;
+            border: 1px solid rgba(15,180,90,.45) !important;
+            color: #FFFFFF !important;
+            font-family: 'Sora', sans-serif !important;
+            font-size: 12px !important;
+            font-weight: 600 !important;
+            letter-spacing: .3px !important;
+            padding: 8px 18px !important;
+            border-radius: 6px !important;
+            transition: all .15s !important;
+            box-shadow: 0 0 0 0 rgba(15,180,90,0) !important;
+        }
+        div[data-testid="stDownloadButton"] button:hover {
+            background: rgba(15,180,90,.12) !important;
+            border-color: rgba(15,180,90,.85) !important;
+            box-shadow: 0 0 12px rgba(15,180,90,.18) !important;
+            color: #FFFFFF !important;
+        }
+        div[data-testid="stDownloadButton"] button:focus {
+            outline: none !important;
+            box-shadow: 0 0 0 2px rgba(15,180,90,.35) !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        st.download_button(
+            label="📊  Export to Excel",
+            data=xlsx_buf.getvalue(),
+            file_name=fname,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=f"dl_{etf_label}_{view}",
+            help=f"Download the current view ({len(export_df)} rows) as .xlsx",
+        )
 
     # ── Stock table — ALL constituents in the directional pool ────────────
     rows_html = ""
