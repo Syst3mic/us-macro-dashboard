@@ -651,7 +651,7 @@ def fetch_fred_data() -> dict:
     Fetch ICSA, ADPNFPCA, UMCSENT from FRED API.
     Server-side GET — no CORS, no proxy needed.
     """
-    fred_key = "bc1f32b397114934e95d879ec2646074"
+    fred_key = st.secrets["FRED_API_KEY"]
     result   = {}
 
     for key, cfg in FRED_SERIES.items():
