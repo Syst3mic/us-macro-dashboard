@@ -2346,7 +2346,6 @@ def render_screener() -> None:
             st.rerun()
     idx_choice = st.session_state["idx_choice"]
     etf_label  = "SPY" if idx_choice == "S&P 500" else "QQQ"
-    index_label = "Overall S&P 500 Index Move" if idx_choice == "S&P 500" else "Overall Nasdaq 100 Move"
 
     # ── Load holdings (full, incl. non-priceable for cash bucketing) ───────
     with st.spinner("Loading constituent list…"):
@@ -2585,7 +2584,7 @@ def render_screener() -> None:
         (c3, "Unchanged",     f"{unchanged}",             "#8898BB"),
         (c4, top_n_label,     f"{top_n_avg:+.2f}%",       "#0FD68A" if top_n_avg          >= 0 else "#F0485A"),
         (c5, top_n_contrib_label, f"{top_n_contrib_bps:+.1f}bps", "#0FD68A" if top_n_contrib_bps >= 0 else "#F0485A"),
-        (c6, index_label, f"{weighted_return:+.2f}%", "#0FD68A" if weighted_return    >= 0 else "#F0485A"),
+        (c6, f"{etf_label} Return", f"{weighted_return:+.2f}%", "#0FD68A" if weighted_return    >= 0 else "#F0485A"),
     ]:
         with col:
             st.markdown(f"""
@@ -2660,6 +2659,43 @@ def render_screener() -> None:
     else:
         direction_pool = direction_pool.copy()
         direction_pool["mkt_cap"] = None
+
+    # ── Excel export — current view, plain data ────────────────────────────
+    # Mirrors the on-screen table exactly: same column order, same row order,
+    # same filtering (sector + Gainers/Losers). Built lazily and only when the
+    # user clicks the download button (no cost on normal page renders).
+    import io
+    export_df = pd.DataFrame({
+        "Rank":       range(1, len(direction_pool) + 1),
+        "Ticker":     direction_pool["ticker"].values,
+        "Company":    direction_pool["company"].values,
+        "Sector":     direction_pool["sector"].values,
+        "Price":      direction_pool["price"].values,
+        "Chg %":      direction_pool["chg_pct"].values,
+        "Chg $":      direction_pool["chg_abs"].values,
+        "Weight %":   (direction_pool["weight"] * 100).values,
+        "Volume":     direction_pool["volume"].values,
+        "Market Cap": direction_pool["mkt_cap"].values,
+    })
+    xlsx_buf = io.BytesIO()
+    with pd.ExcelWriter(xlsx_buf, engine="openpyxl") as writer:
+        export_df.to_excel(writer, sheet_name=f"{etf_label} {view}", index=False)
+    xlsx_buf.seek(0)
+    fname = (
+        f"{etf_label}_{view.lower()}_"
+        f"{('all' if sector_sel == 'All' else sector_sel.replace(' ', '_'))}_"
+        f"{datetime.now(sgt).strftime('%Y%m%d_%H%M')}.xlsx"
+    )
+    col_dl, col_pad = st.columns([2, 8])
+    with col_dl:
+        st.download_button(
+            label="⬇ Export to Excel",
+            data=xlsx_buf.getvalue(),
+            file_name=fname,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=f"dl_{etf_label}_{view}",
+            help=f"Download the current view ({len(export_df)} rows) as .xlsx",
+        )
 
     # ── Stock table — ALL constituents in the directional pool ────────────
     rows_html = ""
