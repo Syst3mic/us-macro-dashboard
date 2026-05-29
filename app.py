@@ -2080,9 +2080,10 @@ def fetch_price_data_live(tickers: tuple) -> pd.DataFrame:
             vol     = cum_volume[ticker] if ticker in cum_volume.index else 0
             rows.append({
                 "ticker":     ticker,
-                "price":      round(lp, 2),
-                "chg_pct":    round(chg_pct, 2),
-                "chg_abs":    round(chg_abs, 2),
+                "price":      lp,            # full precision; rounded only at display
+                "chg_pct":    chg_pct,       # full precision; weighted sum needs it
+                "chg_abs":    chg_abs,
+                "prev_close": pc,            # t-1 anchor for the weight base
                 "volume":     int(vol) if not pd.isna(vol) else 0,
                 "trade_date": str(trade_date),
             })
@@ -2153,9 +2154,10 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
             vol     = int(vol_raw) if not pd.isna(vol_raw) and vol_raw > 0 else None
             rows.append({
                 "ticker":     tk,
-                "price":      round(lp, 2),
-                "chg_pct":    round(chg_pct, 2),
-                "chg_abs":    round(chg_abs, 2),
+                "price":      lp,            # full precision; rounded only at display
+                "chg_pct":    chg_pct,       # full precision; weighted sum needs it
+                "chg_abs":    chg_abs,
+                "prev_close": pc,            # t-1 anchor for the weight base
                 "volume":     vol,
                 "trade_date": str(df_ext.index[-1].date()),
             })
@@ -2204,9 +2206,10 @@ def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
                 vol = 0
             rows.append({
                 "ticker":     ticker,
-                "price":      round(lc, 2),
-                "chg_pct":    round(chg_pct, 2),
-                "chg_abs":    round(chg_abs, 2),
+                "price":      lc,            # full precision; rounded only at display
+                "chg_pct":    chg_pct,       # full precision; weighted sum needs it
+                "chg_abs":    chg_abs,
+                "prev_close": pc,            # t-1 anchor for the weight base
                 "volume":     int(vol) if not pd.isna(vol) else 0,
                 "trade_date": str(col.index[-1].date()),
             })
@@ -2401,12 +2404,14 @@ def render_screener() -> None:
         st.error("No matching price data found.")
         return
 
-    # ── Stable weight base: shares × prev_close over the FULL universe ─────
-    # We need a previous-close anchor for every constituent so the denominator
-    # doesn't depend on which names happen to be trading right now.
-    prev_close_map = _fetch_prev_close(list(tickers_tuple))
-    priced["prev_close"] = priced["ticker"].map(prev_close_map)
-    # Fall back to current price where prev close is unavailable.
+    # ── Stable weight base: shares × t-1 close over the FULL universe ──────
+    # Use the prev_close column emitted by the price-fetch layer — which is
+    # the close of the session BEFORE the one chg_pct is measured against.
+    # This is the start-of-period market cap, the correct anchor for a
+    # period-return weighting (using end-of-period market cap as the weight
+    # base inflates the index return by ~2-3bps because winners gain weight
+    # mid-period). For constituents missing a prev_close in the price frame
+    # (e.g. unmatched names), fall back to the current price.
     priced["prev_close"] = priced["prev_close"].fillna(priced["price"])
 
     priced["mkt_val"] = priced["shares"] * priced["prev_close"]
@@ -2659,73 +2664,6 @@ def render_screener() -> None:
     else:
         direction_pool = direction_pool.copy()
         direction_pool["mkt_cap"] = None
-
-    # ── Excel export — current view, plain data ────────────────────────────
-    # Mirrors the on-screen table exactly: same column order, same row order,
-    # same filtering (sector + Gainers/Losers). Built lazily and only when the
-    # user clicks the download button (no cost on normal page renders).
-    import io
-    export_df = pd.DataFrame({
-        "Rank":       range(1, len(direction_pool) + 1),
-        "Ticker":     direction_pool["ticker"].values,
-        "Company":    direction_pool["company"].values,
-        "Sector":     direction_pool["sector"].values,
-        "Price":      direction_pool["price"].values,
-        "Chg %":      direction_pool["chg_pct"].values,
-        "Chg $":      direction_pool["chg_abs"].values,
-        "Weight %":   (direction_pool["weight"] * 100).values,
-        "Volume":     direction_pool["volume"].values,
-        "Market Cap": direction_pool["mkt_cap"].values,
-    })
-    xlsx_buf = io.BytesIO()
-    with pd.ExcelWriter(xlsx_buf, engine="openpyxl") as writer:
-        export_df.to_excel(writer, sheet_name=f"{etf_label} {view}", index=False)
-    xlsx_buf.seek(0)
-    fname = (
-        f"{etf_label}_{view.lower()}_"
-        f"{('all' if sector_sel == 'All' else sector_sel.replace(' ', '_'))}_"
-        f"{datetime.now(sgt).strftime('%Y%m%d_%H%M')}.xlsx"
-    )
-    col_dl, col_pad = st.columns([2, 8])
-    with col_dl:
-        # Scoped styling so the download button reads clearly on the dark
-        # theme (default Streamlit renders white-on-white here). Targets
-        # only this button by its unique key via [data-testid] selector.
-        st.markdown("""
-        <style>
-        div[data-testid="stDownloadButton"] button {
-            background: #0D1628 !important;
-            border: 1px solid rgba(15,180,90,.45) !important;
-            color: #FFFFFF !important;
-            font-family: 'Sora', sans-serif !important;
-            font-size: 12px !important;
-            font-weight: 600 !important;
-            letter-spacing: .3px !important;
-            padding: 8px 18px !important;
-            border-radius: 6px !important;
-            transition: all .15s !important;
-            box-shadow: 0 0 0 0 rgba(15,180,90,0) !important;
-        }
-        div[data-testid="stDownloadButton"] button:hover {
-            background: rgba(15,180,90,.12) !important;
-            border-color: rgba(15,180,90,.85) !important;
-            box-shadow: 0 0 12px rgba(15,180,90,.18) !important;
-            color: #FFFFFF !important;
-        }
-        div[data-testid="stDownloadButton"] button:focus {
-            outline: none !important;
-            box-shadow: 0 0 0 2px rgba(15,180,90,.35) !important;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-        st.download_button(
-            label="📊  Export to Excel",
-            data=xlsx_buf.getvalue(),
-            file_name=fname,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key=f"dl_{etf_label}_{view}",
-            help=f"Download the current view ({len(export_df)} rows) as .xlsx",
-        )
 
     # ── Stock table — ALL constituents in the directional pool ────────────
     rows_html = ""
