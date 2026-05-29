@@ -651,17 +651,8 @@ def fetch_fred_data() -> dict:
     Fetch ICSA, ADPNFPCA, UMCSENT from FRED API.
     Server-side GET — no CORS, no proxy needed.
     """
-    # Read FRED key from Streamlit secrets (set under Manage app → Settings → Secrets).
-    try:
-        fred_key = st.secrets["FRED_API_KEY"]
-    except Exception:
-        return {"__errors__": [
-            "FRED_API_KEY not set in Streamlit secrets. "
-            "Add it under Manage app → Settings → Secrets, then reboot."
-        ]}
-
+    fred_key = "bc1f32b397114934e95d879ec2646074"
     result   = {}
-    errors   = []
 
     for key, cfg in FRED_SERIES.items():
         # Weekly series: fetch 3 years (156 weeks). Monthly: 10 years.
@@ -676,17 +667,7 @@ def fetch_fred_data() -> dict:
         )
         try:
             resp = requests.get(url, timeout=20)
-            if resp.status_code != 200:
-                # Capture FRED's own error message instead of swallowing it.
-                try:
-                    body = resp.json().get("error_message", resp.text[:200])
-                except Exception:
-                    body = resp.text[:200]
-                msg = f"{cfg['id']}: HTTP {resp.status_code} — {body}"
-                print(f"FRED fetch failed [{key}]: {msg}")
-                errors.append(msg)
-                result[key] = pd.DataFrame(columns=["date", "value"])
-                continue
+            resp.raise_for_status()
             data = resp.json()
             rows = []
             for obs in data.get("observations", []):
@@ -703,13 +684,9 @@ def fetch_fred_data() -> dict:
 
             result[key] = df
         except Exception as e:
-            msg = f"{cfg['id']}: {type(e).__name__} — {e}"
-            print(f"FRED fetch failed [{key}]: {msg}")
-            errors.append(msg)
+            print(f"FRED fetch failed [{key}]: {e}")
             result[key] = pd.DataFrame(columns=["date", "value"])
 
-    if errors:
-        result["__errors__"] = errors
     return result
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2369,6 +2346,7 @@ def render_screener() -> None:
             st.rerun()
     idx_choice = st.session_state["idx_choice"]
     etf_label  = "SPY" if idx_choice == "S&P 500" else "QQQ"
+    index_label = "Overall S&P 500 Index Move" if idx_choice == "S&P 500" else "Overall Nasdaq 100 Move"
 
     # ── Load holdings (full, incl. non-priceable for cash bucketing) ───────
     with st.spinner("Loading constituent list…"):
@@ -2607,7 +2585,7 @@ def render_screener() -> None:
         (c3, "Unchanged",     f"{unchanged}",             "#8898BB"),
         (c4, top_n_label,     f"{top_n_avg:+.2f}%",       "#0FD68A" if top_n_avg          >= 0 else "#F0485A"),
         (c5, top_n_contrib_label, f"{top_n_contrib_bps:+.1f}bps", "#0FD68A" if top_n_contrib_bps >= 0 else "#F0485A"),
-        (c6, f"{etf_label} Return", f"{weighted_return:+.2f}%", "#0FD68A" if weighted_return    >= 0 else "#F0485A"),
+        (c6, index_label, f"{weighted_return:+.2f}%", "#0FD68A" if weighted_return    >= 0 else "#F0485A"),
     ]:
         with col:
             st.markdown(f"""
@@ -2928,14 +2906,6 @@ def main():
         except Exception as e:
             st.error(f"❌ FRED API error: {e}")
             fred_data = {}
-
-    # Surface per-series FRED errors visibly (instead of silently showing "0/2").
-    fred_errors = fred_data.pop("__errors__", []) if isinstance(fred_data, dict) else []
-    if fred_errors:
-        st.error(
-            "❌ FRED data did not load:\n\n" +
-            "\n".join(f"• {msg}" for msg in fred_errors)
-        )
 
     # ── Status + refresh row ───────────────────────────────────────────────
     bls_loaded  = len(all_data)
