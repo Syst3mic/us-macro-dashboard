@@ -2688,38 +2688,8 @@ def render_screener() -> None:
     )
     col_dl, col_pad = st.columns([2, 8])
     with col_dl:
-        # Scoped styling so the download button reads clearly on the dark
-        # theme (default Streamlit renders white-on-white here). Targets
-        # only this button by its unique key via [data-testid] selector.
-        st.markdown("""
-        <style>
-        div[data-testid="stDownloadButton"] button {
-            background: #0D1628 !important;
-            border: 1px solid rgba(15,180,90,.45) !important;
-            color: #FFFFFF !important;
-            font-family: 'Sora', sans-serif !important;
-            font-size: 12px !important;
-            font-weight: 600 !important;
-            letter-spacing: .3px !important;
-            padding: 8px 18px !important;
-            border-radius: 6px !important;
-            transition: all .15s !important;
-            box-shadow: 0 0 0 0 rgba(15,180,90,0) !important;
-        }
-        div[data-testid="stDownloadButton"] button:hover {
-            background: rgba(15,180,90,.12) !important;
-            border-color: rgba(15,180,90,.85) !important;
-            box-shadow: 0 0 12px rgba(15,180,90,.18) !important;
-            color: #FFFFFF !important;
-        }
-        div[data-testid="stDownloadButton"] button:focus {
-            outline: none !important;
-            box-shadow: 0 0 0 2px rgba(15,180,90,.35) !important;
-        }
-        </style>
-        """, unsafe_allow_html=True)
         st.download_button(
-            label="📊  Export to Excel",
+            label="⬇ Export to Excel",
             data=xlsx_buf.getvalue(),
             file_name=fname,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
