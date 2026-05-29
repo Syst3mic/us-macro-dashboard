@@ -651,8 +651,17 @@ def fetch_fred_data() -> dict:
     Fetch ICSA, ADPNFPCA, UMCSENT from FRED API.
     Server-side GET — no CORS, no proxy needed.
     """
-    fred_key = st.secrets["FRED_API_KEY"]
+    # Read FRED key from Streamlit secrets (set under Manage app → Settings → Secrets).
+    try:
+        fred_key = st.secrets["FRED_API_KEY"]
+    except Exception:
+        return {"__errors__": [
+            "FRED_API_KEY not set in Streamlit secrets. "
+            "Add it under Manage app → Settings → Secrets, then reboot."
+        ]}
+
     result   = {}
+    errors   = []
 
     for key, cfg in FRED_SERIES.items():
         # Weekly series: fetch 3 years (156 weeks). Monthly: 10 years.
@@ -667,7 +676,17 @@ def fetch_fred_data() -> dict:
         )
         try:
             resp = requests.get(url, timeout=20)
-            resp.raise_for_status()
+            if resp.status_code != 200:
+                # Capture FRED's own error message instead of swallowing it.
+                try:
+                    body = resp.json().get("error_message", resp.text[:200])
+                except Exception:
+                    body = resp.text[:200]
+                msg = f"{cfg['id']}: HTTP {resp.status_code} — {body}"
+                print(f"FRED fetch failed [{key}]: {msg}")
+                errors.append(msg)
+                result[key] = pd.DataFrame(columns=["date", "value"])
+                continue
             data = resp.json()
             rows = []
             for obs in data.get("observations", []):
@@ -684,9 +703,13 @@ def fetch_fred_data() -> dict:
 
             result[key] = df
         except Exception as e:
-            print(f"FRED fetch failed [{key}]: {e}")
+            msg = f"{cfg['id']}: {type(e).__name__} — {e}"
+            print(f"FRED fetch failed [{key}]: {msg}")
+            errors.append(msg)
             result[key] = pd.DataFrame(columns=["date", "value"])
 
+    if errors:
+        result["__errors__"] = errors
     return result
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1004,7 +1027,7 @@ def render_card(key: str, cfg: dict, df) -> None:
         col_chart, col_btn = st.columns([10, 1])
         with col_chart:
             st.plotly_chart(
-                fig_direct, width='stretch',
+                fig_direct, use_container_width=True,
                 config={"displayModeBar": False},
                 key=f"plt_direct_{key}"
             )
@@ -1027,7 +1050,7 @@ def render_card(key: str, cfg: dict, df) -> None:
             col_chart, col_btn = st.columns([10, 1])
             with col_chart:
                 st.plotly_chart(
-                    fig_mom, width='stretch',
+                    fig_mom, use_container_width=True,
                     config={"displayModeBar": False},
                     key=f"plt_mom_{key}"
                 )
@@ -1046,7 +1069,7 @@ def render_card(key: str, cfg: dict, df) -> None:
             col_chart2, col_btn2 = st.columns([10, 1])
             with col_chart2:
                 st.plotly_chart(
-                    fig_yoy, width='stretch',
+                    fig_yoy, use_container_width=True,
                     config={"displayModeBar": False},
                     key=f"plt_yoy_{key}"
                 )
@@ -1130,7 +1153,7 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
             fig_mom = make_chart(df_c, cfg, "mom", height=200)
             col_chart, col_btn = st.columns([10, 1])
             with col_chart:
-                st.plotly_chart(fig_mom, width='stretch', config={"displayModeBar": False}, key=f"plt_mom_{key}")
+                st.plotly_chart(fig_mom, use_container_width=True, config={"displayModeBar": False}, key=f"plt_mom_{key}")
             with col_btn:
                 if st.button("⛶", key=f"exp_mom_{key}", help="Expand chart"):
                     st.session_state["expanded"] = {"key": key, "which": "mom", "title": f"{cfg['name']} — Month-over-Month", "cfg": cfg, "df_c": df_c}
@@ -1140,7 +1163,7 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
             fig_yoy = make_chart(df_c, cfg, "yoy", height=200)
             col_chart2, col_btn2 = st.columns([10, 1])
             with col_chart2:
-                st.plotly_chart(fig_yoy, width='stretch', config={"displayModeBar": False}, key=f"plt_yoy_{key}")
+                st.plotly_chart(fig_yoy, use_container_width=True, config={"displayModeBar": False}, key=f"plt_yoy_{key}")
             with col_btn2:
                 if st.button("⛶", key=f"exp_yoy_{key}", help="Expand chart"):
                     st.session_state["expanded"] = {"key": key, "which": "yoy", "title": f"{cfg['name']} — Year-over-Year", "cfg": cfg, "df_c": df_c}
@@ -1321,7 +1344,7 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
 
     col_chart, col_btn = st.columns([10, 1])
     with col_chart:
-        st.plotly_chart(fig, width='stretch',
+        st.plotly_chart(fig, use_container_width=True,
                         config={"displayModeBar": False}, key=f"plt_fred_{key}")
     with col_btn:
         if st.button("⛶", key=f"exp_fred_{key}", help="Expand chart"):
@@ -2337,11 +2360,11 @@ def render_screener() -> None:
 
     col_sp, col_ndx, col_rest = st.columns([1, 1, 8])
     with col_sp:
-        if st.button("S&P 500", key="btn_sp500", width='stretch'):
+        if st.button("S&P 500", key="btn_sp500", use_container_width=True):
             st.session_state["idx_choice"] = "S&P 500"
             st.rerun()
     with col_ndx:
-        if st.button("Nasdaq 100", key="btn_ndx100", width='stretch'):
+        if st.button("Nasdaq 100", key="btn_ndx100", use_container_width=True):
             st.session_state["idx_choice"] = "Nasdaq 100"
             st.rerun()
     idx_choice = st.session_state["idx_choice"]
@@ -2516,11 +2539,11 @@ def render_screener() -> None:
 
     col_g, col_l, col_vrest = st.columns([1, 1, 8])
     with col_g:
-        if st.button("Gainers", key="btn_gainers", width='stretch'):
+        if st.button("Gainers", key="btn_gainers", use_container_width=True):
             st.session_state["view_sel"] = "Gainers"
             st.rerun()
     with col_l:
-        if st.button("Losers", key="btn_losers", width='stretch'):
+        if st.button("Losers", key="btn_losers", use_container_width=True):
             st.session_state["view_sel"] = "Losers"
             st.rerun()
 
@@ -2741,11 +2764,11 @@ def main():
     st.markdown("<div style='padding:20px 0 0'>", unsafe_allow_html=True)
     col_macro, col_markets, col_spacer = st.columns([1, 1, 8])
     with col_macro:
-        if st.button("📊  MACRO", key="btn_macro", width='stretch'):
+        if st.button("📊  MACRO", key="btn_macro", use_container_width=True):
             st.session_state["page"] = "MACRO"
             st.rerun()
     with col_markets:
-        if st.button("📈  MARKETS", key="btn_markets", width='stretch'):
+        if st.button("📈  MARKETS", key="btn_markets", use_container_width=True):
             st.session_state["page"] = "MARKETS"
             st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
@@ -2837,7 +2860,7 @@ def main():
             fig_exp = make_chart(df_e, cfg_e, which_e, height=550)
 
         st.plotly_chart(
-            fig_exp, width='stretch',
+            fig_exp, use_container_width=True,
             config={
                 "displayModeBar": True,
                 "modeBarButtonsToRemove": ["lasso2d", "select2d"],
@@ -2905,6 +2928,14 @@ def main():
         except Exception as e:
             st.error(f"❌ FRED API error: {e}")
             fred_data = {}
+
+    # Surface per-series FRED errors visibly (instead of silently showing "0/2").
+    fred_errors = fred_data.pop("__errors__", []) if isinstance(fred_data, dict) else []
+    if fred_errors:
+        st.error(
+            "❌ FRED data did not load:\n\n" +
+            "\n".join(f"• {msg}" for msg in fred_errors)
+        )
 
     # ── Status + refresh row ───────────────────────────────────────────────
     bls_loaded  = len(all_data)
