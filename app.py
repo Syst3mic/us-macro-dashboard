@@ -2100,14 +2100,17 @@ def _pre_market_prev_close(tickers: list, ref_date) -> dict:
     Baseline for PRE-MARKET ONLY.
 
     Pre-market chg% must be measured against the most recent COMPLETED
-    regular-session close (yesterday's official 4pm close), NOT an earlier
-    session. _fetch_prev_close takes each daily bar's date with a bare
-    `x.date()`; when yfinance returns the daily index as tz-aware UTC, a bar
-    for yesterday's session can read as today's calendar date in UTC and gets
-    silently dropped, leaving the baseline two sessions back (folding the prior
-    day's full move into the "pre-market" change). Here we normalise every bar
-    to an ET calendar date first, then take the last close strictly BEFORE
-    ref_date (today's ET date). prepost=False → official regular-session closes.
+    regular-session close (yesterday's official close), NOT an earlier session.
+    Daily bars can't be trusted for this: Yahoo sometimes stamps a completed
+    session's daily bar with the *next* calendar date, so any date filter on the
+    daily frame silently lands one session too far back and folds the prior day's
+    full move into the "pre-market" change.
+
+    So we derive the baseline from INTRADAY bars instead, where every bar is
+    unambiguously timestamped inside the trading day (09:30–16:00 ET) on its real
+    date. prepost=False → regular-session bars only; the last bar on the most
+    recent session strictly BEFORE ref_date (today's ET date) is that session's
+    close. This is immune to the daily-bar dating quirk.
     """
     ET = timezone(timedelta(hours=-4))   # EDT, matches the rest of the module
 
@@ -2119,23 +2122,24 @@ def _pre_market_prev_close(tickers: list, ref_date) -> dict:
 
     try:
         raw = yf.download(
-            tickers, period="1mo", interval="1d",
-            auto_adjust=True, prepost=False, progress=False, threads=True,
+            tickers, period="5d", interval="2m",
+            auto_adjust=True, prepost=False, progress=False,
+            threads=True, group_by="ticker",
         )
         if raw.empty:
             return {}
-        close = raw["Close"]
         out = {}
+        lvl0 = raw.columns.get_level_values(0)
         for tk in tickers:
-            if tk not in close.columns:
+            if tk not in lvl0:
                 continue
-            col = close[tk].dropna()
+            col = raw[tk]["Close"].dropna()
             if col.empty:
                 continue
-            completed = col[[_et_date(ts) < ref_date for ts in col.index]]
-            if completed.empty:
+            prior = col[[_et_date(ts) < ref_date for ts in col.index]]
+            if prior.empty:
                 continue
-            out[tk] = float(completed.iloc[-1])
+            out[tk] = float(prior.iloc[-1])
         return out
     except Exception as e:
         print(f"Pre-market prev close fetch failed: {e}")
