@@ -2095,6 +2095,53 @@ def fetch_price_data_live(tickers: tuple) -> pd.DataFrame:
         return fetch_price_data_eod(tickers)
 
 
+def _pre_market_prev_close(tickers: list, ref_date) -> dict:
+    """
+    Baseline for PRE-MARKET ONLY.
+
+    Pre-market chg% must be measured against the most recent COMPLETED
+    regular-session close (yesterday's official 4pm close), NOT an earlier
+    session. _fetch_prev_close takes each daily bar's date with a bare
+    `x.date()`; when yfinance returns the daily index as tz-aware UTC, a bar
+    for yesterday's session can read as today's calendar date in UTC and gets
+    silently dropped, leaving the baseline two sessions back (folding the prior
+    day's full move into the "pre-market" change). Here we normalise every bar
+    to an ET calendar date first, then take the last close strictly BEFORE
+    ref_date (today's ET date). prepost=False → official regular-session closes.
+    """
+    ET = timezone(timedelta(hours=-4))   # EDT, matches the rest of the module
+
+    def _et_date(ts):
+        try:
+            return ts.tz_convert(ET).date() if ts.tzinfo is not None else ts.date()
+        except (TypeError, AttributeError):
+            return ts.date()
+
+    try:
+        raw = yf.download(
+            tickers, period="1mo", interval="1d",
+            auto_adjust=True, prepost=False, progress=False, threads=True,
+        )
+        if raw.empty:
+            return {}
+        close = raw["Close"]
+        out = {}
+        for tk in tickers:
+            if tk not in close.columns:
+                continue
+            col = close[tk].dropna()
+            if col.empty:
+                continue
+            completed = col[[_et_date(ts) < ref_date for ts in col.index]]
+            if completed.empty:
+                continue
+            out[tk] = float(completed.iloc[-1])
+        return out
+    except Exception as e:
+        print(f"Pre-market prev close fetch failed: {e}")
+        return {}
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
     """
@@ -2135,7 +2182,10 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
             cutoff = datetime(today_et.year, today_et.month, today_et.day, 16, 0, tzinfo=et)
             def in_session(idx): return idx >= cutoff
 
-        prev_close_map = _fetch_prev_close(list(tickers))
+        if session == "pre":
+            prev_close_map = _pre_market_prev_close(list(tickers), today_et)
+        else:
+            prev_close_map = _fetch_prev_close(list(tickers))
         if not prev_close_map:
             return fetch_price_data_eod(tickers)
 
