@@ -5,6 +5,8 @@ Indicators: CPI · Core CPI · PPI · Unemployment · NFP · Initial Claims · A
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
+import html
 import requests
 import pandas as pd
 import plotly.graph_objects as go
@@ -2331,14 +2333,139 @@ def fetch_market_caps(tickers: tuple, prev_prices: tuple) -> dict:
     return result
 
 
+_SORTABLE_TABLE_TEMPLATE = """
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+      margin: 0; background: #06080F;
+      font-family: 'Aptos', 'Segoe UI', system-ui, sans-serif;
+  }
+  .table-wrap {
+      background: #0B1020; border: 1px solid rgba(120,140,200,.1);
+      border-radius: 10px; overflow: hidden; overflow-x: auto;
+  }
+  table.stock-table { width: 100%; border-collapse: collapse; }
+  .stock-table th {
+      font-family: 'Aptos', monospace;
+      font-size: 11px; font-weight: 700; letter-spacing: .7px;
+      text-transform: uppercase; color: #FFFFFF;
+      padding: 8px 12px; border-bottom: 1px solid rgba(120,140,200,.1);
+      text-align: left; background: #080C16;
+      cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  .stock-table th:hover { background: #0d1322; color: #7BA4F5; }
+  .stock-table th .sort-arrow { font-size: 9px; color: #5B8DEF; margin-left: 4px; }
+  .stock-table td {
+      font-family: 'Aptos', monospace;
+      font-size: 14px; padding: 9px 12px;
+      border-bottom: 1px solid rgba(120,140,200,.05);
+      color: #FFFFFF;
+  }
+  .stock-table tr:hover td { background: rgba(91,141,239,.04); }
+  .chg-pos { color: #0FD68A !important; font-weight: 700; }
+  .chg-neg { color: #F0485A !important; font-weight: 700; }
+  .ticker-badge {
+      font-weight: 700; color: #7BA4F5;
+      background: rgba(91,141,239,.08);
+      padding: 2px 7px; border-radius: 4px;
+      font-size: 13px;
+  }
+  .sector-tag {
+      font-size: 11px; padding: 2px 7px; border-radius: 3px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(120,140,200,.1);
+      color: #FFFFFF; white-space: nowrap;
+  }
+  ::-webkit-scrollbar { height: 8px; width: 8px; }
+  ::-webkit-scrollbar-thumb { background: rgba(120,140,200,.25); border-radius: 4px; }
+</style></head>
+<body>
+<div class="table-wrap">
+  <table class="stock-table" id="stockTable">
+    <thead>
+      <tr>
+        <th onclick="sortTable(0,true)">#<span class="sort-arrow"></span></th>
+        <th onclick="sortTable(1,false)">Ticker<span class="sort-arrow"></span></th>
+        <th onclick="sortTable(2,false)">Company<span class="sort-arrow"></span></th>
+        <th onclick="sortTable(3,false)">Sector<span class="sort-arrow"></span></th>
+        <th onclick="sortTable(4,true)" style="text-align:right">Price<span class="sort-arrow"></span></th>
+        <th onclick="sortTable(5,true)" style="text-align:right">Chg %<span class="sort-arrow"></span></th>
+        <th onclick="sortTable(6,true)" style="text-align:right">Chg $<span class="sort-arrow"></span></th>
+        <th onclick="sortTable(7,true)" style="text-align:right">Weight<span class="sort-arrow"></span></th>
+        <th onclick="sortTable(8,true)" style="text-align:right">Volume<span class="sort-arrow"></span></th>
+        <th onclick="sortTable(9,true)" style="text-align:right">Mkt Cap<span class="sort-arrow"></span></th>
+      </tr>
+    </thead>
+    <tbody>__ROWS__</tbody>
+  </table>
+</div>
+<script>
+function sortTable(colIdx, isNumeric) {
+    var table = document.getElementById('stockTable');
+    var tbody = table.tBodies[0];
+    var rows  = Array.prototype.slice.call(tbody.rows);
+    var ths   = table.tHead.rows[0].cells;
+    var th    = ths[colIdx];
+    var dir   = th.getAttribute('data-dir') === 'asc' ? 'desc' : 'asc';
+
+    for (var k = 0; k < ths.length; k++) {
+        ths[k].removeAttribute('data-dir');
+        ths[k].querySelector('.sort-arrow').textContent = '';
+    }
+    th.setAttribute('data-dir', dir);
+    th.querySelector('.sort-arrow').textContent = dir === 'asc' ? ' ▲' : ' ▼';
+
+    rows.sort(function(a, b) {
+        var va = a.children[colIdx].getAttribute('data-sort');
+        var vb = b.children[colIdx].getAttribute('data-sort');
+        if (isNumeric) {
+            var na = parseFloat(va), nb = parseFloat(vb);
+            var aNaN = isNaN(na), bNaN = isNaN(nb);
+            if (aNaN && bNaN) return 0;
+            if (aNaN) return 1;
+            if (bNaN) return -1;
+            return dir === 'asc' ? na - nb : nb - na;
+        } else {
+            va = (va || '').toLowerCase();
+            vb = (vb || '').toLowerCase();
+            if (va < vb) return dir === 'asc' ? -1 : 1;
+            if (va > vb) return dir === 'asc' ? 1 : -1;
+            return 0;
+        }
+    });
+    rows.forEach(function(r) { tbody.appendChild(r); });
+}
+</script>
+</body></html>
+"""
+
+
 def render_screener() -> None:
     sgt = timezone(timedelta(hours=8))
     now = datetime.now(sgt)
 
+    # ── Page-scoped font bump (+2px everywhere on this tab only) ───────────
+    # Injected only while the Markets Screener is being rendered, so the
+    # Macro Dashboard's type sizes are completely unaffected.
+    st.markdown("""
+    <style>
+    [data-testid="stButton"] button   { font-size: 20px !important; }
+    [data-testid="stWidgetLabel"] p   { font-size: 16px !important; }
+    .screener-title       { font-size: 22px !important; }
+    .screener-meta        { font-size: 12px !important; }
+    .data-hover-trigger   { font-size: 13px !important; }
+    .data-q                { font-size: 11px !important; }
+    .data-hover-label     { font-size: 10px !important; }
+    .data-hover-val       { font-size: 13px !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
     st.markdown("""
     <div class="screener-header">
       <div>
-        <div class="screener-title">📈 Markets Screener — S&P 500 &amp; Nasdaq 100 (SPY &amp; QQQ as Proxies)</div>
+        <div class="screener-title">📈 Markets Screener</div>
         <div class="data-hover-wrap" style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(120,140,200,.08)">
           <div class="data-hover-trigger">DATA <span class="data-q">?</span></div>
           <div class="data-hover-bar">
@@ -2537,7 +2664,7 @@ def render_screener() -> None:
         )
 
     st.markdown(
-        f"<div style='font-family:Aptos,monospace;font-size:14px;margin-bottom:14px'>"
+        f"<div style='font-family:Aptos,monospace;font-size:16px;margin-bottom:14px'>"
         f"✓ {state_html}"
         f"</div>",
         unsafe_allow_html=True
@@ -2602,7 +2729,7 @@ def render_screener() -> None:
         if pool_size == 1:
             top_n = 1
             st.markdown(
-                "<div style='font-family:Aptos,monospace;font-size:11px;"
+                "<div style='font-family:Aptos,monospace;font-size:13px;"
                 "color:#4D6080;margin:4px 0 10px'>Only 1 "
                 f"{view.lower()[:-1]} in pool</div>",
                 unsafe_allow_html=True,
@@ -2648,17 +2775,17 @@ def render_screener() -> None:
             st.markdown(f"""
             <div style="background:#0D1628;border:1px solid rgba(120,140,200,.1);
                 border-radius:8px;padding:12px 16px;text-align:center">
-              <div style="font-family:'Aptos',monospace;font-size:9px;
+              <div style="font-family:'Aptos',monospace;font-size:11px;
                    color:#FFFFFF;letter-spacing:.6px;text-transform:uppercase;
                    margin-bottom:4px">{label}</div>
-              <div style="font-family:'Aptos',monospace;font-size:22px;
+              <div style="font-family:'Aptos',monospace;font-size:24px;
                    font-weight:700;color:{color}">{val}</div>
             </div>
             """, unsafe_allow_html=True)
 
     # ── Coverage caption for the index-return figure ─────────────────────
     st.markdown(
-        f"<div style='font-family:Aptos,monospace;font-size:10px;"
+        f"<div style='font-family:Aptos,monospace;font-size:12px;"
         f"color:#8898BB;margin-top:10px'>"
         f"ⓘ {etf_label} Return = Σ(weightᵢ × chgᵢ) over the full {total_universe}-name base; "
         f"{quoted_weight:.1f}% of index weight is currently quoted "
@@ -2674,7 +2801,7 @@ def render_screener() -> None:
     if cash_count > 0:
         names_str = ", ".join(cash_names[:6]) + ("…" if cash_count > 6 else "")
         st.markdown(
-            f"<div style='font-family:Aptos,monospace;font-size:10px;"
+            f"<div style='font-family:Aptos,monospace;font-size:12px;"
             f"color:#8898BB;margin-top:6px'>"
             f"⊘ {cash_count} non-priceable holding(s) treated as Cash &amp; Other "
             f"(excluded from weighted return): {names_str}</div>",
@@ -2755,7 +2882,7 @@ def render_screener() -> None:
             border: 1px solid rgba(15,180,90,.45) !important;
             color: #FFFFFF !important;
             font-family: 'Aptos', sans-serif !important;
-            font-size: 12px !important;
+            font-size: 14px !important;
             font-weight: 600 !important;
             letter-spacing: .3px !important;
             padding: 8px 18px !important;
@@ -2784,51 +2911,43 @@ def render_screener() -> None:
             help=f"Download the current view ({len(export_df)} rows) as .xlsx",
         )
 
-    # ── Stock table — ALL constituents in the directional pool ────────────
+    # ── Stock table — ALL constituents in the directional pool, sortable ──
     rows_html = ""
     for i, row in direction_pool.iterrows():
-        chg_cls  = "chg-pos" if row["chg_pct"] >= 0 else "chg-neg"
-        chg_sign = "▲" if row["chg_pct"] >= 0 else "▼"
-        wt_pct   = row.get("weight", 0.0) * 100
+        chg_cls   = "chg-pos" if row["chg_pct"] >= 0 else "chg-neg"
+        chg_sign  = "▲" if row["chg_pct"] >= 0 else "▼"
+        wt_pct    = row.get("weight", 0.0) * 100
+        mkt_cap_v = row.get("mkt_cap")
+        mkt_cap_sort = "" if (mkt_cap_v is None or pd.isna(mkt_cap_v)) else f"{mkt_cap_v}"
+        ticker_e  = html.escape(str(row["ticker"]))
+        company_e = html.escape(str(row["company"]))
+        sector_e  = html.escape(str(row["sector"]))
         rows_html += f"""
         <tr>
-          <td style="color:#4D6080;width:36px">{i+1}</td>
-          <td><span class="ticker-badge">{row['ticker']}</span></td>
-          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;
-              white-space:nowrap">{row['company']}</td>
-          <td><span class="sector-tag">{row['sector']}</span></td>
-          <td style="text-align:right">${row['price']:,.2f}</td>
-          <td class="{chg_cls}" style="text-align:right">
+          <td data-sort="{i+1}" style="color:#4D6080;width:36px">{i+1}</td>
+          <td data-sort="{ticker_e}"><span class="ticker-badge">{ticker_e}</span></td>
+          <td data-sort="{company_e}" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;
+              white-space:nowrap">{company_e}</td>
+          <td data-sort="{sector_e}"><span class="sector-tag">{sector_e}</span></td>
+          <td data-sort="{row['price']}" style="text-align:right">${row['price']:,.2f}</td>
+          <td data-sort="{row['chg_pct']}" class="{chg_cls}" style="text-align:right">
               {chg_sign} {abs(row['chg_pct']):.2f}%</td>
-          <td class="{chg_cls}" style="text-align:right">
+          <td data-sort="{row['chg_abs']}" class="{chg_cls}" style="text-align:right">
               {'+' if row['chg_abs']>=0 else ''}{row['chg_abs']:.2f}</td>
-          <td style="text-align:right;color:#FFFFFF">{wt_pct:.2f}%</td>
-          <td style="text-align:right;color:#FFFFFF">{fmt_volume(row['volume'])}</td>
-          <td style="text-align:right;color:#FFFFFF">{fmt_mktcap(row.get('mkt_cap'))}</td>
+          <td data-sort="{wt_pct}" style="text-align:right;color:#FFFFFF">{wt_pct:.2f}%</td>
+          <td data-sort="{row['volume']}" style="text-align:right;color:#FFFFFF">{fmt_volume(row['volume'])}</td>
+          <td data-sort="{mkt_cap_sort}" style="text-align:right;color:#FFFFFF">{fmt_mktcap(row.get('mkt_cap'))}</td>
         </tr>"""
 
+    table_doc    = _SORTABLE_TABLE_TEMPLATE.replace("__ROWS__", rows_html)
+    table_height = min(70 + 38 * max(len(direction_pool), 1), 900)
+    components.html(table_doc, height=table_height, scrolling=True)
+
     st.markdown(f"""
-    <div style="background:#0B1020;border:1px solid rgba(120,140,200,.1);
-        border-radius:10px;overflow:hidden;overflow-x:auto">
-      <table class="stock-table">
-        <thead>
-          <tr>
-            <th>#</th><th>Ticker</th><th>Company</th><th>Sector</th>
-            <th style="text-align:right">Price</th>
-            <th style="text-align:right">Chg %</th>
-            <th style="text-align:right">Chg $</th>
-            <th style="text-align:right">Weight</th>
-            <th style="text-align:right">Volume</th>
-            <th style="text-align:right">Mkt Cap</th>
-          </tr>
-        </thead>
-        <tbody>{rows_html}</tbody>
-      </table>
-    </div>
-    <div style="font-family:'Aptos',monospace;font-size:9px;color:#4D6080;
+    <div style="font-family:'Aptos',monospace;font-size:11px;color:#4D6080;
         margin-top:8px;text-align:right">
       Data: Yahoo Finance · Weights: live shares × price · Market cap: prev-day close ·
-      Showing all {len(direction_pool)} {view.lower()} of {active_count} priced
+      Showing all {len(direction_pool)} {view.lower()} of {active_count} priced · Click any column header to sort ↕
     </div>
     """, unsafe_allow_html=True)
 
