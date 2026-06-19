@@ -26,13 +26,11 @@ st.set_page_config(
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;600;700&display=swap');
-
 /* ── Global ── */
 html, body, [data-testid="stApp"] {
     background-color: #06080F;
     color: #FFFFFF;
-    font-family: 'Sora', 'Segoe UI', system-ui, sans-serif;
+    font-family: 'Aptos', 'Segoe UI', system-ui, sans-serif;
 }
 [data-testid="stAppViewContainer"] { background-color: #06080F; }
 [data-testid="stHeader"] { background: transparent; }
@@ -82,7 +80,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     color: #FFFFFF;
     letter-spacing: -.5px;
     line-height: 1;
-    font-family: 'Sora', sans-serif;
+    font-family: 'Aptos', sans-serif;
 }
 .hero-title span {
     background: linear-gradient(90deg, #5B8DEF, #22D3EE);
@@ -91,14 +89,14 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     background-clip: text;
 }
 .hero-sub {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: 'Aptos', monospace;
     font-size: 11px;
     color: #FFFFFF;
     letter-spacing: .5px;
 }
 .hero-right { display: flex; align-items: center; gap: 10px; }
 .bls-tag {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: 'Aptos', monospace;
     font-size: 10px; font-weight: 700; letter-spacing: .7px;
     padding: 6px 14px; border-radius: 5px;
     background: rgba(91,141,239,.1);
@@ -129,7 +127,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     padding: 6px 0 14px;
     border-bottom: 1px solid rgba(120,140,200,.1);
     margin-bottom: 16px;
-    font-family: 'Sora', sans-serif;
+    font-family: 'Aptos', sans-serif;
 }
 .section-header .section-icon {
     color: #5B8DEF;
@@ -143,7 +141,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     letter-spacing: .3px !important;
     text-transform: uppercase !important;
     color: #FFFFFF !important;
-    font-family: 'Sora', sans-serif !important;
+    font-family: 'Aptos', sans-serif !important;
 }
 .ind-src {
     font-size: 9px; font-weight: 700; letter-spacing: .5px;
@@ -151,14 +149,14 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     background: rgba(91,141,239,.07);
     border: 1px solid rgba(91,141,239,.15);
     color: #7BA4F5;
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: 'Aptos', monospace;
 }
 .ind-freq {
     font-size: 9px; color: #FFFFFF;
     padding: 3px 8px; border-radius: 3px;
     background: rgba(255,255,255,.06);
     border: 1px solid rgba(120,140,200,.12);
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: 'Aptos', monospace;
 }
 
 /* ── Stat boxes ── */
@@ -174,16 +172,16 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     font-size: 14px; font-weight: 700; letter-spacing: .5px;
     text-transform: uppercase; color: #FFFFFF;
     margin-bottom: 10px;
-    font-family: 'Sora', sans-serif;
+    font-family: 'Aptos', sans-serif;
 }
 .stat-val {
     font-size: 30px; font-weight: 700; color: #FFFFFF;
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: 'Aptos', monospace;
     letter-spacing: -1px; line-height: 1;
 }
 .stat-delta {
     font-size: 11px; font-weight: 600;
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: 'Aptos', monospace;
     margin-top: 8px; display: inline-block;
     padding: 3px 9px; border-radius: 4px;
 }
@@ -191,12 +189,12 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 .stat-dn { color: #F0485A; background: rgba(240,72,90,.08);  border: 1px solid rgba(240,72,90,.22); }
 .stat-date {
     font-size: 10px; color: #FFFFFF;
-    margin-top: 5px; font-family: 'IBM Plex Mono', monospace;
+    margin-top: 5px; font-family: 'Aptos', monospace;
     opacity: .7;
 }
 
 /* ── Release table ── */
-.rel-table { width: 100%; border-collapse: collapse; font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
+.rel-table { width: 100%; border-collapse: collapse; font-family: 'Aptos', monospace; font-size: 12px; }
 .rel-table th {
     text-align: left; padding: 8px 12px;
     font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
@@ -215,7 +213,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 
 /* ── Chart expand button ── */
 .chart-expand-btn {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: 'Aptos', monospace;
     font-size: 9px; font-weight: 700; letter-spacing: .4px;
     padding: 3px 9px; border-radius: 4px;
     background: rgba(91,141,239,.08);
@@ -259,7 +257,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 }
 .modal-close:hover { background: rgba(240,72,90,.15); border-color: rgba(240,72,90,.3); }
 .modal-title {
-    font-family: 'Sora', sans-serif;
+    font-family: 'Aptos', sans-serif;
     font-size: 16px; font-weight: 700; color: #FFFFFF;
     margin-bottom: 16px; letter-spacing: -.2px;
 }
@@ -275,7 +273,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     align-items: center;
 }
 .data-hover-trigger {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: 'Aptos', monospace;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: .8px;
@@ -335,7 +333,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 .data-hover-item:first-child { padding-left: 0; }
 .data-hover-item:last-child  { padding-right: 0; }
 .data-hover-label {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: 'Aptos', monospace;
     font-size: 8px;
     font-weight: 700;
     letter-spacing: .7px;
@@ -343,7 +341,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     color: #4D6080;
 }
 .data-hover-val {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: 'Aptos', monospace;
     font-size: 11px;
     font-weight: 600;
     color: #FFFFFF;
@@ -363,7 +361,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     font-size: 18px !important;
     padding: 4px 10px !important;
     border-radius: 6px !important;
-    font-family: 'Sora', sans-serif !important;
+    font-family: 'Aptos', sans-serif !important;
     min-height: 34px !important;
     line-height: 1 !important;
 }
@@ -373,8 +371,8 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 }
 
 /* ── Status text ── */
-.status-ok  { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #0FD68A; }
-.status-warn{ font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #F59E0B; }
+.status-ok  { font-family: 'Aptos', monospace; font-size: 12px; color: #0FD68A; }
+.status-warn{ font-family: 'Aptos', monospace; font-size: 12px; color: #F59E0B; }
 
 /* ── Index selector buttons — active = bright white filled, inactive = dim ── */
 .idx-active button {
@@ -410,7 +408,7 @@ div[data-testid="stButton"]:has(button[kind="primaryFormSubmit"]) { display:none
 .ptbtn {
     padding: 8px 28px; border-radius: 5px;
     font-size: 12px; font-weight: 700;
-    font-family: 'Sora', sans-serif;
+    font-family: 'Aptos', sans-serif;
     letter-spacing: .5px; cursor: pointer;
     border: none; transition: all .15s;
     background: transparent; color: #4D6080;
@@ -430,19 +428,19 @@ div[data-testid="stButton"]:has(button[kind="primaryFormSubmit"]) { display:none
     margin-bottom: 16px;
 }
 .screener-title {
-    font-family: 'Sora', sans-serif;
+    font-family: 'Aptos', sans-serif;
     font-size: 20px; font-weight: 700;
     color: #FFFFFF; letter-spacing: -.2px;
 }
 .screener-meta {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: 'Aptos', monospace;
     font-size: 10px; color: #4D6080; letter-spacing: .4px;
 }
 .pill-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
 .pill {
     padding: 5px 14px; border-radius: 20px;
     font-size: 10px; font-weight: 700;
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: 'Aptos', monospace;
     letter-spacing: .4px; cursor: pointer;
     border: 1px solid rgba(120,140,200,.15);
     background: rgba(255,255,255,.03); color: #8898BB;
@@ -454,14 +452,14 @@ div[data-testid="stButton"]:has(button[kind="primaryFormSubmit"]) { display:none
 }
 .stock-table { width: 100%; border-collapse: collapse; }
 .stock-table th {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: 'Aptos', monospace;
     font-size: 9px; font-weight: 700; letter-spacing: .7px;
     text-transform: uppercase; color: #FFFFFF;
     padding: 8px 12px; border-bottom: 1px solid rgba(120,140,200,.1);
     text-align: left; background: #080C16;
 }
 .stock-table td {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: 'Aptos', monospace;
     font-size: 12px; padding: 9px 12px;
     border-bottom: 1px solid rgba(120,140,200,.05);
     color: #FFFFFF;
@@ -481,8 +479,8 @@ div[data-testid="stButton"]:has(button[kind="primaryFormSubmit"]) { display:none
     border: 1px solid rgba(120,140,200,.1);
     color: #FFFFFF; white-space: nowrap;
 }
-.mkt-status-open  { color: #0FD68A; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 700; }
-.mkt-status-closed{ color: #F59E0B; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 700; }
+.mkt-status-open  { color: #0FD68A; font-family: 'Aptos', monospace; font-size: 10px; font-weight: 700; }
+.mkt-status-closed{ color: #F59E0B; font-family: 'Aptos', monospace; font-size: 10px; font-weight: 700; }
 </style>
 
 <!-- Modal HTML (shared, one instance) -->
@@ -723,7 +721,7 @@ def is_positive_signal(v: float, key: str) -> bool:
 CHART_BG  = "#0B1020"
 GRID_COL  = "rgba(120,140,200,.06)"
 AXIS_COL  = "#8898BB"
-FONT_MONO = "IBM Plex Mono, Courier New, monospace"
+FONT_MONO = "Aptos, Courier New, monospace"
 
 def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy",
                height: int = 200) -> go.Figure:
@@ -1308,14 +1306,14 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
         height=200,
         margin=dict(l=0, r=0, t=8, b=0),
         paper_bgcolor="#0B1020", plot_bgcolor="#0B1020",
-        font=dict(family="IBM Plex Mono, monospace", color="#8898BB", size=10),
+        font=dict(family="Aptos, monospace", color="#8898BB", size=10),
         xaxis=dict(showgrid=False, zeroline=False,
                    tickfont=dict(size=10, color="#FFFFFF"),
                    tickformat="%b '%y", nticks=6),
         yaxis=dict(showgrid=True, gridcolor="rgba(120,140,200,.06)", zeroline=False,
                    tickfont=dict(size=10, color="#FFFFFF"), nticks=5),
         hoverlabel=dict(bgcolor="#0E1428", bordercolor="rgba(91,141,239,.3)",
-                        font=dict(family="IBM Plex Mono, monospace", size=12, color="#FFFFFF")),
+                        font=dict(family="Aptos, monospace", size=12, color="#FFFFFF")),
         showlegend=False,
     )
 
@@ -2539,7 +2537,7 @@ def render_screener() -> None:
         )
 
     st.markdown(
-        f"<div style='font-family:IBM Plex Mono,monospace;font-size:14px;margin-bottom:14px'>"
+        f"<div style='font-family:Aptos,monospace;font-size:14px;margin-bottom:14px'>"
         f"✓ {state_html}"
         f"</div>",
         unsafe_allow_html=True
@@ -2604,7 +2602,7 @@ def render_screener() -> None:
         if pool_size == 1:
             top_n = 1
             st.markdown(
-                "<div style='font-family:IBM Plex Mono,monospace;font-size:11px;"
+                "<div style='font-family:Aptos,monospace;font-size:11px;"
                 "color:#4D6080;margin:4px 0 10px'>Only 1 "
                 f"{view.lower()[:-1]} in pool</div>",
                 unsafe_allow_html=True,
@@ -2650,17 +2648,17 @@ def render_screener() -> None:
             st.markdown(f"""
             <div style="background:#0D1628;border:1px solid rgba(120,140,200,.1);
                 border-radius:8px;padding:12px 16px;text-align:center">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;
+              <div style="font-family:'Aptos',monospace;font-size:9px;
                    color:#FFFFFF;letter-spacing:.6px;text-transform:uppercase;
                    margin-bottom:4px">{label}</div>
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:22px;
+              <div style="font-family:'Aptos',monospace;font-size:22px;
                    font-weight:700;color:{color}">{val}</div>
             </div>
             """, unsafe_allow_html=True)
 
     # ── Coverage caption for the index-return figure ─────────────────────
     st.markdown(
-        f"<div style='font-family:IBM Plex Mono,monospace;font-size:10px;"
+        f"<div style='font-family:Aptos,monospace;font-size:10px;"
         f"color:#8898BB;margin-top:10px'>"
         f"ⓘ {etf_label} Return = Σ(weightᵢ × chgᵢ) over the full {total_universe}-name base; "
         f"{quoted_weight:.1f}% of index weight is currently quoted "
@@ -2676,7 +2674,7 @@ def render_screener() -> None:
     if cash_count > 0:
         names_str = ", ".join(cash_names[:6]) + ("…" if cash_count > 6 else "")
         st.markdown(
-            f"<div style='font-family:IBM Plex Mono,monospace;font-size:10px;"
+            f"<div style='font-family:Aptos,monospace;font-size:10px;"
             f"color:#8898BB;margin-top:6px'>"
             f"⊘ {cash_count} non-priceable holding(s) treated as Cash &amp; Other "
             f"(excluded from weighted return): {names_str}</div>",
@@ -2756,7 +2754,7 @@ def render_screener() -> None:
             background: #0D1628 !important;
             border: 1px solid rgba(15,180,90,.45) !important;
             color: #FFFFFF !important;
-            font-family: 'Sora', sans-serif !important;
+            font-family: 'Aptos', sans-serif !important;
             font-size: 12px !important;
             font-weight: 600 !important;
             letter-spacing: .3px !important;
@@ -2827,7 +2825,7 @@ def render_screener() -> None:
         <tbody>{rows_html}</tbody>
       </table>
     </div>
-    <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#4D6080;
+    <div style="font-family:'Aptos',monospace;font-size:9px;color:#4D6080;
         margin-top:8px;text-align:right">
       Data: Yahoo Finance · Weights: live shares × price · Market cap: prev-day close ·
       Showing all {len(direction_pool)} {view.lower()} of {active_count} priced
@@ -2901,11 +2899,11 @@ def main():
         # Chart title
         st.markdown(f"""
         <div style="
-            font-family:'Sora',sans-serif;font-size:22px;font-weight:700;
+            font-family:'Aptos',sans-serif;font-size:22px;font-weight:700;
             color:#FFFFFF;margin-bottom:6px;letter-spacing:-.3px
         ">{title_e}</div>
         <div style="
-            font-family:'IBM Plex Mono',monospace;font-size:11px;
+            font-family:'Aptos',monospace;font-size:11px;
             color:#4D6080;margin-bottom:24px;letter-spacing:.3px
         ">{cfg_e['full']}</div>
         """, unsafe_allow_html=True)
@@ -2949,14 +2947,14 @@ def main():
                 height=550,
                 margin=dict(l=0, r=0, t=8, b=0),
                 paper_bgcolor="#0B1020", plot_bgcolor="#0B1020",
-                font=dict(family="IBM Plex Mono, monospace", color="#8898BB", size=11),
+                font=dict(family="Aptos, monospace", color="#8898BB", size=11),
                 xaxis=dict(showgrid=False, zeroline=False,
                            tickfont=dict(size=11, color="#FFFFFF"),
                            tickformat="%b '%y", nticks=8),
                 yaxis=dict(showgrid=True, gridcolor="rgba(120,140,200,.06)", zeroline=False,
                            tickfont=dict(size=11, color="#FFFFFF"), nticks=6),
                 hoverlabel=dict(bgcolor="#0E1428", bordercolor="rgba(91,141,239,.3)",
-                                font=dict(family="IBM Plex Mono, monospace", size=13, color="#FFFFFF")),
+                                font=dict(family="Aptos, monospace", size=13, color="#FFFFFF")),
                 showlegend=False,
             )
         else:
@@ -3098,7 +3096,7 @@ def main():
     # ── Footer ─────────────────────────────────────────────────────────────
     st.markdown("<hr style='margin-top:32px'>", unsafe_allow_html=True)
     st.markdown(
-        "<p style='font-size:11px;color:#4D6080;font-family:IBM Plex Mono,monospace;text-align:center'>"
+        "<p style='font-size:11px;color:#4D6080;font-family:Aptos,monospace;text-align:center'>"
         "BLS data: CUSR0000SA0 · CUSR0000SA0L1E · WPSFD4 · LNS14000000 · CES0000000001 &nbsp;·&nbsp; "
         "FRED data: PCEPILFE (BEA) · ICSA (DOL)"
         "</p>",
