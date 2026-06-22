@@ -1946,31 +1946,40 @@ def _ndx_fallback() -> pd.DataFrame:
 
 def get_market_state() -> str:
     """
-    Returns market state based on current SGT time (UTC+8).
-    SGT schedule (weekdays only):
-      00:00 – 04:00  →  open        (NYSE 9:30am–4:00pm ET)
-      04:00 – 08:00  →  after_hours (NYSE 4:00pm–8:00pm ET)
-      08:00 – 16:00  →  closed      (overnight)
-      16:00 – 21:30  →  pre         (NYSE 4:00am–9:30am ET)
-      21:30 – 24:00  →  open        (NYSE 9:30am–4:00pm ET continues)
-    Weekends → closed.
+    Returns the NYSE session state, determined entirely in US/Eastern time —
+    the exchange's own timezone — rather than mapping onto SGT calendar days.
+
+    The previous SGT-based version gated on `SGT weekday >= 5` *before*
+    checking time-of-day. Since ET is 12h behind SGT, Friday's regular
+    session (and its after-hours tail) actually lands in the first 8 hours
+    of *Saturday* SGT — so that gate incorrectly forced "closed" during
+    hours that should still read "open"/"after_hours". Doing this in ET
+    avoids that entirely: NYSE's own hours never get sliced by an Eastern
+    weekday boundary, since ET *is* the exchange's home timezone.
+
+    Eastern schedule (weekdays only):
+      00:00 – 04:00 ET  →  closed       (dead zone after after-hours)
+      04:00 – 09:30 ET  →  pre          (pre-market)
+      09:30 – 16:00 ET  →  open         (regular session)
+      16:00 – 20:00 ET  →  after_hours
+      20:00 – 24:00 ET  →  closed
+    Saturday/Sunday (Eastern calendar day) → closed.
     """
-    sgt  = timezone(timedelta(hours=8))
-    now  = datetime.now(sgt)
-    if now.weekday() >= 5:
+    et   = timezone(timedelta(hours=-4))   # EDT — matches the rest of the module
+    now  = datetime.now(et)
+    if now.weekday() >= 5:        # Sat/Sun, Eastern calendar day
         return "closed"
-    h, m = now.hour, now.minute
-    mins = h * 60 + m
-    if mins < 240:          # 00:00–04:00 SGT
-        return "open"
-    elif mins < 480:        # 04:00–08:00 SGT
-        return "after_hours"
-    elif mins < 960:        # 08:00–16:00 SGT
+    mins = now.hour * 60 + now.minute
+    if mins < 240:                # 00:00–04:00 ET
         return "closed"
-    elif mins < 1290:       # 16:00–21:30 SGT
+    elif mins < 570:              # 04:00–09:30 ET
         return "pre"
-    else:                   # 21:30–24:00 SGT
+    elif mins < 960:              # 09:30–16:00 ET
         return "open"
+    elif mins < 1200:             # 16:00–20:00 ET
+        return "after_hours"
+    else:                         # 20:00–24:00 ET
+        return "closed"
 
 
 def _fetch_prev_close(tickers: list) -> dict:
@@ -2223,54 +2232,69 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
         return fetch_price_data_eod(tickers)
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=900, show_spinner=False)
+def _fetch_eod_raw(tickers: tuple, cache_bucket: str) -> pd.DataFrame:
+    """
+    Cached Yahoo pull for daily EOD bars. `cache_bucket` (the Eastern
+    calendar date + current session state) is not used inside the function —
+    its only job is to force a fresh Yahoo pull the instant the trading day
+    or session state changes, rather than trusting a blind wall-clock TTL
+    that could span a market-close transition and serve yesterday's bars
+    for up to an hour into the new session. The ttl=900 is just a backstop
+    in case Yahoo posts an official close late within an unchanged bucket.
+    """
+    try:
+        return yf.download(
+            list(tickers), period="5d", interval="1d",
+            auto_adjust=True, progress=False, threads=True,
+        )
+    except Exception as e:
+        print(f"EOD fetch failed: {e}")
+        return pd.DataFrame()
+
+
 def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
     """
     EOD / closed / fallback: daily bars.
     last_close = most recent session's official close; prev_close = the one before.
     """
-    try:
-        raw = yf.download(
-            list(tickers), period="5d", interval="1d",
-            auto_adjust=True, progress=False, threads=True,
-        )
-        if raw.empty:
-            return pd.DataFrame()
-        close  = raw["Close"]
-        volume = raw["Volume"]
-        if len(close) < 2:
-            return pd.DataFrame()
-
-        rows = []
-        for ticker in tickers:
-            if ticker not in close.columns:
-                continue
-            col = close[ticker].dropna()
-            if len(col) < 2:
-                continue
-            lc = float(col.iloc[-1])
-            pc = float(col.iloc[-2])
-            if pc == 0:
-                continue
-            chg_pct = (lc / pc - 1) * 100
-            chg_abs = lc - pc
-            try:
-                vol = volume[ticker].dropna().iloc[-1]
-            except Exception:
-                vol = 0
-            rows.append({
-                "ticker":     ticker,
-                "price":      lc,            # full precision; rounded only at display
-                "chg_pct":    chg_pct,       # full precision; weighted sum needs it
-                "chg_abs":    chg_abs,
-                "prev_close": pc,            # t-1 anchor for the weight base
-                "volume":     int(vol) if not pd.isna(vol) else 0,
-                "trade_date": str(col.index[-1].date()),
-            })
-        return pd.DataFrame(rows)
-    except Exception as e:
-        print(f"EOD fetch failed: {e}")
+    et           = timezone(timedelta(hours=-4))
+    cache_bucket = f"{datetime.now(et).date()}_{get_market_state()}"
+    raw = _fetch_eod_raw(tickers, cache_bucket)
+    if raw.empty:
         return pd.DataFrame()
+    close  = raw["Close"]
+    volume = raw["Volume"]
+    if len(close) < 2:
+        return pd.DataFrame()
+
+    rows = []
+    for ticker in tickers:
+        if ticker not in close.columns:
+            continue
+        col = close[ticker].dropna()
+        if len(col) < 2:
+            continue
+        lc = float(col.iloc[-1])
+        pc = float(col.iloc[-2])
+        if pc == 0:
+            continue
+        chg_pct = (lc / pc - 1) * 100
+        chg_abs = lc - pc
+        try:
+            vol = volume[ticker].dropna().iloc[-1]
+        except Exception:
+            vol = 0
+        rows.append({
+            "ticker":     ticker,
+            "price":      lc,            # full precision; rounded only at display
+            "chg_pct":    chg_pct,       # full precision; weighted sum needs it
+            "chg_abs":    chg_abs,
+            "prev_close": pc,            # t-1 anchor for the weight base
+            "volume":     int(vol) if not pd.isna(vol) else 0,
+            "trade_date": str(col.index[-1].date()),
+        })
+    return pd.DataFrame(rows)
 
 
 def fetch_price_data(tickers: tuple) -> tuple:
@@ -2629,7 +2653,18 @@ def render_screener() -> None:
     # above still uses the full-universe weight base.
     quoted = priced[priced["price"].notna()].copy()
 
-    trade_date    = quoted["trade_date"].iloc[0] if ("trade_date" in quoted.columns and not quoted.empty) else "—"
+    # Bug fix: this used to take quoted["trade_date"].iloc[0] — whichever
+    # ticker happened to land in the first row. If even one early-ordered
+    # ticker's daily bar hadn't posted yet on Yahoo's side while the rest of
+    # the market had already rolled to the new session, the page-wide date
+    # badge would wrongly show yesterday's date even though the table itself
+    # was mostly already showing the new session. Using the most common
+    # trade_date across the full quoted universe is robust to a handful of
+    # stale/late-posting outliers.
+    if "trade_date" in quoted.columns and not quoted.empty:
+        trade_date = quoted["trade_date"].value_counts().idxmax()
+    else:
+        trade_date = "—"
     active_count  = len(quoted)
     sgt           = timezone(timedelta(hours=8))
     now_sgt_str   = datetime.now(sgt).strftime("%H:%M SGT")
