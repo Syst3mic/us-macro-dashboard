@@ -2357,6 +2357,103 @@ def fetch_market_caps(tickers: tuple, prev_prices: tuple) -> dict:
     return result
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_recent_splits(tickers: tuple, cache_bucket: str, lookback_days: int = 3) -> dict:
+    """
+    Batched, near-zero-marginal-cost corporate-action check.
+
+    A stock split mechanically moves a ticker's raw closing price by the
+    split ratio (a 10-for-1 split drops the raw print ~90%) even though
+    nothing economically happened. yfinance's auto_adjust=True is *supposed*
+    to retroactively rebase historical closes so chg_pct nets this out — but
+    Yahoo's backend can lag applying that rebase for a few hours right on the
+    ex-date, which is exactly when a split-driven artifact would otherwise
+    slip through as a bogus "top mover".
+
+    This does ONE extra batched download (actions=True) across the whole
+    universe — not one call per ticker — and returns any ticker with a split
+    dated within `lookback_days`, so the screener can (a) tag it for
+    transparency and (b) independently verify its chg_pct rather than
+    trusting auto_adjust blindly.
+
+    cache_bucket: caller passes a date-keyed string (ET) so this can't serve
+    a stale "no splits today" result across a calendar-day boundary — same
+    pattern as _fetch_eod_raw's cache_bucket.
+    """
+    try:
+        raw = yf.download(
+            list(tickers), period="10d", interval="1d",
+            auto_adjust=True, actions=True, progress=False, threads=True,
+        )
+        if raw.empty or "Stock Splits" not in raw.columns.get_level_values(0):
+            return {}
+        splits = raw["Stock Splits"]
+        et     = timezone(timedelta(hours=-4))
+        cutoff = (datetime.now(et) - timedelta(days=lookback_days)).date()
+
+        out = {}
+        for tk in tickers:
+            if tk not in splits.columns:
+                continue
+            col = splits[tk].dropna()
+            col = col[col != 0]
+            if col.empty:
+                continue
+            recent = col[[ts.date() >= cutoff for ts in col.index]]
+            if not recent.empty:
+                ts    = recent.index[-1]
+                ratio = float(recent.iloc[-1])
+                out[tk] = {"date": ts.date(), "ratio": ratio}
+        return out
+    except Exception as e:
+        print(f"Split detection failed: {e}")
+        return {}
+
+
+def _verify_split_adjusted_chg(ticker: str, split_date, ratio: float,
+                                current_price: float):
+    """
+    Independently re-derives chg_pct for a single flagged ticker using RAW
+    (auto_adjust=False) closes, manually dividing the pre-split close by the
+    split ratio (post-split price = pre-split price / ratio; e.g. a 4-for-1
+    split: $400 -> $100, ratio=4.0). This sidesteps any Yahoo-side lag in
+    applying the auto-adjust rebase and gives a trustworthy figure to
+    cross-check the fast-path value against.
+
+    Only called for the handful of tickers fetch_recent_splits flags — not
+    the full universe — so the extra per-ticker call is cheap.
+
+    Returns None if it can't be computed (missing data), in which case the
+    caller leaves the original auto_adjust-derived chg_pct untouched.
+    """
+    try:
+        raw = yf.download(
+            ticker, period="10d", interval="1d",
+            auto_adjust=False, progress=False, threads=False,
+        )
+        if raw.empty:
+            return None
+        close = raw["Close"].dropna()
+        pre_split = close[close.index.date < split_date]
+        if pre_split.empty or ratio == 0:
+            return None
+        raw_prev_close      = float(pre_split.iloc[-1])
+        adjusted_prev_close = raw_prev_close / ratio
+        if adjusted_prev_close == 0:
+            return None
+        return (current_price / adjusted_prev_close - 1) * 100
+    except Exception as e:
+        print(f"Split verification failed for {ticker}: {e}")
+        return None
+
+
+def _split_tag(ratio) -> str:
+    """Human-readable split label, e.g. 4.0 -> '4:1 split', 0.1 -> '1:10 split'."""
+    if ratio >= 1:
+        return f"{ratio:.0f}:1 split"
+    return f"1:{(1/ratio):.0f} split"
+
+
 _SORTABLE_TABLE_TEMPLATE = """
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
@@ -2512,6 +2609,11 @@ def render_screener() -> None:
               <span class="data-hover-label">Cache</span>
               <span class="data-hover-val">Prices 5min · Mkt Cap 24h</span>
             </div>
+            <div class="data-hover-divider"></div>
+            <div class="data-hover-item">
+              <span class="data-hover-label">Corp Actions</span>
+              <span class="data-hover-val">Splits auto-detected &amp; chg% normalized</span>
+            </div>
           </div>
         </div>
       </div>
@@ -2607,6 +2709,42 @@ def render_screener() -> None:
     if priced["price"].notna().sum() == 0:
         st.error("No matching price data found.")
         return
+
+    # ── Corporate-action guard: flag & verify recent stock splits ──────────
+    # See fetch_recent_splits / _verify_split_adjusted_chg docstrings. This
+    # is one extra batched call across the whole universe, then a targeted
+    # re-check only for whatever handful of tickers actually split.
+    et_now       = timezone(timedelta(hours=-4))
+    split_bucket = str(datetime.now(et_now).date())
+    with st.spinner("Checking for recent stock splits…"):
+        splits_map = fetch_recent_splits(tickers_tuple, split_bucket)
+
+    priced["split_ratio"] = priced["ticker"].map(
+        lambda t: splits_map.get(t, {}).get("ratio"))
+    priced["split_date"] = priced["ticker"].map(
+        lambda t: splits_map.get(t, {}).get("date"))
+    priced["split_tag"] = priced["split_ratio"].apply(
+        lambda r: _split_tag(r) if pd.notna(r) else None)
+
+    for tk, info in splits_map.items():
+        mask = priced["ticker"] == tk
+        if not mask.any():
+            continue
+        px = priced.loc[mask, "price"].iloc[0]
+        if pd.isna(px):
+            continue
+        verified = _verify_split_adjusted_chg(tk, info["date"], info["ratio"], float(px))
+        if verified is None:
+            continue
+        existing = priced.loc[mask, "chg_pct"].iloc[0]
+        # Only override if auto_adjust's figure materially disagrees with the
+        # independently-verified one (>1pp) — otherwise auto_adjust already
+        # did its job correctly and the split_tag badge alone is enough.
+        if pd.isna(existing) or abs(verified - float(existing)) > 1.0:
+            corrected_prev_close = float(px) / (1 + verified / 100)
+            priced.loc[mask, "chg_pct"]    = verified
+            priced.loc[mask, "chg_abs"]    = float(px) - corrected_prev_close
+            priced.loc[mask, "prev_close"] = corrected_prev_close
 
     # ── Stable weight base: shares × t-1 close over the FULL universe ──────
     # Use the prev_close column emitted by the price-fetch layer — which is
@@ -2957,10 +3095,20 @@ def render_screener() -> None:
         ticker_e  = html.escape(str(row["ticker"]))
         company_e = html.escape(str(row["company"]))
         sector_e  = html.escape(str(row["sector"]))
+        split_tag_v = row.get("split_tag")
+        split_badge = ""
+        if pd.notna(split_tag_v):
+            split_badge = (
+                f' <span title="Recent corporate action — chg% is normalized for this split" '
+                f'style="font-size:10px;padding:1px 6px;border-radius:3px;'
+                f'background:rgba(245,158,11,.15);color:#F59E0B;'
+                f'border:1px solid rgba(245,158,11,.35);white-space:nowrap">'
+                f'↺ {html.escape(str(split_tag_v))}</span>'
+            )
         rows_html += f"""
         <tr>
           <td data-sort="{i+1}" style="color:#4D6080;width:36px">{i+1}</td>
-          <td data-sort="{ticker_e}"><span class="ticker-badge">{ticker_e}</span></td>
+          <td data-sort="{ticker_e}"><span class="ticker-badge">{ticker_e}</span>{split_badge}</td>
           <td data-sort="{company_e}" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;
               white-space:nowrap">{company_e}</td>
           <td data-sort="{sector_e}"><span class="sector-tag">{sector_e}</span></td>
@@ -2982,7 +3130,8 @@ def render_screener() -> None:
     <div style="font-family:'Aptos',monospace;font-size:11px;color:#4D6080;
         margin-top:8px;text-align:right">
       Data: Yahoo Finance · Weights: live shares × price · Market cap: prev-day close ·
-      Showing all {len(direction_pool)} {view.lower()} of {active_count} priced · Click any column header to sort ↕
+      Showing all {len(direction_pool)} {view.lower()} of {active_count} priced · Click any column header to sort ↕ ·
+      ↺ = recent stock split, chg% normalized for the split
     </div>
     """, unsafe_allow_html=True)
 
