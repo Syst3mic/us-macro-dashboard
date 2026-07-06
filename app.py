@@ -1841,25 +1841,109 @@ def _load_gics_map() -> dict:
     return gmap
 
 
+_COLUMN_ALIASES = {
+    # Company/name field
+    "name":            "company",
+    "company":         "company",
+    # Ticker field
+    "ticker":          "ticker_raw",
+    "ticker symbol":   "ticker_raw",
+    "symbol":          "ticker_raw",
+    # Weight field (loaded but currently unused — the screener recomputes
+    # live weight itself from shares × price)
+    "weight":          "weight_file",
+    "% tna":           "weight_file",
+    # Shares-held field — provider naming has changed release to release
+    "shares held":     "shares_raw",
+    "share/ par":      "shares_raw",
+    "share / par":     "shares_raw",
+    "shares/par":      "shares_raw",
+    "shares outstanding": "shares_raw",
+}
+
+
+def _canonicalize_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Rename whichever provider-specific column names are present to the
+    canonical names _load_holdings expects, matched case/whitespace-insensitively."""
+    rename_map = {}
+    for col in df.columns:
+        key = str(col).strip().lower()
+        if key in _COLUMN_ALIASES:
+            rename_map[col] = _COLUMN_ALIASES[key]
+    return df.rename(columns=rename_map)
+
+
+def _find_header_row(path: str, sheet_name: str, max_scan: int = 20) -> int:
+    """
+    Provider xlsx exports (e.g. State Street's SPY.xlsx) prepend a few
+    metadata rows (fund name, ticker symbol, as-of date, blank line) above
+    the real header. Scan the first `max_scan` rows for the one containing
+    both a ticker-like and a name-like label, rather than hardcoding a fixed
+    skip count that would silently break the next time the provider adds or
+    removes a metadata line.
+    """
+    try:
+        raw = pd.read_excel(path, sheet_name=sheet_name, header=None, nrows=max_scan)
+    except Exception:
+        return 0
+    for i, row in raw.iterrows():
+        cells = {str(c).strip().lower() for c in row.tolist()}
+        has_ticker = bool(cells & {"ticker", "ticker symbol", "symbol"})
+        has_name   = bool(cells & {"name", "company"})
+        if has_ticker and has_name:
+            return int(i)
+    return 0  # fall back to the old assumption if nothing matches
+
+
 def _load_holdings(path: str, index_name: str) -> pd.DataFrame:
     """
     Read a holdings file (SPY .xlsx or QQQ .csv) into a normalised frame:
       ticker (yf), company, shares, sector, index, priceable
-    Non-priceable rows (cash, futures, placeholders) are retained with
-    priceable=False so their exposure can be bucketed as cash.
+
+    Provider exports change shape more than you'd like:
+      - State Street's SPY.xlsx prepends a few metadata rows (fund name,
+        ticker symbol, as-of date, blank line) above the real header, and
+        appends legal-disclaimer paragraphs + blank rows below the holdings.
+      - Invesco's QQQ.csv uses different column names release to release
+        (e.g. 'Company'/'Share/ Par'/'% TNA' vs an older 'Name'/'Shares
+        Held'/'Weight' convention), and appends a trailing '# as of <date>'
+        comment line.
+
+    Rather than hardcode either provider's current quirks, this:
+      1. Locates the real header row by content (xlsx only — CSVs are
+         assumed header-row-0, which has held for both providers so far).
+      2. Canonicalizes whichever column names are found via _COLUMN_ALIASES.
+      3. Drops any row without a ticker — the one thing every genuine
+         holding has and every metadata/disclaimer/comment row lacks.
     """
     if path.lower().endswith(".csv"):
         df = pd.read_csv(path, encoding="utf-8-sig")
     else:
-        df = pd.read_excel(path, sheet_name="holdings")
+        header_row = _find_header_row(path, "holdings")
+        df = pd.read_excel(path, sheet_name="holdings", header=header_row)
 
-    df = df.rename(columns={
-        "Name": "company", "Ticker": "ticker_raw",
-        "Weight": "weight_file", "Shares Held": "shares_raw",
-    })
+    df = _canonicalize_columns(df)
+
+    missing = {"ticker_raw", "company"} - set(df.columns)
+    if missing:
+        raise ValueError(
+            f"{index_name} holdings file at {path} is missing expected "
+            f"column(s) {missing} after alias mapping — got columns "
+            f"{df.columns.tolist()}. Update _COLUMN_ALIASES if the provider "
+            f"renamed a field again."
+        )
+
+    # Strip metadata/footer/comment rows. Every genuine holding has a ticker;
+    # disclaimers, blank spacer rows, and "# as of ..." trailers do not.
+    df = df[df["ticker_raw"].notna()].copy()
+    df = df[~df["ticker_raw"].astype(str).str.strip().str.startswith("#")].copy()
+
     df["ticker_raw"] = df["ticker_raw"].astype(str)
     df["ticker"]     = df["ticker_raw"].apply(_to_yf)
-    df["shares"]     = df["shares_raw"].apply(_parse_shares)
+    if "shares_raw" in df.columns:
+        df["shares"] = df["shares_raw"].apply(_parse_shares)
+    else:
+        df["shares"] = float("nan")
     df["priceable"]  = df["ticker_raw"].apply(_is_priceable)
     df["index"]      = index_name
 
