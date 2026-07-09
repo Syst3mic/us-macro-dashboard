@@ -40,7 +40,7 @@ section[data-testid="stSidebar"] { background: #080C16; }
 
 /* ── Hide Streamlit chrome ── */
 #MainMenu, footer, header { visibility: hidden; }
-.block-container { padding: 0 2rem 4rem; max-width: 1400px; }
+.block-container { padding: 0 2rem 4rem; }
 
 /* ── Divider ── */
 hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important; }
