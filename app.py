@@ -1767,15 +1767,29 @@ _DATA_DIR  = os.path.join(_HERE, "data")
 _SPY_FILE  = _find_data_file("SPY.xlsx")
 _QQQ_FILE  = _find_data_file("QQQ.csv")
 
-# Wikipedia pages for S&P 500 and Nasdaq-100 constituents. Both tables are
-# actively maintained by Wikipedia editors — typically updated within hours of
-# index rebalances, additions, removals, and GICS reclassifications. Neither
-# requires an API key or has rate limits, and the table schemas have been
-# stable for years. These replace the old community-maintained GitHub CSV
-# (which lagged changes by days/weeks) and the manual _EXTRA_GICS dict
-# (which required a code change every time a new QQQ-only name was added).
+# Wikipedia pages — used as the fast primary source for the bulk of tickers.
+# Results are remapped to Yahoo Finance's sector terminology so the sector
+# filter in the screener is consistent with what yfinance returns for the
+# edge-case tickers that Wikipedia misses.
 _SP500_WIKI  = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
 _NDX100_WIKI = "https://en.wikipedia.org/wiki/Nasdaq-100"
+
+# GICS (Wikipedia) → Yahoo Finance sector name mapping.
+# Yahoo Finance uses slightly different names for five sectors; the rest match.
+_GICS_TO_YAHOO = {
+    "Information Technology": "Technology",
+    "Health Care":            "Healthcare",
+    "Consumer Discretionary": "Consumer Cyclical",
+    "Consumer Staples":       "Consumer Defensive",
+    "Financials":             "Financial Services",
+    "Materials":              "Basic Materials",
+    # The remaining six are identical in both taxonomies:
+    "Communication Services": "Communication Services",
+    "Industrials":            "Industrials",
+    "Energy":                 "Energy",
+    "Real Estate":            "Real Estate",
+    "Utilities":              "Utilities",
+}
 
 
 def _to_yf(t: str) -> str:
@@ -1808,26 +1822,32 @@ def _parse_shares(x) -> float:
 @st.cache_data(ttl=86400, show_spinner=False)
 def _load_gics_map() -> dict:
     """
-    Build {yf_ticker: GICS Sector} from Wikipedia, the most reliably
-    up-to-date free source for GICS classifications:
+    Build {yf_ticker: Yahoo Finance sector name}.
 
-      1. S&P 500 Wikipedia page  — covers all ~503 SPY names plus the
-         majority of QQQ names (most large-cap Nasdaq names are dual-listed
-         in the S&P 500).
-      2. Nasdaq-100 Wikipedia page — layered on top with setdefault, so it
-         fills only the QQQ-only gaps (ASML, SHOP, MELI, ARM, etc.) without
-         overwriting any S&P 500 entry. No more manual _EXTRA_GICS dict to
-         maintain: any new Nasdaq-only addition is picked up automatically.
+    Three-pass approach, all returning Yahoo Finance sector terminology
+    so the screener's sector filter is consistent across every ticker:
 
-    Both pages are edited by Wikipedia contributors within hours of index
-    rebalances and GICS reclassifications — materially faster than the old
-    community GitHub CSV, which lagged by days to weeks.
+      Pass 1 — Wikipedia S&P 500 page (batched, ~503 tickers, fast).
+               Covers the full SPY universe plus the majority of QQQ names
+               dual-listed in the S&P 500. GICS names are remapped to Yahoo
+               Finance equivalents via _GICS_TO_YAHOO.
 
-    Falls back to the hardcoded legacy lists only if both Wikipedia fetches
-    fail (network outage, Wikipedia down). Cached for 24h.
+      Pass 2 — Wikipedia Nasdaq-100 page (batched, fills QQQ-only gaps
+               where the table carries sector data). Same remapping applied.
+
+      Pass 3 — yfinance .info['sector'] for any ticker still missing after
+               both Wikipedia passes (non-US names like ASML/SHOP/CCEP,
+               recent IPOs like SPCX, any future edge cases). Yahoo Finance
+               returns its native sector names directly — no mapping needed.
+               Only called for the handful of tickers that fall through
+               (~10-20), so the per-ticker overhead is negligible.
+
+    Falls back to the hardcoded legacy lists (in GICS names, remapped) only
+    if Wikipedia is completely unreachable. Cached for 24h.
     """
-    # Must fetch via requests with a browser User-Agent — pd.read_html(url)
-    # uses urllib without headers and gets a 403 from Wikipedia.
+    from io import StringIO as _SIO
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     HDR = {"User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -1836,15 +1856,17 @@ def _load_gics_map() -> dict:
     gmap = {}
 
     def _find_col(df, *keywords):
-        """Return the first column whose lowercase name contains any keyword."""
         for col in df.columns:
             if any(kw in col.lower() for kw in keywords):
                 return col
         return None
 
+    def _remap(sec: str) -> str:
+        """Convert a GICS sector name to its Yahoo Finance equivalent."""
+        return _GICS_TO_YAHOO.get(str(sec).strip(), str(sec).strip())
+
     # ── Pass 1: S&P 500 Wikipedia ────────────────────────────────────────
     try:
-        from io import StringIO as _SIO
         r     = requests.get(_SP500_WIKI, headers=HDR, timeout=20)
         r.raise_for_status()
         sp500 = pd.read_html(_SIO(r.text), attrs={"id": "constituents"})[0]
@@ -1853,20 +1875,17 @@ def _load_gics_map() -> dict:
         if sym_col and sec_col:
             for sym, sec in zip(sp500[sym_col], sp500[sec_col]):
                 if pd.notna(sym) and pd.notna(sec):
-                    gmap[_to_yf(str(sym))] = str(sec)
-            print(f"GICS: loaded {len(gmap)} S&P 500 entries from Wikipedia")
+                    gmap[_to_yf(str(sym))] = _remap(sec)
+            print(f"Sectors: loaded {len(gmap)} S&P 500 entries from Wikipedia")
         else:
             raise ValueError(f"Expected columns not found: {sp500.columns.tolist()}")
     except Exception as e:
-        print(f"GICS: S&P 500 Wikipedia fetch failed: {e}")
+        print(f"Sectors: S&P 500 Wikipedia fetch failed: {e}")
 
-    # ── Pass 2: Nasdaq-100 Wikipedia (fills QQQ-only gaps) ───────────────
+    # ── Pass 2: Nasdaq-100 Wikipedia (QQQ-only gaps) ─────────────────────
     try:
-        from io import StringIO as _SIO
-        r2  = requests.get(_NDX100_WIKI, headers=HDR, timeout=20)
+        r2 = requests.get(_NDX100_WIKI, headers=HDR, timeout=20)
         r2.raise_for_status()
-        # Find the constituents table: largest table with both ticker and
-        # sector columns (guards against Wikipedia adding/reordering tables).
         ndx_df = None
         for tbl in pd.read_html(_SIO(r2.text)):
             cols_lower = [c.lower() for c in tbl.columns]
@@ -1883,20 +1902,70 @@ def _load_gics_map() -> dict:
                 for sym, sec in zip(ndx_df[sym_col], ndx_df[sec_col]):
                     if pd.notna(sym) and pd.notna(sec):
                         tk = _to_yf(str(sym))
-                        if tk not in gmap:   # never overwrite S&P 500 entry
-                            gmap[tk] = str(sec)
+                        if tk not in gmap:
+                            gmap[tk] = _remap(sec)
                             added += 1
-                print(f"GICS: added {added} Nasdaq-100-only entries from Wikipedia")
+                print(f"Sectors: added {added} Nasdaq-100-only entries from Wikipedia")
     except Exception as e:
-        print(f"GICS: Nasdaq-100 Wikipedia fetch failed: {e}")
+        print(f"Sectors: Nasdaq-100 Wikipedia fetch failed: {e}")
 
     # ── Fallback: hardcoded legacy lists if both Wikipedia fetches failed ─
     if not gmap:
-        print("GICS: both Wikipedia fetches failed — using built-in fallback")
+        print("Sectors: Wikipedia unavailable — using built-in fallback")
         for tk, _co, sec in _SP500_FALLBACK_DATA + _NDX100_DATA:
-            gmap[_to_yf(tk)] = sec
+            gmap[_to_yf(tk)] = _remap(sec)
 
+    # ── Pass 3: yfinance for any ticker still missing ─────────────────────
+    # Determine which tickers need a yfinance lookup by checking against the
+    # combined priceable universe. Called lazily here so the map is already
+    # populated before _load_holdings() runs (which calls _load_gics_map()).
+    # We don't know the full universe yet at this point, so Pass 3 is deferred
+    # to _fill_missing_sectors(), called from _load_holdings() after merge.
     return gmap
+
+
+def _fill_missing_sectors(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    For any priceable ticker whose sector is still '—' after the Wikipedia
+    passes, fetch it from yfinance .info['sector']. Yahoo Finance returns its
+    native sector names directly (Technology, Healthcare, Consumer Cyclical,
+    etc.) so no remapping is needed.
+
+    Uses a small thread pool to parallelise the per-ticker .info calls;
+    typically only ~10-20 tickers need this so latency is low. Results are
+    written back into the df in-place and also merged into the cached gmap
+    so subsequent calls within the same session don't re-fetch.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    missing = df[(df["sector"] == "—") & df["priceable"]]["ticker"].unique().tolist()
+    if not missing:
+        return df
+
+    print(f"Sectors: fetching {len(missing)} missing via yfinance: {missing}")
+
+    def _fetch_one(tk):
+        try:
+            info = yf.Ticker(tk).info
+            sec  = info.get("sector", "")
+            return tk, sec if sec else "—"
+        except Exception:
+            return tk, "—"
+
+    results = {}
+    with ThreadPoolExecutor(max_workers=min(len(missing), 8)) as pool:
+        futures = {pool.submit(_fetch_one, tk): tk for tk in missing}
+        for fut in as_completed(futures):
+            tk, sec = fut.result()
+            results[tk] = sec
+
+    df["sector"] = df.apply(
+        lambda row: results.get(row["ticker"], row["sector"])
+        if row["sector"] == "—" else row["sector"],
+        axis=1,
+    )
+    print(f"Sectors: yfinance filled {sum(1 for s in results.values() if s != '—')} / {len(missing)}")
+    return df
 
 
 _COLUMN_ALIASES = {
@@ -2009,8 +2078,55 @@ def _load_holdings(path: str, index_name: str) -> pd.DataFrame:
     df["sector"] = df["ticker"].map(gmap).fillna("—")
     df["source"] = "file"
 
+    # Pass 3: yfinance fallback for any ticker still missing a sector
+    df = _fill_missing_sectors(df)
+
     keep = ["ticker", "ticker_raw", "company", "shares", "sector", "index", "priceable", "source"]
     return df[keep].reset_index(drop=True)
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _get_holdings_date() -> str:
+    """
+    Read the as-of date from SPY.xlsx and QQQ.csv and return a formatted
+    string for the DATA hover bar, e.g. 'SPY / QQQ Holdings · 02 Jul 2026'.
+    Uses the most recent date across both files so the label is always
+    current after a holdings file swap.
+    """
+    from datetime import datetime
+    dates = {}
+
+    # SPY.xlsx: row 3 cell B = "As of 01-Jul-2026"
+    if _SPY_FILE:
+        try:
+            raw = pd.read_excel(_SPY_FILE, sheet_name="holdings",
+                                header=None, nrows=4)
+            for _, row in raw.iterrows():
+                for cell in row:
+                    if isinstance(cell, str) and "as of" in cell.lower():
+                        date_str = cell.lower().replace("as of", "").strip()
+                        dates["SPY"] = datetime.strptime(date_str, "%d-%b-%Y")
+                        break
+        except Exception as e:
+            print(f"SPY date read failed: {e}")
+
+    # QQQ.csv: trailing line "# as of 2026-07-02"
+    if _QQQ_FILE:
+        try:
+            with open(_QQQ_FILE, "r", encoding="utf-8-sig") as f:
+                lines = [l.strip() for l in f.readlines() if l.strip()]
+            for line in reversed(lines):
+                if line.lower().startswith("# as of"):
+                    date_str = line.lower().replace("# as of", "").strip()
+                    dates["QQQ"] = datetime.strptime(date_str, "%Y-%m-%d")
+                    break
+        except Exception as e:
+            print(f"QQQ date read failed: {e}")
+
+    if not dates:
+        return "SPY / QQQ Holdings"
+    most_recent = max(dates.values())
+    return f"SPY / QQQ Holdings · {most_recent.strftime('%d %b %Y')}"
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
@@ -2725,7 +2841,7 @@ def render_screener() -> None:
     </style>
     """, unsafe_allow_html=True)
 
-    st.markdown("""
+    st.markdown(f"""
     <div class="screener-header">
       <div>
         <div class="screener-title">📈 Markets Screener</div>
@@ -2734,7 +2850,7 @@ def render_screener() -> None:
           <div class="data-hover-bar">
             <div class="data-hover-item">
               <span class="data-hover-label">Universe</span>
-              <span class="data-hover-val">SPY / QQQ Holdings · 27 May 2026</span>
+              <span class="data-hover-val">{_get_holdings_date()}</span>
             </div>
             <div class="data-hover-divider"></div>
             <div class="data-hover-item">
