@@ -1767,27 +1767,15 @@ _DATA_DIR  = os.path.join(_HERE, "data")
 _SPY_FILE  = _find_data_file("SPY.xlsx")
 _QQQ_FILE  = _find_data_file("QQQ.csv")
 
-# Authoritative GICS sector source: full S&P 500 constituents CSV (covers all SPY
-# names + most QQQ names). Non-S&P Nasdaq-100 names are filled from _EXTRA_GICS.
-_SP500_GICS_CSV = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
-
-# GICS sectors for Nasdaq-100 constituents that are NOT in the S&P 500
-# (and therefore absent from the GICS CSV above).
-_EXTRA_GICS = {
-    "MRVL": "Information Technology",
-    "ASML": "Information Technology",
-    "SHOP": "Information Technology",
-    "MELI": "Consumer Discretionary",
-    "PDD":  "Consumer Discretionary",
-    "FER":  "Industrials",
-    "MSTR": "Information Technology",
-    "ARM":  "Information Technology",
-    "CCEP": "Consumer Staples",
-    "ALNY": "Health Care",
-    "TRI":  "Industrials",
-    "ZS":   "Information Technology",
-    "INSM": "Health Care",
-}
+# Wikipedia pages for S&P 500 and Nasdaq-100 constituents. Both tables are
+# actively maintained by Wikipedia editors — typically updated within hours of
+# index rebalances, additions, removals, and GICS reclassifications. Neither
+# requires an API key or has rate limits, and the table schemas have been
+# stable for years. These replace the old community-maintained GitHub CSV
+# (which lagged changes by days/weeks) and the manual _EXTRA_GICS dict
+# (which required a code change every time a new QQQ-only name was added).
+_SP500_WIKI  = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+_NDX100_WIKI = "https://en.wikipedia.org/wiki/Nasdaq-100"
 
 
 def _to_yf(t: str) -> str:
@@ -1820,24 +1808,94 @@ def _parse_shares(x) -> float:
 @st.cache_data(ttl=86400, show_spinner=False)
 def _load_gics_map() -> dict:
     """
-    Build {yf_ticker: GICS Sector}. Primary source: S&P 500 GICS CSV (GitHub).
-    Falls back to the hardcoded GICS pulled from the legacy lists if the CSV
-    is unreachable. _EXTRA_GICS is layered on top for non-S&P Nasdaq names.
+    Build {yf_ticker: GICS Sector} from Wikipedia, the most reliably
+    up-to-date free source for GICS classifications:
+
+      1. S&P 500 Wikipedia page  — covers all ~503 SPY names plus the
+         majority of QQQ names (most large-cap Nasdaq names are dual-listed
+         in the S&P 500).
+      2. Nasdaq-100 Wikipedia page — layered on top with setdefault, so it
+         fills only the QQQ-only gaps (ASML, SHOP, MELI, ARM, etc.) without
+         overwriting any S&P 500 entry. No more manual _EXTRA_GICS dict to
+         maintain: any new Nasdaq-only addition is picked up automatically.
+
+    Both pages are edited by Wikipedia contributors within hours of index
+    rebalances and GICS reclassifications — materially faster than the old
+    community GitHub CSV, which lagged by days to weeks.
+
+    Falls back to the hardcoded legacy lists only if both Wikipedia fetches
+    fail (network outage, Wikipedia down). Cached for 24h.
     """
+    # Must fetch via requests with a browser User-Agent — pd.read_html(url)
+    # uses urllib without headers and gets a 403 from Wikipedia.
+    HDR = {"User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0 Safari/537.36"
+    )}
     gmap = {}
+
+    def _find_col(df, *keywords):
+        """Return the first column whose lowercase name contains any keyword."""
+        for col in df.columns:
+            if any(kw in col.lower() for kw in keywords):
+                return col
+        return None
+
+    # ── Pass 1: S&P 500 Wikipedia ────────────────────────────────────────
     try:
-        r = requests.get(_SP500_GICS_CSV, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        from io import StringIO as _SIO
+        r     = requests.get(_SP500_WIKI, headers=HDR, timeout=20)
         r.raise_for_status()
-        csv = pd.read_csv(pd.io.common.StringIO(r.text))
-        for sym, sec in zip(csv["Symbol"], csv["GICS Sector"]):
-            gmap[_to_yf(sym)] = sec
+        sp500 = pd.read_html(_SIO(r.text), attrs={"id": "constituents"})[0]
+        sym_col = _find_col(sp500, "symbol", "ticker")
+        sec_col = _find_col(sp500, "gics sector", "sector")
+        if sym_col and sec_col:
+            for sym, sec in zip(sp500[sym_col], sp500[sec_col]):
+                if pd.notna(sym) and pd.notna(sec):
+                    gmap[_to_yf(str(sym))] = str(sec)
+            print(f"GICS: loaded {len(gmap)} S&P 500 entries from Wikipedia")
+        else:
+            raise ValueError(f"Expected columns not found: {sp500.columns.tolist()}")
     except Exception as e:
-        print(f"GICS CSV fetch failed: {e} — using built-in GICS fallback")
+        print(f"GICS: S&P 500 Wikipedia fetch failed: {e}")
+
+    # ── Pass 2: Nasdaq-100 Wikipedia (fills QQQ-only gaps) ───────────────
+    try:
+        from io import StringIO as _SIO
+        r2  = requests.get(_NDX100_WIKI, headers=HDR, timeout=20)
+        r2.raise_for_status()
+        # Find the constituents table: largest table with both ticker and
+        # sector columns (guards against Wikipedia adding/reordering tables).
+        ndx_df = None
+        for tbl in pd.read_html(_SIO(r2.text)):
+            cols_lower = [c.lower() for c in tbl.columns]
+            has_ticker = any("ticker" in c or "symbol" in c for c in cols_lower)
+            has_sector = any("sector" in c or "gics" in c for c in cols_lower)
+            if has_ticker and has_sector and len(tbl) > 50:
+                ndx_df = tbl
+                break
+        if ndx_df is not None:
+            sym_col = _find_col(ndx_df, "ticker", "symbol")
+            sec_col = _find_col(ndx_df, "gics sector", "sector")
+            if sym_col and sec_col:
+                added = 0
+                for sym, sec in zip(ndx_df[sym_col], ndx_df[sec_col]):
+                    if pd.notna(sym) and pd.notna(sec):
+                        tk = _to_yf(str(sym))
+                        if tk not in gmap:   # never overwrite S&P 500 entry
+                            gmap[tk] = str(sec)
+                            added += 1
+                print(f"GICS: added {added} Nasdaq-100-only entries from Wikipedia")
+    except Exception as e:
+        print(f"GICS: Nasdaq-100 Wikipedia fetch failed: {e}")
+
+    # ── Fallback: hardcoded legacy lists if both Wikipedia fetches failed ─
+    if not gmap:
+        print("GICS: both Wikipedia fetches failed — using built-in fallback")
         for tk, _co, sec in _SP500_FALLBACK_DATA + _NDX100_DATA:
             gmap[_to_yf(tk)] = sec
-    # Layer Nasdaq-only names on top (do not overwrite CSV entries)
-    for tk, sec in _EXTRA_GICS.items():
-        gmap.setdefault(_to_yf(tk), sec)
+
     return gmap
 
 
