@@ -774,7 +774,7 @@ def is_positive_signal(v: float, key: str) -> bool:
 CHART_BG  = "#FFFFFF"
 GRID_COL  = "rgba(0,0,0,.07)"
 AXIS_COL  = "#4D6080"
-FONT_MONO = "Inter", sans-serif
+FONT_MONO = "Inter, sans-serif"
 
 def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy",
                height: int = 200) -> go.Figure:
