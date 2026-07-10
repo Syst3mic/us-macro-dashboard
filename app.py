@@ -1965,6 +1965,34 @@ def _load_gics_map() -> dict:
         for tk, _co, sec in _SP500_FALLBACK_DATA + _NDX100_DATA:
             gmap[_to_yf(tk)] = _remap(sec)
 
+    # ── Supplemental dict: reliable Yahoo Finance sector names for tickers
+    # that consistently slip through Wikipedia (non-US names, very recent
+    # IPOs, spin-offs) or where yf.Ticker().info is unreliable at cache time.
+    # Uses setdefault so Wikipedia-sourced entries are never overwritten.
+    # Sector names match Yahoo Finance taxonomy exactly.
+    _SECTOR_SUPPLEMENT = {
+        # Non-US Nasdaq-100 names (not in S&P 500 Wikipedia)
+        "ARM":  "Technology",          # ARM Holdings PLC (UK)
+        "ASML": "Technology",          # ASML Holding (Netherlands)
+        "SHOP": "Technology",          # Shopify (Canada)
+        "MELI": "Consumer Cyclical",   # MercadoLibre (Argentina)
+        "PDD":  "Consumer Cyclical",   # PDD Holdings (China)
+        "FER":  "Industrials",         # Ferrovial (Spain)
+        "CCEP": "Consumer Defensive",  # Coca-Cola Europacific Partners (UK)
+        "TRI":  "Industrials",         # Thomson Reuters (Canada)
+        # Recent US IPOs / spin-offs (may not yet be stable on Wikipedia)
+        "ALAB": "Technology",          # Astera Labs
+        "SNDK": "Technology",          # SanDisk (WD spin-off)
+        "RKLB": "Industrials",         # Rocket Lab USA
+        "NBIS": "Technology",          # Nebius Group (formerly Yandex NV)
+        "CRWV": "Technology",          # CoreWeave
+        "HONA": "Industrials",         # Honeywell Automation (spin-off)
+        "MSTR": "Technology",          # MicroStrategy
+        "SPCX": "Industrials",         # SpaceX (recently listed)
+    }
+    for tk, sec in _SECTOR_SUPPLEMENT.items():
+        gmap.setdefault(_to_yf(tk), sec)
+
     # ── Pass 3: yfinance for any ticker still missing ─────────────────────
     # Determine which tickers need a yfinance lookup by checking against the
     # combined priceable universe. Called lazily here so the map is already
