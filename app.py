@@ -3364,6 +3364,24 @@ def render_screener() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────────────────────────────────────
+def _on_top_n_slider():
+    """Slider moved → push new value into number input and shared state."""
+    pool_max = st.session_state.get("pool_max", 50)
+    val = min(max(int(st.session_state.get("sb_top_n", 10)), 1), pool_max)
+    st.session_state["top_n_val"]    = val
+    st.session_state["sb_top_n_num"] = val   # forces number input to update
+
+
+def _on_top_n_input():
+    """Number typed → push new value into slider and shared state."""
+    pool_max = st.session_state.get("pool_max", 50)
+    raw = st.session_state.get("sb_top_n_num", 10)
+    val = min(max(int(raw), 1), pool_max)
+    st.session_state["top_n_val"] = val
+    st.session_state["sb_top_n"]  = val      # forces slider to update
+    st.session_state["sb_top_n_num"] = val   # clamp in case user typed out-of-range
+
+
 def main():
     sgt = timezone(timedelta(hours=8))
     now_str = datetime.now(sgt).strftime("%d %b %Y · %H:%M SGT")
@@ -3540,10 +3558,13 @@ def main():
 
             st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
 
-            # Top N — slider for visual selection + number input for precise entry.
-            # The number input takes priority when the user types a value directly.
+            # Top N — slider + number input, fully bidirectional.
+            # _on_top_n_slider / _on_top_n_input (defined at module level)
+            # write to the OTHER widget's session_state key so both always
+            # reflect the same value after any interaction.
             st.markdown('<div class="sb-section-label">Top N</div>', unsafe_allow_html=True)
             pool_max = max(1, st.session_state.get("pool_size", 50))
+            st.session_state["pool_max"] = pool_max   # makes pool_max accessible inside callbacks
             current  = min(st.session_state.get("top_n_val", 10), pool_max)
 
             st.slider(
@@ -3551,6 +3572,7 @@ def main():
                 min_value=1, max_value=pool_max,
                 value=current, step=1,
                 key="sb_top_n",
+                on_change=_on_top_n_slider,
                 label_visibility="collapsed",
             )
             st.number_input(
@@ -3558,14 +3580,11 @@ def main():
                 min_value=1, max_value=pool_max,
                 value=current, step=1,
                 key="sb_top_n_num",
+                on_change=_on_top_n_input,
                 label_visibility="collapsed",
-                help="Type an exact value instead of dragging the slider",
+                help="Type an exact value — slider will move to match",
             )
-
-            # Sync: number_input wins if it changed from last render, else slider wins
-            slider_v = int(st.session_state["sb_top_n"])
-            num_v    = int(st.session_state["sb_top_n_num"])
-            st.session_state["top_n_val"] = num_v if num_v != current else slider_v
+            st.session_state["top_n_val"] = st.session_state.get("sb_top_n", current)
 
             st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
 
