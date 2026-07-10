@@ -38,6 +38,42 @@ html, body, [data-testid="stApp"] {
 [data-testid="stHeader"] { background: transparent; }
 section[data-testid="stSidebar"] { background: #080C16; }
 
+/* ── Sidebar layout ── */
+section[data-testid="stSidebar"] > div:first-child {
+    padding: 1.2rem 1rem 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+.sb-logo {
+    padding: 4px 0 20px;
+    border-bottom: 1px solid rgba(91,141,239,.12);
+    margin-bottom: 16px;
+}
+.sb-logo-title {
+    font-size: 16px; font-weight: 700;
+    color: #FFFFFF; letter-spacing: -.2px;
+}
+.sb-logo-sub {
+    font-size: 10px; color: rgba(255,255,255,.35);
+    letter-spacing: .06em; margin-top: 3px;
+    text-transform: uppercase;
+}
+.sb-section-label {
+    font-size: 9px; font-weight: 700; letter-spacing: .1em;
+    color: rgba(255,255,255,.3); text-transform: uppercase;
+    margin: 14px 0 6px; padding-left: 2px;
+}
+.sb-divider {
+    border: none; border-top: 1px solid rgba(120,140,200,.1);
+    margin: 14px 0;
+}
+.sb-footnote {
+    font-size: 10px; color: rgba(120,140,200,.55);
+    line-height: 1.6; margin-top: 4px;
+}
+/* Active nav button styles injected dynamically via f-string CSS */
+
 /* ── Hide Streamlit chrome ── */
 #MainMenu, footer, header { visibility: hidden; }
 .block-container { padding: 0 2rem 4rem; }
@@ -2825,94 +2861,31 @@ def render_screener() -> None:
     sgt = timezone(timedelta(hours=8))
     now = datetime.now(sgt)
 
-    # ── Page-scoped font bump (+2px everywhere on this tab only) ───────────
-    # Injected only while the Markets Screener is being rendered, so the
-    # Macro Dashboard's type sizes are completely unaffected.
-    st.markdown("""
-    <style>
-    [data-testid="stButton"] button   { font-size: 20px !important; }
-    [data-testid="stWidgetLabel"] p   { font-size: 16px !important; }
-    .screener-title       { font-size: 22px !important; }
-    .screener-meta        { font-size: 12px !important; }
-    .data-hover-trigger   { font-size: 13px !important; }
-    .data-q                { font-size: 11px !important; }
-    .data-hover-label     { font-size: 10px !important; }
-    .data-hover-val       { font-size: 13px !important; }
-    </style>
-    """, unsafe_allow_html=True)
-
-    st.markdown(f"""
-    <div class="screener-header">
-      <div>
-        <div class="screener-title">📈 Markets Screener</div>
-        <div class="data-hover-wrap" style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(120,140,200,.08)">
-          <div class="data-hover-trigger">DATA <span class="data-q">?</span></div>
-          <div class="data-hover-bar">
-            <div class="data-hover-item">
-              <span class="data-hover-label">Universe</span>
-              <span class="data-hover-val">{_get_holdings_date()}</span>
-            </div>
-            <div class="data-hover-divider"></div>
-            <div class="data-hover-item">
-              <span class="data-hover-label">Prices</span>
-              <span class="data-hover-val">Yahoo Finance · Market-State Aware</span>
-            </div>
-            <div class="data-hover-divider"></div>
-            <div class="data-hover-item">
-              <span class="data-hover-label">Weights</span>
-              <span class="data-hover-val">Live · shares × price</span>
-            </div>
-            <div class="data-hover-divider"></div>
-            <div class="data-hover-item">
-              <span class="data-hover-label">Cache</span>
-              <span class="data-hover-val">Prices 5min · Mkt Cap 24h</span>
-            </div>
-            <div class="data-hover-divider"></div>
-            <div class="data-hover-item">
-              <span class="data-hover-label">Corp Actions</span>
-              <span class="data-hover-val">Splits auto-detected &amp; chg% normalized</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── Index selector — inject per-render CSS targeting button keys ─────
+    # All controls (index, view, sector, top_n) live in the sidebar.
+    # Read their current values from session_state here.
     if "idx_choice" not in st.session_state:
         st.session_state["idx_choice"] = "S&P 500"
 
-    is_sp  = st.session_state["idx_choice"] == "S&P 500"
-    is_ndx = not is_sp
+    idx_choice  = st.session_state["idx_choice"]
+    etf_label   = "SPY" if idx_choice == "S&P 500" else "QQQ"
+    index_label = "Overall S&P 500 Index Move" if idx_choice == "S&P 500" else "Overall Nasdaq 100 Move"
 
-    sp_bg   = "rgba(255,255,255,.14)"  if is_sp  else "transparent"
-    sp_bd   = "rgba(255,255,255,.55)"  if is_sp  else "rgba(120,140,200,.18)"
-    sp_col  = "#FFFFFF"                if is_sp  else "rgba(255,255,255,.3)"
-    sp_fw   = "700"                    if is_sp  else "400"
-    ndx_bg  = "rgba(255,255,255,.14)"  if is_ndx else "transparent"
-    ndx_bd  = "rgba(255,255,255,.55)"  if is_ndx else "rgba(120,140,200,.18)"
-    ndx_col = "#FFFFFF"                if is_ndx else "rgba(255,255,255,.3)"
-    ndx_fw  = "700"                    if is_ndx else "400"
-
-    st.markdown(f"""
+    # ── Page-scoped font bump ──────────────────────────────────────────────
+    st.markdown("""
     <style>
-    button[aria-label="S&P 500"] {{ background:{sp_bg}!important; border-color:{sp_bd}!important; color:{sp_col}!important; font-weight:{sp_fw}!important; }}
-    button[aria-label="Nasdaq 100"] {{ background:{ndx_bg}!important; border-color:{ndx_bd}!important; color:{ndx_col}!important; font-weight:{ndx_fw}!important; }}
+    .screener-title { font-size: 22px !important; }
+    .screener-meta  { font-size: 12px !important; }
     </style>
     """, unsafe_allow_html=True)
 
-    col_sp, col_ndx, col_rest = st.columns([1, 1, 8])
-    with col_sp:
-        if st.button("S&P 500", key="btn_sp500", use_container_width=True):
-            st.session_state["idx_choice"] = "S&P 500"
-            st.rerun()
-    with col_ndx:
-        if st.button("Nasdaq 100", key="btn_ndx100", use_container_width=True):
-            st.session_state["idx_choice"] = "Nasdaq 100"
-            st.rerun()
-    idx_choice = st.session_state["idx_choice"]
-    etf_label  = "SPY" if idx_choice == "S&P 500" else "QQQ"
-    index_label = "Overall S&P 500 Index Move" if idx_choice == "S&P 500" else "Overall Nasdaq 100 Move"
+    # ── Minimal main-content title ─────────────────────────────────────────
+    st.markdown(
+        f"<div class='screener-title' style='font-weight:700;color:#FFF;"
+        f"padding:20px 0 12px'>📈 Markets Screener"
+        f"<span style='font-size:13px;font-weight:400;color:rgba(255,255,255,.35);"
+        f"margin-left:12px'>{idx_choice}</span></div>",
+        unsafe_allow_html=True,
+    )
 
     # ── Load holdings (full, incl. non-priceable for cash bucketing) ───────
     with st.spinner("Loading constituent list…"):
@@ -3101,46 +3074,20 @@ def render_screener() -> None:
         unsafe_allow_html=True
     )
 
-    # ── Sector filter (applies to the displayed table only) ───────────────
-    sectors    = ["All"] + sorted([s for s in quoted["sector"].dropna().unique().tolist() if s != "—"])
+    # ── Read controls from session_state (all set by sidebar) ───────────────
+    # Update the available sectors cache so the sidebar selectbox has the
+    # correct options on the next rerun.
+    sectors = ["All"] + sorted([s for s in quoted["sector"].dropna().unique().tolist() if s != "—"])
     if (quoted["sector"] == "—").any():
         sectors = sectors + ["—"]
-    sector_sel = st.selectbox("Filter by Sector", sectors, key="sector_sel",
-                              label_visibility="collapsed")
+    st.session_state["available_sectors"] = sectors
 
-    # ── View toggle: Gainers / Losers ─────────────────────────────────────
-    if "view_sel" not in st.session_state:
-        st.session_state["view_sel"] = "Gainers"
-    is_gainers = st.session_state["view_sel"] == "Gainers"
-    is_losers  = not is_gainers
+    sector_sel = st.session_state.get("sector_sel", "All")
+    if sector_sel not in sectors:
+        sector_sel = "All"
+        st.session_state["sector_sel"] = "All"
 
-    g_bg  = "rgba(15,214,138,.15)"  if is_gainers else "transparent"
-    g_bd  = "rgba(15,214,138,.5)"   if is_gainers else "rgba(15,214,138,.2)"
-    g_col = "#0FD68A"
-    g_fw  = "700"                   if is_gainers else "400"
-    l_bg  = "rgba(240,72,90,.15)"   if is_losers  else "transparent"
-    l_bd  = "rgba(240,72,90,.5)"    if is_losers  else "rgba(240,72,90,.2)"
-    l_col = "#F0485A"
-    l_fw  = "700"                   if is_losers  else "400"
-
-    st.markdown(f"""
-    <style>
-    button[aria-label="Gainers"] {{ background:{g_bg}!important; border-color:{g_bd}!important; color:{g_col}!important; font-weight:{g_fw}!important; }}
-    button[aria-label="Losers"]  {{ background:{l_bg}!important; border-color:{l_bd}!important; color:{l_col}!important; font-weight:{l_fw}!important; }}
-    </style>
-    """, unsafe_allow_html=True)
-
-    col_g, col_l, col_vrest = st.columns([1, 1, 8])
-    with col_g:
-        if st.button("Gainers", key="btn_gainers", use_container_width=True):
-            st.session_state["view_sel"] = "Gainers"
-            st.rerun()
-    with col_l:
-        if st.button("Losers", key="btn_losers", use_container_width=True):
-            st.session_state["view_sel"] = "Losers"
-            st.rerun()
-
-    view = st.session_state["view_sel"]
+    view = st.session_state.get("view_sel", "Gainers")
 
     # ── Build the directional pool (used for both the table and Top-N) ─────
     df = quoted.copy()
@@ -3153,35 +3100,17 @@ def render_screener() -> None:
         direction_pool = df[df["chg_pct"] < 0].sort_values("chg_pct", ascending=True).reset_index(drop=True)
 
     pool_size = len(direction_pool)
+    # Cache pool_size so the sidebar slider can set its max correctly next rerun
+    st.session_state["pool_size"] = pool_size
 
-    # ── Dynamic Top-N scroller ────────────────────────────────────────────
-    if pool_size >= 1:
-        default_n = min(10, pool_size)
-        if pool_size == 1:
-            top_n = 1
-            st.markdown(
-                "<div style='font-family:Aptos,monospace;font-size:13px;"
-                "color:#4D6080;margin:4px 0 10px'>Only 1 "
-                f"{view.lower()[:-1]} in pool</div>",
-                unsafe_allow_html=True,
-            )
-        else:
-            top_n = st.slider(
-                f"Top N {view}",
-                min_value=1, max_value=pool_size, value=default_n, step=1,
-                key=f"topn_{idx_choice}_{view}",
-                help=f"Average return of the top N {view.lower()} by % change",
-            )
-    else:
-        top_n = 0
+    # Read Top N from sidebar slider (clamped to actual pool size)
+    top_n = min(st.session_state.get("top_n_val", 10), pool_size) if pool_size >= 1 else 0
 
     top_n_slice  = direction_pool.head(top_n) if top_n > 0 else direction_pool.head(0)
     top_n_avg    = top_n_slice["chg_pct"].mean() if not top_n_slice.empty else 0.0
     top_n_label  = f"Top {top_n} {view} Avg"
 
     # Index-return contribution of those same Top N names: Σ(weightᵢ × chgᵢ).
-    # weight is a fraction and chg_pct is in %, so the product is in % units;
-    # ×100 expresses it in basis points (the readable unit for a contribution).
     if not top_n_slice.empty:
         top_n_contrib_bps = float((top_n_slice["weight"] * top_n_slice["chg_pct"]).sum()) * 100
     else:
@@ -3401,41 +3330,164 @@ def main():
     sgt = timezone(timedelta(hours=8))
     now_str = datetime.now(sgt).strftime("%d %b %Y · %H:%M SGT")
 
-    # ── Page toggle: MACRO / MARKETS ──────────────────────────────────────
-    if "page" not in st.session_state:
-        st.session_state["page"] = "MACRO"
+    # ── Initialise session state ───────────────────────────────────────────
+    if "page"               not in st.session_state: st.session_state["page"]               = "MACRO"
+    if "idx_choice"         not in st.session_state: st.session_state["idx_choice"]         = "S&P 500"
+    if "view_sel"           not in st.session_state: st.session_state["view_sel"]           = "Gainers"
+    if "top_n_val"          not in st.session_state: st.session_state["top_n_val"]          = 10
+    if "sector_sel"         not in st.session_state: st.session_state["sector_sel"]         = "All"
+    if "available_sectors"  not in st.session_state: st.session_state["available_sectors"]  = ["All"]
+    if "pool_size"          not in st.session_state: st.session_state["pool_size"]          = 50
+
+    # ── Sidebar ────────────────────────────────────────────────────────────
+    # All navigation and Markets controls live here. Streamlit re-runs the
+    # whole script on every interaction, so sidebar widgets simply write to
+    # session_state and the main content area reads from it.
 
     is_macro   = st.session_state["page"] == "MACRO"
     is_markets = not is_macro
-    m_bg  = "rgba(91,141,239,.22)"  if is_macro   else "transparent"
-    m_bd  = "rgba(91,141,239,.7)"   if is_macro   else "rgba(120,140,200,.2)"
-    m_col = "#FFFFFF"               if is_macro   else "rgba(255,255,255,.35)"
-    m_fw  = "700"                   if is_macro   else "400"
-    mk_bg = "rgba(91,141,239,.22)"  if is_markets else "transparent"
-    mk_bd = "rgba(91,141,239,.7)"   if is_markets else "rgba(120,140,200,.2)"
-    mk_col= "#FFFFFF"               if is_markets else "rgba(255,255,255,.35)"
-    mk_fw = "700"                   if is_markets else "400"
+
+    # ── Active-state CSS for all sidebar + legacy nav buttons ─────────────
+    # Sidebar buttons are targeted by aria-label. All colour tokens are
+    # injected here in one block so the dynamic f-string logic is centralised.
+    idx_choice_css = st.session_state.get("idx_choice", "S&P 500")
+    view_css       = st.session_state.get("view_sel", "Gainers")
+
+    sp_active  = idx_choice_css == "S&P 500"
+    ndx_active = not sp_active
+    g_active   = view_css == "Gainers"
+    l_active   = not g_active
+
+    sp_bg  = "rgba(255,255,255,.14)" if sp_active  else "transparent"
+    sp_bd  = "rgba(255,255,255,.55)" if sp_active  else "rgba(120,140,200,.18)"
+    sp_fw  = "700"                   if sp_active  else "400"
+    sp_col = "#FFFFFF"
+    ndx_bg  = "rgba(255,255,255,.14)" if ndx_active else "transparent"
+    ndx_bd  = "rgba(255,255,255,.55)" if ndx_active else "rgba(120,140,200,.18)"
+    ndx_fw  = "700"                   if ndx_active else "400"
+    ndx_col = "#FFFFFF"
+    g_bg   = "rgba(15,214,138,.15)"  if g_active else "transparent"
+    g_bd   = "rgba(15,214,138,.5)"   if g_active else "rgba(15,214,138,.2)"
+    g_fw   = "700"                   if g_active else "400"
+    l_bg   = "rgba(240,72,90,.15)"   if l_active else "transparent"
+    l_bd   = "rgba(240,72,90,.5)"    if l_active else "rgba(240,72,90,.2)"
+    l_fw   = "700"                   if l_active else "400"
+    m_bg   = "rgba(91,141,239,.22)"  if is_macro   else "transparent"
+    m_bd   = "rgba(91,141,239,.7)"   if is_macro   else "rgba(120,140,200,.2)"
+    m_fw   = "700"                   if is_macro   else "400"
+    mk_bg  = "rgba(91,141,239,.22)"  if is_markets else "transparent"
+    mk_bd  = "rgba(91,141,239,.7)"   if is_markets else "rgba(120,140,200,.2)"
+    mk_fw  = "700"                   if is_markets else "400"
 
     st.markdown(f"""
     <style>
-    button[aria-label="📊  MACRO"]   {{ background:{m_bg}!important;  border-color:{m_bd}!important;  color:{m_col}!important;  font-weight:{m_fw}!important;  }}
-    button[aria-label="📈  MARKETS"] {{ background:{mk_bg}!important; border-color:{mk_bd}!important; color:{mk_col}!important; font-weight:{mk_fw}!important; }}
+    button[aria-label="📊  Macro"]     {{ background:{m_bg}!important;  border-color:{m_bd}!important;  font-weight:{m_fw}!important; color:#FFFFFF!important; }}
+    button[aria-label="📈  Markets"]   {{ background:{mk_bg}!important; border-color:{mk_bd}!important; font-weight:{mk_fw}!important; color:#FFFFFF!important; }}
+    button[aria-label="S&P 500"]       {{ background:{sp_bg}!important; border-color:{sp_bd}!important; font-weight:{sp_fw}!important; color:{sp_col}!important; }}
+    button[aria-label="Nasdaq 100"]    {{ background:{ndx_bg}!important;border-color:{ndx_bd}!important;font-weight:{ndx_fw}!important;color:{ndx_col}!important;}}
+    button[aria-label="Gainers"]       {{ background:{g_bg}!important;  border-color:{g_bd}!important;  font-weight:{g_fw}!important;  color:#0FD68A!important; }}
+    button[aria-label="Losers"]        {{ background:{l_bg}!important;  border-color:{l_bd}!important;  font-weight:{l_fw}!important;  color:#F0485A!important; }}
     </style>
     """, unsafe_allow_html=True)
 
-    st.markdown("<div style='padding:20px 0 0'>", unsafe_allow_html=True)
-    col_macro, col_markets, col_spacer = st.columns([1, 1, 8])
-    with col_macro:
-        if st.button("📊  MACRO", key="btn_macro", use_container_width=True):
+    with st.sidebar:
+        # ── Identity ──────────────────────────────────────────────────────
+        st.markdown("""
+        <div class="sb-logo">
+          <div class="sb-logo-sub">US Markets Suite</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # ── Navigation ────────────────────────────────────────────────────
+        st.markdown('<div class="sb-section-label">Navigation</div>', unsafe_allow_html=True)
+        if st.button("📊  Macro", key="btn_macro", use_container_width=True):
             st.session_state["page"] = "MACRO"
             st.rerun()
-    with col_markets:
-        if st.button("📈  MARKETS", key="btn_markets", use_container_width=True):
+        if st.button("📈  Markets", key="btn_markets", use_container_width=True):
             st.session_state["page"] = "MARKETS"
             st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── Route to MARKETS screener ──────────────────────────────────────────
+        # ── Markets controls (only when on Markets tab) ───────────────────
+        if is_markets:
+            st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
+
+            # Index
+            st.markdown('<div class="sb-section-label">Index</div>', unsafe_allow_html=True)
+            col_sp, col_ndx = st.columns(2)
+            with col_sp:
+                if st.button("S&P 500", key="btn_sp500", use_container_width=True):
+                    st.session_state["idx_choice"] = "S&P 500"
+                    st.rerun()
+            with col_ndx:
+                if st.button("Nasdaq 100", key="btn_ndx100", use_container_width=True):
+                    st.session_state["idx_choice"] = "Nasdaq 100"
+                    st.rerun()
+
+            st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
+
+            # View
+            st.markdown('<div class="sb-section-label">View</div>', unsafe_allow_html=True)
+            col_g, col_l = st.columns(2)
+            with col_g:
+                if st.button("Gainers", key="btn_gainers", use_container_width=True):
+                    st.session_state["view_sel"] = "Gainers"
+                    st.rerun()
+            with col_l:
+                if st.button("Losers", key="btn_losers", use_container_width=True):
+                    st.session_state["view_sel"] = "Losers"
+                    st.rerun()
+
+            st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
+
+            # Top N — max capped at pool_size stored from previous render;
+            # defaults to 50 on first load and is clamped in render_screener.
+            st.markdown('<div class="sb-section-label">Top N</div>', unsafe_allow_html=True)
+            pool_max = max(1, st.session_state.get("pool_size", 50))
+            top_n_default = min(10, pool_max)
+            st.slider(
+                "Top N",
+                min_value=1,
+                max_value=pool_max,
+                value=st.session_state.get("top_n_val", top_n_default),
+                step=1,
+                key="sb_top_n",
+                label_visibility="collapsed",
+            )
+            st.session_state["top_n_val"] = st.session_state["sb_top_n"]
+
+            st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
+
+            # Sector filter — populated with sectors cached from last render.
+            # Shows only "All" on very first load, full list from second load onward.
+            st.markdown('<div class="sb-section-label">Sector</div>', unsafe_allow_html=True)
+            available_sectors = st.session_state.get("available_sectors", ["All"])
+            prev_sel = st.session_state.get("sector_sel", "All")
+            sec_idx  = available_sectors.index(prev_sel) if prev_sel in available_sectors else 0
+            sector_sel = st.selectbox(
+                "Sector",
+                available_sectors,
+                index=sec_idx,
+                key="sb_sector",
+                label_visibility="collapsed",
+            )
+            st.session_state["sector_sel"] = sector_sel
+
+            st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
+
+            # DATA methodology
+            st.markdown('<div class="sb-section-label">Data</div>', unsafe_allow_html=True)
+            holdings_date = _get_holdings_date()
+            st.markdown(f"""
+            <div class="sb-footnote">
+              <b style="color:rgba(255,255,255,.6)">Universe</b><br>{holdings_date}<br><br>
+              <b style="color:rgba(255,255,255,.6)">Prices</b><br>Yahoo Finance · Market-state aware<br><br>
+              <b style="color:rgba(255,255,255,.6)">Weights</b><br>Live shares × price<br><br>
+              <b style="color:rgba(255,255,255,.6)">Cache</b><br>Prices 5 min · Sectors 24 h<br><br>
+              <b style="color:rgba(255,255,255,.6)">Corp Actions</b><br>Splits auto-detected · chg% normalised
+            </div>
+            """, unsafe_allow_html=True)
+
+    # ── Route to page ──────────────────────────────────────────────────────
     if st.session_state["page"] == "MARKETS":
         render_screener()
         return
