@@ -3540,21 +3540,32 @@ def main():
 
             st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
 
-            # Top N — max capped at pool_size stored from previous render;
-            # defaults to 50 on first load and is clamped in render_screener.
+            # Top N — slider for visual selection + number input for precise entry.
+            # The number input takes priority when the user types a value directly.
             st.markdown('<div class="sb-section-label">Top N</div>', unsafe_allow_html=True)
             pool_max = max(1, st.session_state.get("pool_size", 50))
-            top_n_default = min(10, pool_max)
+            current  = min(st.session_state.get("top_n_val", 10), pool_max)
+
             st.slider(
                 "Top N",
-                min_value=1,
-                max_value=pool_max,
-                value=st.session_state.get("top_n_val", top_n_default),
-                step=1,
+                min_value=1, max_value=pool_max,
+                value=current, step=1,
                 key="sb_top_n",
                 label_visibility="collapsed",
             )
-            st.session_state["top_n_val"] = st.session_state["sb_top_n"]
+            st.number_input(
+                "Type exact number",
+                min_value=1, max_value=pool_max,
+                value=current, step=1,
+                key="sb_top_n_num",
+                label_visibility="collapsed",
+                help="Type an exact value instead of dragging the slider",
+            )
+
+            # Sync: number_input wins if it changed from last render, else slider wins
+            slider_v = int(st.session_state["sb_top_n"])
+            num_v    = int(st.session_state["sb_top_n_num"])
+            st.session_state["top_n_val"] = num_v if num_v != current else slider_v
 
             st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
 
