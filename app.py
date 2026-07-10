@@ -2757,47 +2757,47 @@ _SORTABLE_TABLE_TEMPLATE = """
 <style>
   * { box-sizing: border-box; }
   html, body {
-      margin: 0; background: #06080F;
+      margin: 0; background: #FFFFFF;
       font-family: 'Aptos', 'Segoe UI', system-ui, sans-serif;
   }
   .table-wrap {
-      background: #0B1020; border: 1px solid rgba(120,140,200,.1);
+      background: #FFFFFF; border: 1px solid #D8E0F0;
       border-radius: 10px; overflow: hidden; overflow-x: auto;
   }
   table.stock-table { width: 100%; border-collapse: collapse; }
   .stock-table th {
       font-family: 'Aptos', monospace;
       font-size: 11px; font-weight: 700; letter-spacing: .7px;
-      text-transform: uppercase; color: #FFFFFF;
-      padding: 8px 12px; border-bottom: 1px solid rgba(120,140,200,.1);
-      text-align: left; background: #080C16;
+      text-transform: uppercase; color: #1A2540;
+      padding: 8px 12px; border-bottom: 1px solid #D8E0F0;
+      text-align: left; background: #EEF2FC;
       cursor: pointer; user-select: none; white-space: nowrap;
   }
-  .stock-table th:hover { background: #0d1322; color: #7BA4F5; }
-  .stock-table th .sort-arrow { font-size: 9px; color: #5B8DEF; margin-left: 4px; }
+  .stock-table th:hover { background: #E2E9F8; color: #3D6DD6; }
+  .stock-table th .sort-arrow { font-size: 9px; color: #3D6DD6; margin-left: 4px; }
   .stock-table td {
       font-family: 'Aptos', monospace;
       font-size: 14px; padding: 9px 12px;
-      border-bottom: 1px solid rgba(120,140,200,.05);
-      color: #FFFFFF;
+      border-bottom: 1px solid #F0F4FC;
+      color: #1A2540;
   }
-  .stock-table tr:hover td { background: rgba(91,141,239,.04); }
-  .chg-pos { color: #0FD68A !important; font-weight: 700; }
-  .chg-neg { color: #F0485A !important; font-weight: 700; }
+  .stock-table tr:hover td { background: rgba(91,141,239,.05); }
+  .chg-pos { color: #0CA86C !important; font-weight: 700; }
+  .chg-neg { color: #C8303F !important; font-weight: 700; }
   .ticker-badge {
-      font-weight: 700; color: #7BA4F5;
-      background: rgba(91,141,239,.08);
+      font-weight: 700; color: #3D6DD6;
+      background: rgba(91,141,239,.1);
       padding: 2px 7px; border-radius: 4px;
       font-size: 13px;
   }
   .sector-tag {
       font-size: 11px; padding: 2px 7px; border-radius: 3px;
-      background: rgba(255,255,255,.05);
-      border: 1px solid rgba(120,140,200,.1);
-      color: #FFFFFF; white-space: nowrap;
+      background: rgba(91,141,239,.08);
+      border: 1px solid rgba(91,141,239,.2);
+      color: #1A2540; white-space: nowrap;
   }
   ::-webkit-scrollbar { height: 8px; width: 8px; }
-  ::-webkit-scrollbar-thumb { background: rgba(120,140,200,.25); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb { background: rgba(91,141,239,.2); border-radius: 4px; }
 </style></head>
 <body>
 <div class="table-wrap">
@@ -2883,9 +2883,9 @@ def render_screener() -> None:
 
     # ── Minimal main-content title ─────────────────────────────────────────
     st.markdown(
-        f"<div class='screener-title' style='font-weight:700;color:#FFF;"
+        f"<div class='screener-title' style='font-weight:700;color:#1A2540;"
         f"padding:20px 0 12px'>📈 Markets Screener"
-        f"<span style='font-size:13px;font-weight:400;color:rgba(255,255,255,.35);"
+        f"<span style='font-size:13px;font-weight:400;color:#4D6080;"
         f"margin-left:12px'>{idx_choice}</span></div>",
         unsafe_allow_html=True,
     )
@@ -3042,36 +3042,37 @@ def render_screener() -> None:
     now_sgt_str   = datetime.now(sgt).strftime("%H:%M SGT")
 
     # ── Market state status badge ─────────────────────────────────────────
+    _txt = "#1A2540"   # dark text for white background
     if market_state == "open":
         state_html = (
             f"<span style='color:#0FD68A;font-weight:700'>● LIVE</span>"
-            f"<span style='color:#FFFFFF'> (~15min delay) · "
+            f"<span style='color:{_txt}'> (~15min delay) · "
             f"{active_count} of {total_universe} stocks active · "
             f"as of {now_sgt_str}</span>"
         )
     elif market_state == "pre":
         state_html = (
             f"<span style='color:#F59E0B;font-weight:700'>● PRE-MARKET</span>"
-            f"<span style='color:#FFFFFF'> (~15min delay) · "
+            f"<span style='color:{_txt}'> (~15min delay) · "
             f"{active_count} of {total_universe} stocks active · "
             f"as of {now_sgt_str}</span>"
         )
     elif market_state == "after_hours":
         state_html = (
             f"<span style='color:#A78BFA;font-weight:700'>● AFTER-HOURS</span>"
-            f"<span style='color:#FFFFFF'> (~15min delay) · "
+            f"<span style='color:{_txt}'> (~15min delay) · "
             f"{active_count} of {total_universe} stocks active · "
             f"as of {now_sgt_str}</span>"
         )
     else:
         state_html = (
             f"<span style='color:#F0485A;font-weight:700'>● CLOSED</span>"
-            f"<span style='color:#FFFFFF'> · showing {trade_date} official close · "
+            f"<span style='color:{_txt}'> · showing {trade_date} official close · "
             f"{active_count} stocks</span>"
         )
 
     st.markdown(
-        f"<div style='font-family:Aptos,monospace;font-size:16px;margin-bottom:14px'>"
+        f"<div style='font-family:Aptos,monospace;font-size:16px;margin-bottom:14px;color:{_txt}'>"
         f"✓ {state_html}"
         f"</div>",
         unsafe_allow_html=True
@@ -3083,7 +3084,13 @@ def render_screener() -> None:
     sectors = ["All"] + sorted([s for s in quoted["sector"].dropna().unique().tolist() if s != "—"])
     if (quoted["sector"] == "—").any():
         sectors = sectors + ["—"]
+
+    old_sectors = st.session_state.get("available_sectors", ["All"])
     st.session_state["available_sectors"] = sectors
+    # First time data loads, trigger a rerun so the sidebar selectbox
+    # immediately shows the full sector list rather than just "All".
+    if len(old_sectors) <= 1 and len(sectors) > 1:
+        st.rerun()
 
     sector_sel = st.session_state.get("sector_sel", "All")
     if sector_sel not in sectors:
@@ -3127,49 +3134,43 @@ def render_screener() -> None:
 
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     for col, label, val, color in [
-        (c1, "Gainers",       f"{gainers}",               "#0FD68A"),
-        (c2, "Losers",        f"{losers}",                "#F0485A"),
-        (c3, "Unchanged",     f"{unchanged}",             "#8898BB"),
-        (c4, top_n_label,     f"{top_n_avg:+.2f}%",       "#0FD68A" if top_n_avg          >= 0 else "#F0485A"),
-        (c5, top_n_contrib_label, f"{top_n_contrib_bps:+.1f}bps", "#0FD68A" if top_n_contrib_bps >= 0 else "#F0485A"),
-        (c6, index_label, f"{weighted_return:+.2f}%", "#0FD68A" if weighted_return    >= 0 else "#F0485A"),
+        (c1, "Gainers",       f"{gainers}",               "#0CA86C"),
+        (c2, "Losers",        f"{losers}",                "#C8303F"),
+        (c3, "Unchanged",     f"{unchanged}",             "#4D6080"),
+        (c4, top_n_label,     f"{top_n_avg:+.2f}%",       "#0CA86C" if top_n_avg          >= 0 else "#C8303F"),
+        (c5, top_n_contrib_label, f"{top_n_contrib_bps:+.1f}bps", "#0CA86C" if top_n_contrib_bps >= 0 else "#C8303F"),
+        (c6, index_label, f"{weighted_return:+.2f}%", "#0CA86C" if weighted_return    >= 0 else "#C8303F"),
     ]:
         with col:
             st.markdown(f"""
-            <div style="background:#0D1628;border:1px solid rgba(120,140,200,.1);
+            <div style="background:#F0F4FF;border:1px solid rgba(91,141,239,.2);
                 border-radius:8px;padding:12px 16px;text-align:center">
               <div style="font-family:'Aptos',monospace;font-size:11px;
-                   color:#FFFFFF;letter-spacing:.6px;text-transform:uppercase;
+                   color:#4D6080;letter-spacing:.6px;text-transform:uppercase;
                    margin-bottom:4px">{label}</div>
               <div style="font-family:'Aptos',monospace;font-size:24px;
                    font-weight:700;color:{color}">{val}</div>
             </div>
             """, unsafe_allow_html=True)
 
-    # ── Coverage caption for the index-return figure ─────────────────────
-    st.markdown(
-        f"<div style='font-family:Aptos,monospace;font-size:12px;"
-        f"color:#8898BB;margin-top:10px'>"
+    # ── Cache footnotes for sidebar "About" section ──────────────────────
+    st.session_state["screener_about_main"] = (
         f"ⓘ {etf_label} Return = Σ(weightᵢ × chgᵢ) over the full {total_universe}-name base; "
         f"{quoted_weight:.1f}% of index weight is currently quoted "
         f"({priced_with_quote}/{total_universe} names), the rest assumed flat. "
         f"Top {top_n} {view} Contrib = those same {top_n} names' share of that move, "
         f"in basis points (Σ weightᵢ × chgᵢ). "
         f"Pre/after-hours figures will differ from the ETF's own live quote due to "
-        f"thin, unsynchronized constituent prints.</div>",
-        unsafe_allow_html=True
+        f"thin, unsynchronized constituent prints."
     )
-
-    # ── Cash & Other note ─────────────────────────────────────────────────
     if cash_count > 0:
         names_str = ", ".join(cash_names[:6]) + ("…" if cash_count > 6 else "")
-        st.markdown(
-            f"<div style='font-family:Aptos,monospace;font-size:12px;"
-            f"color:#8898BB;margin-top:6px'>"
-            f"⊘ {cash_count} non-priceable holding(s) treated as Cash &amp; Other "
-            f"(excluded from weighted return): {names_str}</div>",
-            unsafe_allow_html=True
+        st.session_state["screener_about_cash"] = (
+            f"⊘ {cash_count} non-priceable holding(s) treated as Cash & Other "
+            f"(excluded from weighted return): {names_str}"
         )
+    else:
+        st.session_state["screener_about_cash"] = ""
 
     st.markdown("<div style='margin-top:16px'></div>", unsafe_allow_html=True)
 
@@ -3236,14 +3237,13 @@ def render_screener() -> None:
     )
     col_dl, col_pad = st.columns([2, 8])
     with col_dl:
-        # Scoped styling so the download button reads clearly on the dark
-        # theme (default Streamlit renders white-on-white here).
+        # Export button styled for white background
         st.markdown("""
         <style>
         div[data-testid="stDownloadButton"] button {
-            background: #0D1628 !important;
-            border: 1px solid rgba(15,180,90,.45) !important;
-            color: #FFFFFF !important;
+            background: #EEF2FC !important;
+            border: 1px solid rgba(61,109,214,.4) !important;
+            color: #1A2540 !important;
             font-family: 'Aptos', sans-serif !important;
             font-size: 14px !important;
             font-weight: 600 !important;
@@ -3251,17 +3251,11 @@ def render_screener() -> None:
             padding: 8px 18px !important;
             border-radius: 6px !important;
             transition: all .15s !important;
-            box-shadow: 0 0 0 0 rgba(15,180,90,0) !important;
         }
         div[data-testid="stDownloadButton"] button:hover {
-            background: rgba(15,180,90,.12) !important;
-            border-color: rgba(15,180,90,.85) !important;
-            box-shadow: 0 0 12px rgba(15,180,90,.18) !important;
-            color: #FFFFFF !important;
-        }
-        div[data-testid="stDownloadButton"] button:focus {
-            outline: none !important;
-            box-shadow: 0 0 0 2px rgba(15,180,90,.35) !important;
+            background: #dde5f7 !important;
+            border-color: rgba(61,109,214,.7) !important;
+            color: #1A2540 !important;
         }
         </style>
         """, unsafe_allow_html=True)
@@ -3307,9 +3301,9 @@ def render_screener() -> None:
               {chg_sign} {abs(row['chg_pct']):.2f}%</td>
           <td data-sort="{row['chg_abs']}" class="{chg_cls}" style="text-align:right">
               {'+' if row['chg_abs']>=0 else ''}{row['chg_abs']:.2f}</td>
-          <td data-sort="{wt_pct}" style="text-align:right;color:#FFFFFF">{wt_pct:.2f}%</td>
-          <td data-sort="{row['volume']}" style="text-align:right;color:#FFFFFF">{fmt_volume(row['volume'])}</td>
-          <td data-sort="{mkt_cap_sort}" style="text-align:right;color:#FFFFFF">{fmt_mktcap(row.get('mkt_cap'))}</td>
+          <td data-sort="{wt_pct}" style="text-align:right;color:#1A2540">{wt_pct:.2f}%</td>
+          <td data-sort="{row['volume']}" style="text-align:right;color:#1A2540">{fmt_volume(row['volume'])}</td>
+          <td data-sort="{mkt_cap_sort}" style="text-align:right;color:#1A2540">{fmt_mktcap(row.get('mkt_cap'))}</td>
         </tr>"""
 
     table_doc    = _SORTABLE_TABLE_TEMPLATE.replace("__ROWS__", rows_html)
@@ -3317,7 +3311,7 @@ def render_screener() -> None:
     components.html(table_doc, height=table_height, scrolling=True)
 
     st.markdown(f"""
-    <div style="font-family:'Aptos',monospace;font-size:11px;color:#4D6080;
+    <div style="font-family:'Aptos',monospace;font-size:11px;color:#6B7A99;
         margin-top:8px;text-align:right">
       Data: Yahoo Finance · Weights: live shares × price · Market cap: prev-day close ·
       Showing all {len(direction_pool)} {view.lower()} of {active_count} priced · Click any column header to sort ↕ ·
@@ -3349,6 +3343,22 @@ def main():
 
     is_macro   = st.session_state["page"] == "MACRO"
     is_markets = not is_macro
+
+    # ── Dynamic background: white for Markets, dark for Macro ─────────────
+    if is_markets:
+        st.markdown("""
+        <style>
+        [data-testid="stMain"]                       { background: #FFFFFF !important; }
+        [data-testid="stMain"] .block-container      { background: #FFFFFF !important; }
+        </style>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <style>
+        [data-testid="stMain"]                       { background: #06080F !important; }
+        [data-testid="stMain"] .block-container      { background: #06080F !important; }
+        </style>
+        """, unsafe_allow_html=True)
 
     # ── Active-state CSS for all sidebar + legacy nav buttons ─────────────
     # Sidebar buttons are targeted by aria-label. All colour tokens are
@@ -3397,8 +3407,7 @@ def main():
         # ── Identity ──────────────────────────────────────────────────────
         st.markdown("""
         <div class="sb-logo">
-          <div class="sb-logo-title">🏦 Helios Capital</div>
-          <div class="sb-logo-sub">US Markets Suite</div>
+          <div class="sb-logo-title">📊 US Markets</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -3478,8 +3487,25 @@ def main():
 
             st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
 
-            # DATA methodology
-            st.markdown('<div class="sb-section-label">Data</div>', unsafe_allow_html=True)
+            # About — methodology footnotes cached from last render_screener() call
+            st.markdown('<div class="sb-section-label">About</div>', unsafe_allow_html=True)
+            about_main = st.session_state.get("screener_about_main", "")
+            about_cash = st.session_state.get("screener_about_cash", "")
+            if about_main:
+                st.markdown(
+                    f'<div class="sb-footnote">{about_main}</div>',
+                    unsafe_allow_html=True,
+                )
+                if about_cash:
+                    st.markdown(
+                        f'<div class="sb-footnote" style="margin-top:8px">{about_cash}</div>',
+                        unsafe_allow_html=True,
+                    )
+            else:
+                st.markdown(
+                    '<div class="sb-footnote">Load the screener to see methodology details.</div>',
+                    unsafe_allow_html=True,
+                )
             holdings_date = _get_holdings_date()
             st.markdown(f"""
             <div class="sb-footnote">
