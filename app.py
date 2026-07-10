@@ -30,11 +30,11 @@ st.markdown("""
 <style>
 /* ── Global ── */
 html, body, [data-testid="stApp"] {
-    background-color: #06080F;
-    color: #FFFFFF;
-    font-family: 'Aptos', 'Segoe UI', system-ui, sans-serif;
+    background-color: #FFFFFF;
+    color: #1A2540;
+    font-family: 'Arial', sans-serif;
 }
-[data-testid="stAppViewContainer"] { background-color: #06080F; }
+[data-testid="stAppViewContainer"] { background-color: #FFFFFF; }
 [data-testid="stHeader"] { background: transparent; }
 section[data-testid="stSidebar"] { background: #080C16; }
 
@@ -86,8 +86,8 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 
 /* ── Hero banner ── */
 .hero-banner {
-    background: #06080F;
-    border-bottom: 1px solid rgba(91,141,239,.2);
+    background: #FFFFFF;
+    border-bottom: 1px solid rgba(91,141,239,.15);
     padding: 28px 32px 24px;
     margin: 0 -2rem 28px;
     position: relative;
@@ -118,10 +118,10 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 .hero-title {
     font-size: 28px;
     font-weight: 800;
-    color: #FFFFFF;
+    color: #1A2540;
     letter-spacing: -.5px;
     line-height: 1;
-    font-family: 'Aptos', sans-serif;
+    font-family: 'Arial', sans-serif;
 }
 .hero-title span {
     background: linear-gradient(90deg, #5B8DEF, #22D3EE);
@@ -130,14 +130,14 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     background-clip: text;
 }
 .hero-sub {
-    font-family: 'Aptos', monospace;
+    font-family: 'Arial', monospace;
     font-size: 11px;
-    color: #FFFFFF;
+    color: #4D6080;
     letter-spacing: .5px;
 }
 .hero-right { display: flex; align-items: center; gap: 10px; }
 .bls-tag {
-    font-family: 'Aptos', monospace;
+    font-family: 'Arial', monospace;
     font-size: 10px; font-weight: 700; letter-spacing: .7px;
     padding: 6px 14px; border-radius: 5px;
     background: rgba(91,141,239,.1);
@@ -164,11 +164,11 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1.5px;
-    color: #FFFFFF;
+    color: #1A2540;
     padding: 6px 0 14px;
-    border-bottom: 1px solid rgba(120,140,200,.1);
+    border-bottom: 1px solid rgba(91,141,239,.15);
     margin-bottom: 16px;
-    font-family: 'Aptos', sans-serif;
+    font-family: 'Arial', sans-serif;
 }
 .section-header .section-icon {
     color: #5B8DEF;
@@ -181,80 +181,80 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     font-weight: 700 !important;
     letter-spacing: .3px !important;
     text-transform: uppercase !important;
-    color: #FFFFFF !important;
-    font-family: 'Aptos', sans-serif !important;
+    color: #1A2540 !important;
+    font-family: 'Arial', sans-serif !important;
 }
 .ind-src {
     font-size: 9px; font-weight: 700; letter-spacing: .5px;
     padding: 3px 8px; border-radius: 3px;
-    background: rgba(91,141,239,.07);
-    border: 1px solid rgba(91,141,239,.15);
-    color: #7BA4F5;
-    font-family: 'Aptos', monospace;
+    background: rgba(91,141,239,.1);
+    border: 1px solid rgba(91,141,239,.2);
+    color: #3D6DD6;
+    font-family: 'Arial', monospace;
 }
 .ind-freq {
-    font-size: 9px; color: #FFFFFF;
+    font-size: 9px; color: #4D6080;
     padding: 3px 8px; border-radius: 3px;
-    background: rgba(255,255,255,.06);
-    border: 1px solid rgba(120,140,200,.12);
-    font-family: 'Aptos', monospace;
+    background: rgba(91,141,239,.06);
+    border: 1px solid rgba(91,141,239,.12);
+    font-family: 'Arial', monospace;
 }
 
 /* ── Stat boxes ── */
 .stat-box {
-    background: #0D1628;
-    border: 1px solid rgba(120,140,200,.12);
+    background: #F0F4FF;
+    border: 1px solid rgba(91,141,239,.15);
     border-radius: 10px;
     padding: 18px 20px 14px;
     transition: border-color .2s;
 }
-.stat-box:hover { border-color: rgba(120,140,200,.25); }
+.stat-box:hover { border-color: rgba(91,141,239,.35); }
 .stat-period {
     font-size: 14px; font-weight: 700; letter-spacing: .5px;
-    text-transform: uppercase; color: #FFFFFF;
+    text-transform: uppercase; color: #4D6080;
     margin-bottom: 10px;
-    font-family: 'Aptos', sans-serif;
+    font-family: 'Arial', sans-serif;
 }
 .stat-val {
-    font-size: 30px; font-weight: 700; color: #FFFFFF;
-    font-family: 'Aptos', monospace;
+    font-size: 30px; font-weight: 700; color: #1A2540;
+    font-family: 'Arial', monospace;
     letter-spacing: -1px; line-height: 1;
 }
 .stat-delta {
     font-size: 11px; font-weight: 600;
-    font-family: 'Aptos', monospace;
+    font-family: 'Arial', monospace;
     margin-top: 8px; display: inline-block;
     padding: 3px 9px; border-radius: 4px;
 }
-.stat-up { color: #0FD68A; background: rgba(15,214,138,.08); border: 1px solid rgba(15,214,138,.22); }
-.stat-dn { color: #F0485A; background: rgba(240,72,90,.08);  border: 1px solid rgba(240,72,90,.22); }
+.stat-up { color: #0CA86C; background: rgba(12,168,108,.08); border: 1px solid rgba(12,168,108,.22); }
+.stat-dn { color: #C8303F; background: rgba(200,48,63,.08);  border: 1px solid rgba(200,48,63,.22); }
 .stat-date {
-    font-size: 10px; color: #FFFFFF;
-    margin-top: 5px; font-family: 'Aptos', monospace;
-    opacity: .7;
+    font-size: 10px; color: #4D6080;
+    margin-top: 5px; font-family: 'Arial', monospace;
+    opacity: .85;
 }
 
 /* ── Release table ── */
-.rel-table { width: 100%; border-collapse: collapse; font-family: 'Aptos', monospace; font-size: 12px; }
+.rel-table { width: 100%; border-collapse: collapse; font-family: 'Arial', monospace; font-size: 12px; }
 .rel-table th {
     text-align: left; padding: 8px 12px;
     font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
-    color: #FFFFFF; background: #111827;
-    border-bottom: 1px solid rgba(120,140,200,.1);
-    opacity: .7;
-}
-.rel-table td {
-    padding: 8px 12px; color: #FFFFFF;
-    border-bottom: 1px solid rgba(120,140,200,.06);
+    color: #1A2540; background: #EEF2FC;
+    border-bottom: 1px solid rgba(91,141,239,.15);
     opacity: .8;
 }
+.rel-table td {
+    padding: 8px 12px; color: #1A2540;
+    border-bottom: 1px solid rgba(91,141,239,.08);
+    opacity: .85;
+}
 .rel-table tr:first-child td { opacity: 1; font-weight: 600; }
-.pos { color: #0FD68A !important; opacity: 1 !important; }
-.neg { color: #F0485A !important; opacity: 1 !important; }
+.pos { color: #0CA86C !important; opacity: 1 !important; }
+.neg { color: #C8303F !important; opacity: 1 !important; }
 
 /* ── Chart expand button ── */
 .chart-expand-btn {
-    font-family: 'Aptos', monospace;
+    font-family: 'Arial', monospace;
     font-size: 9px; font-weight: 700; letter-spacing: .4px;
     padding: 3px 9px; border-radius: 4px;
     background: rgba(91,141,239,.08);
@@ -265,7 +265,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 .chart-expand-btn:hover {
     background: rgba(91,141,239,.18);
     border-color: rgba(91,141,239,.4);
-    color: #FFFFFF;
+    color: #1A2540;
 }
 
 /* ── Modal overlay ── */
@@ -298,7 +298,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 }
 .modal-close:hover { background: rgba(240,72,90,.15); border-color: rgba(240,72,90,.3); }
 .modal-title {
-    font-family: 'Aptos', sans-serif;
+    font-family: 'Arial', sans-serif;
     font-size: 16px; font-weight: 700; color: #FFFFFF;
     margin-bottom: 16px; letter-spacing: -.2px;
 }
@@ -314,7 +314,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     align-items: center;
 }
 .data-hover-trigger {
-    font-family: 'Aptos', monospace;
+    font-family: 'Arial', monospace;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: .8px;
@@ -374,7 +374,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 .data-hover-item:first-child { padding-left: 0; }
 .data-hover-item:last-child  { padding-right: 0; }
 .data-hover-label {
-    font-family: 'Aptos', monospace;
+    font-family: 'Arial', monospace;
     font-size: 8px;
     font-weight: 700;
     letter-spacing: .7px;
@@ -382,7 +382,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     color: #4D6080;
 }
 .data-hover-val {
-    font-family: 'Aptos', monospace;
+    font-family: 'Arial', monospace;
     font-size: 11px;
     font-weight: 600;
     color: #FFFFFF;
@@ -396,13 +396,13 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 
 /* ── Streamlit button overrides (refresh) ── */
 [data-testid="stButton"] button {
-    background: rgba(255,255,255,.04) !important;
-    border: 1px solid rgba(120,140,200,.15) !important;
-    color: #FFFFFF !important;
+    background: rgba(91,141,239,.07) !important;
+    border: 1px solid rgba(91,141,239,.2) !important;
+    color: #1A2540 !important;
     font-size: 18px !important;
     padding: 4px 10px !important;
     border-radius: 6px !important;
-    font-family: 'Aptos', sans-serif !important;
+    font-family: 'Arial', sans-serif !important;
     min-height: 34px !important;
     line-height: 1 !important;
 }
@@ -412,8 +412,8 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 }
 
 /* ── Status text ── */
-.status-ok  { font-family: 'Aptos', monospace; font-size: 12px; color: #0FD68A; }
-.status-warn{ font-family: 'Aptos', monospace; font-size: 12px; color: #F59E0B; }
+.status-ok  { font-family: 'Arial', monospace; font-size: 12px; color: #0FD68A; }
+.status-warn{ font-family: 'Arial', monospace; font-size: 12px; color: #F59E0B; }
 
 /* ── Index selector buttons — active = bright white filled, inactive = dim ── */
 .idx-active button {
@@ -449,7 +449,7 @@ div[data-testid="stButton"]:has(button[kind="primaryFormSubmit"]) { display:none
 .ptbtn {
     padding: 8px 28px; border-radius: 5px;
     font-size: 12px; font-weight: 700;
-    font-family: 'Aptos', sans-serif;
+    font-family: 'Arial', sans-serif;
     letter-spacing: .5px; cursor: pointer;
     border: none; transition: all .15s;
     background: transparent; color: #4D6080;
@@ -469,19 +469,19 @@ div[data-testid="stButton"]:has(button[kind="primaryFormSubmit"]) { display:none
     margin-bottom: 16px;
 }
 .screener-title {
-    font-family: 'Aptos', sans-serif;
+    font-family: 'Arial', sans-serif;
     font-size: 20px; font-weight: 700;
     color: #FFFFFF; letter-spacing: -.2px;
 }
 .screener-meta {
-    font-family: 'Aptos', monospace;
+    font-family: 'Arial', monospace;
     font-size: 10px; color: #4D6080; letter-spacing: .4px;
 }
 .pill-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
 .pill {
     padding: 5px 14px; border-radius: 20px;
     font-size: 10px; font-weight: 700;
-    font-family: 'Aptos', monospace;
+    font-family: 'Arial', monospace;
     letter-spacing: .4px; cursor: pointer;
     border: 1px solid rgba(120,140,200,.15);
     background: rgba(255,255,255,.03); color: #8898BB;
@@ -493,14 +493,14 @@ div[data-testid="stButton"]:has(button[kind="primaryFormSubmit"]) { display:none
 }
 .stock-table { width: 100%; border-collapse: collapse; }
 .stock-table th {
-    font-family: 'Aptos', monospace;
+    font-family: 'Arial', monospace;
     font-size: 9px; font-weight: 700; letter-spacing: .7px;
     text-transform: uppercase; color: #FFFFFF;
     padding: 8px 12px; border-bottom: 1px solid rgba(120,140,200,.1);
     text-align: left; background: #080C16;
 }
 .stock-table td {
-    font-family: 'Aptos', monospace;
+    font-family: 'Arial', monospace;
     font-size: 12px; padding: 9px 12px;
     border-bottom: 1px solid rgba(120,140,200,.05);
     color: #FFFFFF;
@@ -520,8 +520,8 @@ div[data-testid="stButton"]:has(button[kind="primaryFormSubmit"]) { display:none
     border: 1px solid rgba(120,140,200,.1);
     color: #FFFFFF; white-space: nowrap;
 }
-.mkt-status-open  { color: #0FD68A; font-family: 'Aptos', monospace; font-size: 10px; font-weight: 700; }
-.mkt-status-closed{ color: #F59E0B; font-family: 'Aptos', monospace; font-size: 10px; font-weight: 700; }
+.mkt-status-open  { color: #0FD68A; font-family: 'Arial', monospace; font-size: 10px; font-weight: 700; }
+.mkt-status-closed{ color: #F59E0B; font-family: 'Arial', monospace; font-size: 10px; font-weight: 700; }
 </style>
 
 <!-- Modal HTML (shared, one instance) -->
@@ -759,10 +759,10 @@ def is_positive_signal(v: float, key: str) -> bool:
 # ─────────────────────────────────────────────────────────────────────────────
 # PLOTLY CHART
 # ─────────────────────────────────────────────────────────────────────────────
-CHART_BG  = "#0B1020"
-GRID_COL  = "rgba(120,140,200,.06)"
-AXIS_COL  = "#8898BB"
-FONT_MONO = "Aptos, Courier New, monospace"
+CHART_BG  = "#FFFFFF"
+GRID_COL  = "rgba(0,0,0,.07)"
+AXIS_COL  = "#4D6080"
+FONT_MONO = "Arial, sans-serif"
 
 def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy",
                height: int = 200) -> go.Figure:
@@ -806,7 +806,7 @@ def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy",
             marker_line_width=1,
             hovertemplate="%{x|%b %Y}<br><b>%{y:+.0f}K</b><extra></extra>",
         ))
-        fig.add_hline(y=0, line_color="rgba(120,140,200,.2)", line_width=1)
+        fig.add_hline(y=0, line_color="rgba(0,0,0,.12)", line_width=1)
 
     # ── Price index (CPI / Core CPI / PPI): MoM% or YoY% changes ──────────
     else:
@@ -820,7 +820,7 @@ def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy",
             fillcolor=hex_fill(color, 0.1),
             hovertemplate=f"%{{x|%b %Y}}<br><b>%{{y:+.2f}}{unit}</b><extra></extra>",
         ))
-        fig.add_hline(y=0, line_color="rgba(120,140,200,.2)", line_width=1)
+        fig.add_hline(y=0, line_color="rgba(0,0,0,.12)", line_width=1)
 
     fig.update_layout(
         height=height,
@@ -830,18 +830,18 @@ def make_chart(df: pd.DataFrame, cfg: dict, which: str = "yoy",
         font=dict(family=FONT_MONO, color=AXIS_COL, size=10),
         xaxis=dict(
             showgrid=False, zeroline=False,
-            tickfont=dict(size=10, color="#FFFFFF"),
+            tickfont=dict(size=10, color="#1A2540"),
             tickformat="%b '%y", nticks=6,
         ),
         yaxis=dict(
             showgrid=True, gridcolor=GRID_COL, zeroline=False,
-            tickfont=dict(size=10, color="#FFFFFF"), nticks=5,
+            tickfont=dict(size=10, color="#1A2540"), nticks=5,
             **yaxis_opts,
         ),
         hoverlabel=dict(
-            bgcolor="#0E1428",
+            bgcolor="#F0F4FF",
             bordercolor="rgba(91,141,239,.3)",
-            font=dict(family=FONT_MONO, size=12, color="#FFFFFF"),
+            font=dict(family=FONT_MONO, size=12, color="#1A2540"),
         ),
         showlegend=False,
     )
@@ -1327,7 +1327,7 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
             marker_line_width=1,
             hovertemplate="%{x|%b %Y}<br><b>%{y:+.0f}K</b><extra></extra>",
         ))
-        fig.add_hline(y=0, line_color="rgba(120,140,200,.2)", line_width=1)
+        fig.add_hline(y=0, line_color="rgba(0,0,0,.12)", line_width=1)
     else:
         hover_fmt = "%{x|%d %b '%y}<br><b>%{y:.0f}K</b>" if cfg["freq"] == "Weekly" else "%{x|%b %Y}<br><b>%{y:.1f}</b>"
         fig = go.Figure(go.Scatter(
@@ -1346,15 +1346,15 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
     fig.update_layout(
         height=200,
         margin=dict(l=0, r=0, t=8, b=0),
-        paper_bgcolor="#0B1020", plot_bgcolor="#0B1020",
-        font=dict(family="Aptos, monospace", color="#8898BB", size=10),
+        paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF",
+        font=dict(family="Arial, sans-serif", color="#8898BB", size=10),
         xaxis=dict(showgrid=False, zeroline=False,
-                   tickfont=dict(size=10, color="#FFFFFF"),
+                   tickfont=dict(size=10, color="#1A2540"),
                    tickformat="%b '%y", nticks=6),
         yaxis=dict(showgrid=True, gridcolor="rgba(120,140,200,.06)", zeroline=False,
-                   tickfont=dict(size=10, color="#FFFFFF"), nticks=5),
-        hoverlabel=dict(bgcolor="#0E1428", bordercolor="rgba(91,141,239,.3)",
-                        font=dict(family="Aptos, monospace", size=12, color="#FFFFFF")),
+                   tickfont=dict(size=10, color="#1A2540"), nticks=5),
+        hoverlabel=dict(bgcolor="#F0F4FF", bordercolor="rgba(91,141,239,.3)",
+                        font=dict(family="Arial, sans-serif", size=12, color="#1A2540")),
         showlegend=False,
     )
 
@@ -2758,7 +2758,7 @@ _SORTABLE_TABLE_TEMPLATE = """
   * { box-sizing: border-box; }
   html, body {
       margin: 0; background: #FFFFFF;
-      font-family: 'Aptos', 'Segoe UI', system-ui, sans-serif;
+      font-family: 'Arial', sans-serif;
   }
   .table-wrap {
       background: #FFFFFF; border: 1px solid #D8E0F0;
@@ -2766,7 +2766,7 @@ _SORTABLE_TABLE_TEMPLATE = """
   }
   table.stock-table { width: 100%; border-collapse: collapse; }
   .stock-table th {
-      font-family: 'Aptos', monospace;
+      font-family: 'Arial', monospace;
       font-size: 11px; font-weight: 700; letter-spacing: .7px;
       text-transform: uppercase; color: #1A2540;
       padding: 8px 12px; border-bottom: 1px solid #D8E0F0;
@@ -2776,7 +2776,7 @@ _SORTABLE_TABLE_TEMPLATE = """
   .stock-table th:hover { background: #E2E9F8; color: #3D6DD6; }
   .stock-table th .sort-arrow { font-size: 9px; color: #3D6DD6; margin-left: 4px; }
   .stock-table td {
-      font-family: 'Aptos', monospace;
+      font-family: 'Arial', monospace;
       font-size: 14px; padding: 9px 12px;
       border-bottom: 1px solid #F0F4FC;
       color: #1A2540;
@@ -3072,7 +3072,7 @@ def render_screener() -> None:
         )
 
     st.markdown(
-        f"<div style='font-family:Aptos,monospace;font-size:16px;margin-bottom:14px;color:{_txt}'>"
+        f"<div style='font-family:Arial,sans-serif;font-size:16px;margin-bottom:14px;color:{_txt}'>"
         f"✓ {state_html}"
         f"</div>",
         unsafe_allow_html=True
@@ -3145,10 +3145,10 @@ def render_screener() -> None:
             st.markdown(f"""
             <div style="background:#F0F4FF;border:1px solid rgba(91,141,239,.2);
                 border-radius:8px;padding:12px 16px;text-align:center">
-              <div style="font-family:'Aptos',monospace;font-size:11px;
+              <div style="font-family:'Arial',sans-serif;font-size:11px;
                    color:#4D6080;letter-spacing:.6px;text-transform:uppercase;
                    margin-bottom:4px">{label}</div>
-              <div style="font-family:'Aptos',monospace;font-size:24px;
+              <div style="font-family:'Arial',sans-serif;font-size:24px;
                    font-weight:700;color:{color}">{val}</div>
             </div>
             """, unsafe_allow_html=True)
@@ -3244,7 +3244,7 @@ def render_screener() -> None:
             background: #EEF2FC !important;
             border: 1px solid rgba(61,109,214,.4) !important;
             color: #1A2540 !important;
-            font-family: 'Aptos', sans-serif !important;
+            font-family: 'Arial', sans-serif !important;
             font-size: 14px !important;
             font-weight: 600 !important;
             letter-spacing: .3px !important;
@@ -3311,7 +3311,7 @@ def render_screener() -> None:
     components.html(table_doc, height=table_height, scrolling=True)
 
     st.markdown(f"""
-    <div style="font-family:'Aptos',monospace;font-size:11px;color:#6B7A99;
+    <div style="font-family:'Arial',sans-serif;font-size:11px;color:#6B7A99;
         margin-top:8px;text-align:right">
       Data: Yahoo Finance · Weights: live shares × price · Market cap: prev-day close ·
       Showing all {len(direction_pool)} {view.lower()} of {active_count} priced · Click any column header to sort ↕ ·
@@ -3344,21 +3344,13 @@ def main():
     is_macro   = st.session_state["page"] == "MACRO"
     is_markets = not is_macro
 
-    # ── Dynamic background: white for Markets, dark for Macro ─────────────
-    if is_markets:
-        st.markdown("""
-        <style>
-        [data-testid="stMain"]                       { background: #FFFFFF !important; }
-        [data-testid="stMain"] .block-container      { background: #FFFFFF !important; }
-        </style>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <style>
-        [data-testid="stMain"]                       { background: #06080F !important; }
-        [data-testid="stMain"] .block-container      { background: #06080F !important; }
-        </style>
-        """, unsafe_allow_html=True)
+    # ── White background for all pages ────────────────────────────────────
+    st.markdown("""
+    <style>
+    [data-testid="stMain"]                  { background: #FFFFFF !important; }
+    [data-testid="stMain"] .block-container { background: #FFFFFF !important; }
+    </style>
+    """, unsafe_allow_html=True)
 
     # ── Active-state CSS for all sidebar + legacy nav buttons ─────────────
     # Sidebar buttons are targeted by aria-label. All colour tokens are
@@ -3419,6 +3411,37 @@ def main():
         if st.button("📈  Markets", key="btn_markets", use_container_width=True):
             st.session_state["page"] = "MARKETS"
             st.rerun()
+
+        # ── Macro section navigation (only when on Macro tab) ─────────────
+        if is_macro:
+            if "macro_section" not in st.session_state:
+                st.session_state["macro_section"] = "Inflation"
+
+            ms = st.session_state["macro_section"]
+            inf_active = ms == "Inflation"
+            lab_active = ms == "Labour Markets"
+            inf_bg = "rgba(91,141,239,.22)" if inf_active else "transparent"
+            inf_bd = "rgba(91,141,239,.7)"  if inf_active else "rgba(120,140,200,.2)"
+            inf_fw = "700"                  if inf_active else "400"
+            lab_bg = "rgba(91,141,239,.22)" if lab_active else "transparent"
+            lab_bd = "rgba(91,141,239,.7)"  if lab_active else "rgba(120,140,200,.2)"
+            lab_fw = "700"                  if lab_active else "400"
+
+            st.markdown(f"""
+            <style>
+            button[aria-label="Inflation"]       {{ background:{inf_bg}!important; border-color:{inf_bd}!important; font-weight:{inf_fw}!important; color:#FFFFFF!important; }}
+            button[aria-label="Labour Markets"]  {{ background:{lab_bg}!important; border-color:{lab_bd}!important; font-weight:{lab_fw}!important; color:#FFFFFF!important; }}
+            </style>
+            """, unsafe_allow_html=True)
+
+            st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
+            st.markdown('<div class="sb-section-label">Section</div>', unsafe_allow_html=True)
+            if st.button("Inflation", key="sb_inflation", use_container_width=True):
+                st.session_state["macro_section"] = "Inflation"
+                st.rerun()
+            if st.button("Labour Markets", key="sb_labour", use_container_width=True):
+                st.session_state["macro_section"] = "Labour Markets"
+                st.rerun()
 
         # ── Markets controls (only when on Markets tab) ───────────────────
         if is_markets:
@@ -3542,11 +3565,11 @@ def main():
         # Chart title
         st.markdown(f"""
         <div style="
-            font-family:'Aptos',sans-serif;font-size:22px;font-weight:700;
-            color:#FFFFFF;margin-bottom:6px;letter-spacing:-.3px
+            font-family:'Arial',sans-serif;font-size:22px;font-weight:700;
+            color:#1A2540;margin-bottom:6px;letter-spacing:-.3px
         ">{title_e}</div>
         <div style="
-            font-family:'Aptos',monospace;font-size:11px;
+            font-family:'Arial',sans-serif;font-size:11px;
             color:#4D6080;margin-bottom:24px;letter-spacing:.3px
         ">{cfg_e['full']}</div>
         """, unsafe_allow_html=True)
@@ -3573,7 +3596,7 @@ def main():
                     marker_line_width=1,
                     hovertemplate="%{x|%b %Y}<br><b>%{y:+.0f}K</b><extra></extra>",
                 ))
-                fig_exp.add_hline(y=0, line_color="rgba(120,140,200,.2)", line_width=1)
+                fig_exp.add_hline(y=0, line_color="rgba(0,0,0,.12)", line_width=1)
             else:
                 hover_fmt = "%{x|%d %b '%y}<br><b>%{y:.0f}K</b>" if cfg_e.get("freq") == "Weekly" else "%{x|%b %Y}<br><b>%{y:.1f}</b>"
                 fig_exp = go.Figure(go.Scatter(
@@ -3589,15 +3612,15 @@ def main():
             fig_exp.update_layout(
                 height=550,
                 margin=dict(l=0, r=0, t=8, b=0),
-                paper_bgcolor="#0B1020", plot_bgcolor="#0B1020",
-                font=dict(family="Aptos, monospace", color="#8898BB", size=11),
+                paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF",
+                font=dict(family="Arial, sans-serif", color="#8898BB", size=11),
                 xaxis=dict(showgrid=False, zeroline=False,
-                           tickfont=dict(size=11, color="#FFFFFF"),
+                           tickfont=dict(size=11, color="#1A2540"),
                            tickformat="%b '%y", nticks=8),
                 yaxis=dict(showgrid=True, gridcolor="rgba(120,140,200,.06)", zeroline=False,
-                           tickfont=dict(size=11, color="#FFFFFF"), nticks=6),
-                hoverlabel=dict(bgcolor="#0E1428", bordercolor="rgba(91,141,239,.3)",
-                                font=dict(family="Aptos, monospace", size=13, color="#FFFFFF")),
+                           tickfont=dict(size=11, color="#1A2540"), nticks=6),
+                hoverlabel=dict(bgcolor="#F0F4FF", bordercolor="rgba(91,141,239,.3)",
+                                font=dict(family="Arial, sans-serif", size=13, color="#1A2540")),
                 showlegend=False,
             )
         else:
@@ -3694,52 +3717,52 @@ def main():
 
     st.markdown("<div style='margin-bottom:20px'></div>", unsafe_allow_html=True)
 
+    macro_section = st.session_state.get("macro_section", "Inflation")
+
     # ── INFLATION: CPI · Core CPI · PPI · Core PCE ───────────────────────
-    st.markdown(
-        '<div class="section-header"><span class="section-icon">▲</span>INFLATION</div>',
-        unsafe_allow_html=True
-    )
-    # Row 1: CPI · Core CPI · PPI (BLS)
-    cols_price = st.columns(3, gap="medium")
-    for col, key in zip(cols_price, ["cpi", "corecpi", "ppi"]):
-        with col:
+    if macro_section == "Inflation":
+        st.markdown(
+            '<div class="section-header"><span class="section-icon">▲</span>INFLATION</div>',
+            unsafe_allow_html=True
+        )
+        # Row 1: CPI · Core CPI · PPI (BLS)
+        cols_price = st.columns(3, gap="medium")
+        for col, key in zip(cols_price, ["cpi", "corecpi", "ppi"]):
+            with col:
+                with st.container(border=True):
+                    render_card(key, SERIES[key], all_data.get(key))
+        st.markdown("<div style='margin-top:10px'></div>", unsafe_allow_html=True)
+        # Row 2: Core PCE (BEA via FRED) — Fed's preferred inflation measure
+        cols_pce = st.columns(3, gap="medium")
+        with cols_pce[0]:
             with st.container(border=True):
-                render_card(key, SERIES[key], all_data.get(key))
-    st.markdown("<div style='margin-top:10px'></div>", unsafe_allow_html=True)
-    # Row 2: Core PCE (BEA via FRED) — Fed's preferred inflation measure
-    cols_pce = st.columns(3, gap="medium")
-    with cols_pce[0]:
-        with st.container(border=True):
-            render_fred_card("corepce", FRED_SERIES["corepce"], fred_data.get("corepce"))
+                render_fred_card("corepce", FRED_SERIES["corepce"], fred_data.get("corepce"))
 
-    st.markdown("<div style='margin-top:24px'></div>", unsafe_allow_html=True)
-
-    # ── LABOR: Unemployment · NFP · Initial Claims · ADP ──────────────────
-    st.markdown(
-        '<div class="section-header"><span class="section-icon">●</span>LABOR MARKET</div>',
-        unsafe_allow_html=True
-    )
-    # Row 1: Unemployment + NFP (BLS)
-    cols_labor = st.columns(2, gap="medium")
-    for col, key in zip(cols_labor, ["unemp", "nfp"]):
-        with col:
+    # ── LABOR: Unemployment · NFP · Initial Claims ────────────────────────
+    elif macro_section == "Labour Markets":
+        st.markdown(
+            '<div class="section-header"><span class="section-icon">●</span>LABOUR MARKETS</div>',
+            unsafe_allow_html=True
+        )
+        # Row 1: Unemployment + NFP (BLS)
+        cols_labor = st.columns(2, gap="medium")
+        for col, key in zip(cols_labor, ["unemp", "nfp"]):
+            with col:
+                with st.container(border=True):
+                    render_card(key, SERIES[key], all_data.get(key))
+        st.markdown("<div style='margin-top:10px'></div>", unsafe_allow_html=True)
+        # Row 2: Initial Claims (FRED)
+        cols_labor2 = st.columns(2, gap="medium")
+        with cols_labor2[0]:
             with st.container(border=True):
-                render_card(key, SERIES[key], all_data.get(key))
-
-    st.markdown("<div style='margin-top:10px'></div>", unsafe_allow_html=True)
-
-    # Row 2: Initial Claims (FRED)
-    cols_labor2 = st.columns(2, gap="medium")
-    with cols_labor2[0]:
-        with st.container(border=True):
-            render_fred_card("claims", FRED_SERIES["claims"], fred_data.get("claims"))
+                render_fred_card("claims", FRED_SERIES["claims"], fred_data.get("claims"))
 
 
 
     # ── Footer ─────────────────────────────────────────────────────────────
     st.markdown("<hr style='margin-top:32px'>", unsafe_allow_html=True)
     st.markdown(
-        "<p style='font-size:11px;color:#4D6080;font-family:Aptos,monospace;text-align:center'>"
+        "<p style='font-size:11px;color:#4D6080;font-family:Arial,sans-serif;text-align:center'>"
         "BLS data: CUSR0000SA0 · CUSR0000SA0L1E · WPSFD4 · LNS14000000 · CES0000000001 &nbsp;·&nbsp; "
         "FRED data: PCEPILFE (BEA) · ICSA (DOL)"
         "</p>",
