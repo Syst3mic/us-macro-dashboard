@@ -189,7 +189,7 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
 
 /* ── Indicator name ── */
 .ind-name {
-    font-size: 20px !important;
+    font-size: 18px !important;
     font-weight: 700 !important;
     letter-spacing: .3px !important;
     text-transform: uppercase !important;
@@ -3788,10 +3788,6 @@ def main():
 
     # ── INFLATION: CPI · Core CPI · PPI · Core PCE ───────────────────────
     if macro_section == "Inflation":
-        st.markdown(
-            '<div class="section-header"><span class="section-icon">▲</span>INFLATION</div>',
-            unsafe_allow_html=True
-        )
         # Row 1: CPI · Core CPI · PPI (BLS)
         cols_price = st.columns(3, gap="medium")
         for col, key in zip(cols_price, ["cpi", "corecpi", "ppi"]):
@@ -3807,10 +3803,6 @@ def main():
 
     # ── LABOR: Unemployment · NFP · Initial Claims ────────────────────────
     elif macro_section == "Labour Markets":
-        st.markdown(
-            '<div class="section-header"><span class="section-icon">●</span>LABOUR MARKETS</div>',
-            unsafe_allow_html=True
-        )
         # Row 1: Unemployment + NFP (BLS)
         cols_labor = st.columns(2, gap="medium")
         for col, key in zip(cols_labor, ["unemp", "nfp"]):
