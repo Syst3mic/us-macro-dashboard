@@ -2925,7 +2925,7 @@ def render_screener() -> None:
     # ── Minimal main-content title ─────────────────────────────────────────
     st.markdown(
         f"<div class='screener-title' style='font-weight:700;color:#1A2540;"
-        f"padding:20px 0 12px;font-family:Inter,sans-serif;font-size:20px'>📈 Markets Screener"
+        f"padding:20px 0 12px;font-family:Inter,sans-serif;font-size:20px'>📈 Market Screener"
         f"<span style='font-size:12px;font-weight:400;color:#4D6080;"
         f"margin-left:12px'>{idx_choice}</span></div>",
         unsafe_allow_html=True,
@@ -3458,7 +3458,7 @@ def main():
     st.markdown(f"""
     <style>
     button[aria-label="📊  Macro"]     {{ background:{m_bg}!important;  border-color:{m_bd}!important;  font-weight:{m_fw}!important; color:{m_col}!important; }}
-    button[aria-label="📈  Markets"]   {{ background:{mk_bg}!important; border-color:{mk_bd}!important; font-weight:{mk_fw}!important; color:{mk_col}!important; }}
+    button[aria-label="📈  Market Screener"]   {{ background:{mk_bg}!important; border-color:{mk_bd}!important; font-weight:{mk_fw}!important; color:{mk_col}!important; }}
     button[aria-label="S&P 500"]       {{ background:{sp_bg}!important; border-color:{sp_bd}!important; font-weight:{sp_fw}!important; color:{sp_col}!important; }}
     button[aria-label="Nasdaq 100"]    {{ background:{ndx_bg}!important;border-color:{ndx_bd}!important;font-weight:{ndx_fw}!important;color:{ndx_col}!important;}}
     button[aria-label="Gainers"]       {{ background:{g_bg}!important;  border-color:{g_bd}!important;  font-weight:{g_fw}!important;  color:{g_col}!important; }}
@@ -3479,7 +3479,7 @@ def main():
         if st.button("📊  Macro", key="btn_macro", use_container_width=True):
             st.session_state["page"] = "MACRO"
             st.rerun()
-        if st.button("📈  Markets", key="btn_markets", use_container_width=True):
+        if st.button("📈  Market Screener", key="btn_markets", use_container_width=True):
             st.session_state["page"] = "MARKETS"
             st.rerun()
 
