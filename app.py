@@ -1869,8 +1869,8 @@ def _parse_shares(x) -> float:
     return float(str(x).replace(",", "").strip())
 
 
-@st.cache_data(ttl=86400, show_spinner=False)
-def _load_gics_map() -> dict:
+@st.cache_data(ttl=3600, show_spinner=False)
+def _load_gics_map(version: str = "v4") -> dict:
     """
     Build {yf_ticker: Yahoo Finance sector name}.
 
@@ -2152,7 +2152,7 @@ def _load_holdings(path: str, index_name: str) -> pd.DataFrame:
     df["priceable"]  = df["ticker_raw"].apply(_is_priceable)
     df["index"]      = index_name
 
-    gmap = _load_gics_map()
+    gmap = _load_gics_map("v4")
     df["sector"] = df["ticker"].map(gmap).fillna("—")
     df["source"] = "file"
 
@@ -2207,7 +2207,7 @@ def _get_holdings_date() -> str:
     return f"SPY / QQQ Holdings · {most_recent.strftime('%d %b %Y')}"
 
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_sp500_cached() -> pd.DataFrame:
     """Cached file load only — raises on failure so the caller can fall back uncached."""
     return _load_holdings(_SPY_FILE, "S&P 500")
@@ -2244,7 +2244,7 @@ def _sp500_fallback() -> pd.DataFrame:
     return df
 
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_ndx_cached() -> pd.DataFrame:
     """Cached file load only — raises on failure so the caller can fall back uncached."""
     return _load_holdings(_QQQ_FILE, "Nasdaq 100")
@@ -2910,7 +2910,7 @@ def render_screener() -> None:
 
     idx_choice  = st.session_state["idx_choice"]
     etf_label   = "SPY" if idx_choice == "S&P 500" else "QQQ"
-    index_label = "Overall S&P 500 Index Move" if idx_choice == "S&P 500" else "Overall Nasdaq 100 Move"
+    index_label = "S&P 500 Return" if idx_choice == "S&P 500" else "Nasdaq 100 Return"
 
     # ── Page-scoped font bump ──────────────────────────────────────────────
     st.markdown("""
@@ -3183,12 +3183,14 @@ def render_screener() -> None:
         with col:
             st.markdown(f"""
             <div style="background:#F0F4FF;border:1px solid rgba(91,141,239,.2);
-                border-radius:8px;padding:12px 16px;text-align:center">
-              <div style="font-family:'Arial';font-size:11px;
-                   color:#4D6080;letter-spacing:.6px;text-transform:uppercase;
-                   margin-bottom:4px">{label}</div>
-              <div style="font-family:'Arial';font-size:24px;
-                   font-weight:700;color:{color}">{val}</div>
+                border-radius:8px;padding:12px 16px;text-align:center;min-height:80px;
+                display:flex;flex-direction:column;justify-content:center">
+              <div style="font-family:'Arial';font-size:10px;font-weight:600;
+                   color:#4D6080;letter-spacing:.5px;text-transform:uppercase;
+                   margin-bottom:6px;white-space:nowrap;overflow:hidden;
+                   text-overflow:ellipsis">{label}</div>
+              <div style="font-family:'Arial';font-size:22px;
+                   font-weight:700;color:{color};line-height:1">{val}</div>
             </div>
             """, unsafe_allow_html=True)
 
