@@ -78,6 +78,20 @@ section[data-testid="stSidebar"] > div:first-child {
 #MainMenu, footer, header { visibility: hidden; }
 .block-container { padding: 0 2rem 4rem; }
 
+/* ── Force sidebar permanently open ── */
+/* Hide the collapse button inside the sidebar so users can't close it */
+button[aria-label="Close sidebar"]   { display: none !important; }
+button[data-testid="collapseSidebar"] { display: none !important; }
+/* If sidebar is somehow collapsed, force it back open */
+section[data-testid="stSidebar"][aria-expanded="false"] {
+    transform: translateX(0) !important;
+    visibility: visible !important;
+    width: 244px !important;
+    min-width: 244px !important;
+}
+/* Keep the expand arrow visible as a fallback */
+[data-testid="collapsedControl"] { display: flex !important; }
+
 /* ── Divider ── */
 hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important; }
 
