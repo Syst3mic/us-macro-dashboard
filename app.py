@@ -3394,6 +3394,7 @@ def main():
         # ── Identity ──────────────────────────────────────────────────────
         st.markdown("""
         <div class="sb-logo">
+          <div class="sb-logo-title">🏦 Helios Capital</div>
           <div class="sb-logo-sub">US Markets Suite</div>
         </div>
         """, unsafe_allow_html=True)
