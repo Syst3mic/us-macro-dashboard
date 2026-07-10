@@ -36,7 +36,7 @@ html, body, [data-testid="stApp"] {
 }
 [data-testid="stAppViewContainer"] { background-color: #FFFFFF; }
 [data-testid="stHeader"] { background: transparent; }
-section[data-testid="stSidebar"] { background: #080C16; }
+section[data-testid="stSidebar"] { background: #F4F6FA; }
 
 /* ── Sidebar layout ── */
 section[data-testid="stSidebar"] > div:first-child {
@@ -47,29 +47,29 @@ section[data-testid="stSidebar"] > div:first-child {
 }
 .sb-logo {
     padding: 4px 0 20px;
-    border-bottom: 1px solid rgba(91,141,239,.12);
+    border-bottom: 1px solid rgba(0,0,0,.1);
     margin-bottom: 16px;
 }
 .sb-logo-title {
     font-size: 16px; font-weight: 700;
-    color: #FFFFFF; letter-spacing: -.2px;
+    color: #1A2540; letter-spacing: -.2px;
 }
 .sb-logo-sub {
-    font-size: 10px; color: rgba(255,255,255,.35);
+    font-size: 10px; color: rgba(0,0,0,.4);
     letter-spacing: .06em; margin-top: 3px;
     text-transform: uppercase;
 }
 .sb-section-label {
     font-size: 9px; font-weight: 700; letter-spacing: .1em;
-    color: rgba(255,255,255,.3); text-transform: uppercase;
+    color: rgba(0,0,0,.35); text-transform: uppercase;
     margin: 14px 0 6px; padding-left: 2px;
 }
 .sb-divider {
-    border: none; border-top: 1px solid rgba(120,140,200,.1);
+    border: none; border-top: 1px solid rgba(0,0,0,.1);
     margin: 14px 0;
 }
 .sb-footnote {
-    font-size: 10px; color: rgba(120,140,200,.55);
+    font-size: 10px; color: #4D6080;
     line-height: 1.6; margin-top: 4px;
 }
 /* Active nav button styles injected dynamically via f-string CSS */
@@ -3363,35 +3363,45 @@ def main():
     g_active   = view_css == "Gainers"
     l_active   = not g_active
 
-    sp_bg  = "rgba(255,255,255,.14)" if sp_active  else "transparent"
-    sp_bd  = "rgba(255,255,255,.55)" if sp_active  else "rgba(120,140,200,.18)"
-    sp_fw  = "700"                   if sp_active  else "400"
-    sp_col = "#FFFFFF"
-    ndx_bg  = "rgba(255,255,255,.14)" if ndx_active else "transparent"
-    ndx_bd  = "rgba(255,255,255,.55)" if ndx_active else "rgba(120,140,200,.18)"
-    ndx_fw  = "700"                   if ndx_active else "400"
-    ndx_col = "#FFFFFF"
-    g_bg   = "rgba(15,214,138,.15)"  if g_active else "transparent"
-    g_bd   = "rgba(15,214,138,.5)"   if g_active else "rgba(15,214,138,.2)"
+    # ── Active/inactive colours — light sidebar ───────────────────────────
+    # Active: blue-tinted background + white text (blue bg → white readable)
+    # Inactive: transparent + dark text (light sidebar bg → dark readable)
+    _act_col = "#FFFFFF"   # text on active (blue-bg) button
+    _ina_col = "#1A2540"   # text on inactive (transparent) button
+
+    sp_bg  = "rgba(91,141,239,.22)" if sp_active  else "transparent"
+    sp_bd  = "rgba(91,141,239,.7)"  if sp_active  else "rgba(91,141,239,.2)"
+    sp_fw  = "700"                  if sp_active  else "400"
+    sp_col = _act_col               if sp_active  else _ina_col
+    ndx_bg  = "rgba(91,141,239,.22)" if ndx_active else "transparent"
+    ndx_bd  = "rgba(91,141,239,.7)"  if ndx_active else "rgba(91,141,239,.2)"
+    ndx_fw  = "700"                  if ndx_active else "400"
+    ndx_col = _act_col               if ndx_active else _ina_col
+    g_bg   = "rgba(12,168,108,.15)"  if g_active else "transparent"
+    g_bd   = "rgba(12,168,108,.5)"   if g_active else "rgba(12,168,108,.25)"
     g_fw   = "700"                   if g_active else "400"
-    l_bg   = "rgba(240,72,90,.15)"   if l_active else "transparent"
-    l_bd   = "rgba(240,72,90,.5)"    if l_active else "rgba(240,72,90,.2)"
+    g_col  = "#0CA86C"
+    l_bg   = "rgba(200,48,63,.15)"   if l_active else "transparent"
+    l_bd   = "rgba(200,48,63,.5)"    if l_active else "rgba(200,48,63,.25)"
     l_fw   = "700"                   if l_active else "400"
+    l_col  = "#C8303F"
     m_bg   = "rgba(91,141,239,.22)"  if is_macro   else "transparent"
-    m_bd   = "rgba(91,141,239,.7)"   if is_macro   else "rgba(120,140,200,.2)"
+    m_bd   = "rgba(91,141,239,.7)"   if is_macro   else "rgba(91,141,239,.2)"
     m_fw   = "700"                   if is_macro   else "400"
+    m_col  = _act_col                if is_macro   else _ina_col
     mk_bg  = "rgba(91,141,239,.22)"  if is_markets else "transparent"
-    mk_bd  = "rgba(91,141,239,.7)"   if is_markets else "rgba(120,140,200,.2)"
+    mk_bd  = "rgba(91,141,239,.7)"   if is_markets else "rgba(91,141,239,.2)"
     mk_fw  = "700"                   if is_markets else "400"
+    mk_col = _act_col                if is_markets else _ina_col
 
     st.markdown(f"""
     <style>
-    button[aria-label="📊  Macro"]     {{ background:{m_bg}!important;  border-color:{m_bd}!important;  font-weight:{m_fw}!important; color:#FFFFFF!important; }}
-    button[aria-label="📈  Markets"]   {{ background:{mk_bg}!important; border-color:{mk_bd}!important; font-weight:{mk_fw}!important; color:#FFFFFF!important; }}
+    button[aria-label="📊  Macro"]     {{ background:{m_bg}!important;  border-color:{m_bd}!important;  font-weight:{m_fw}!important; color:{m_col}!important; }}
+    button[aria-label="📈  Markets"]   {{ background:{mk_bg}!important; border-color:{mk_bd}!important; font-weight:{mk_fw}!important; color:{mk_col}!important; }}
     button[aria-label="S&P 500"]       {{ background:{sp_bg}!important; border-color:{sp_bd}!important; font-weight:{sp_fw}!important; color:{sp_col}!important; }}
     button[aria-label="Nasdaq 100"]    {{ background:{ndx_bg}!important;border-color:{ndx_bd}!important;font-weight:{ndx_fw}!important;color:{ndx_col}!important;}}
-    button[aria-label="Gainers"]       {{ background:{g_bg}!important;  border-color:{g_bd}!important;  font-weight:{g_fw}!important;  color:#0FD68A!important; }}
-    button[aria-label="Losers"]        {{ background:{l_bg}!important;  border-color:{l_bd}!important;  font-weight:{l_fw}!important;  color:#F0485A!important; }}
+    button[aria-label="Gainers"]       {{ background:{g_bg}!important;  border-color:{g_bd}!important;  font-weight:{g_fw}!important;  color:{g_col}!important; }}
+    button[aria-label="Losers"]        {{ background:{l_bg}!important;  border-color:{l_bd}!important;  font-weight:{l_fw}!important;  color:{l_col}!important; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -3421,16 +3431,18 @@ def main():
             inf_active = ms == "Inflation"
             lab_active = ms == "Labour Markets"
             inf_bg = "rgba(91,141,239,.22)" if inf_active else "transparent"
-            inf_bd = "rgba(91,141,239,.7)"  if inf_active else "rgba(120,140,200,.2)"
+            inf_bd = "rgba(91,141,239,.7)"  if inf_active else "rgba(91,141,239,.2)"
             inf_fw = "700"                  if inf_active else "400"
+            inf_col = "#FFFFFF"             if inf_active else "#1A2540"
             lab_bg = "rgba(91,141,239,.22)" if lab_active else "transparent"
-            lab_bd = "rgba(91,141,239,.7)"  if lab_active else "rgba(120,140,200,.2)"
+            lab_bd = "rgba(91,141,239,.7)"  if lab_active else "rgba(91,141,239,.2)"
             lab_fw = "700"                  if lab_active else "400"
+            lab_col = "#FFFFFF"             if lab_active else "#1A2540"
 
             st.markdown(f"""
             <style>
-            button[aria-label="Inflation"]       {{ background:{inf_bg}!important; border-color:{inf_bd}!important; font-weight:{inf_fw}!important; color:#FFFFFF!important; }}
-            button[aria-label="Labour Markets"]  {{ background:{lab_bg}!important; border-color:{lab_bd}!important; font-weight:{lab_fw}!important; color:#FFFFFF!important; }}
+            button[aria-label="Inflation"]       {{ background:{inf_bg}!important; border-color:{inf_bd}!important; font-weight:{inf_fw}!important; color:{inf_col}!important; }}
+            button[aria-label="Labour Markets"]  {{ background:{lab_bg}!important; border-color:{lab_bd}!important; font-weight:{lab_fw}!important; color:{lab_col}!important; }}
             </style>
             """, unsafe_allow_html=True)
 
@@ -3532,11 +3544,11 @@ def main():
             holdings_date = _get_holdings_date()
             st.markdown(f"""
             <div class="sb-footnote">
-              <b style="color:rgba(255,255,255,.6)">Universe</b><br>{holdings_date}<br><br>
-              <b style="color:rgba(255,255,255,.6)">Prices</b><br>Yahoo Finance · Market-state aware<br><br>
-              <b style="color:rgba(255,255,255,.6)">Weights</b><br>Live shares × price<br><br>
-              <b style="color:rgba(255,255,255,.6)">Cache</b><br>Prices 5 min · Sectors 24 h<br><br>
-              <b style="color:rgba(255,255,255,.6)">Corp Actions</b><br>Splits auto-detected · chg% normalised
+              <b style="color:#1A2540">Universe</b><br>{holdings_date}<br><br>
+              <b style="color:#1A2540">Prices</b><br>Yahoo Finance · Market-state aware<br><br>
+              <b style="color:#1A2540">Weights</b><br>Live shares × price<br><br>
+              <b style="color:#1A2540">Cache</b><br>Prices 5 min · Sectors 24 h<br><br>
+              <b style="color:#1A2540">Corp Actions</b><br>Splits auto-detected · chg% normalised
             </div>
             """, unsafe_allow_html=True)
 
