@@ -192,7 +192,6 @@ hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important;
     font-size: 18px !important;
     font-weight: 700 !important;
     letter-spacing: .3px !important;
-    text-transform: uppercase !important;
     color: #1A2540 !important;
     font-family: 'Inter', sans-serif !important;
 }
