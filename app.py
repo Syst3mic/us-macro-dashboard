@@ -2794,6 +2794,8 @@ def _split_tag(ratio) -> str:
 _SORTABLE_TABLE_TEMPLATE = """
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; }
   html, body {
@@ -2807,17 +2809,17 @@ _SORTABLE_TABLE_TEMPLATE = """
   table.stock-table { width: 100%; border-collapse: collapse; }
   .stock-table th {
       font-family: 'Inter', sans-serif;
-      font-size: 11px; font-weight: 700; letter-spacing: .7px;
+      font-size: 10px; font-weight: 700; letter-spacing: .7px;
       text-transform: uppercase; color: #1A2540;
       padding: 8px 12px; border-bottom: 1px solid #D8E0F0;
       text-align: left; background: #EEF2FC;
       cursor: pointer; user-select: none; white-space: nowrap;
   }
   .stock-table th:hover { background: #E2E9F8; color: #3D6DD6; }
-  .stock-table th .sort-arrow { font-size: 9px; color: #3D6DD6; margin-left: 4px; }
+  .stock-table th .sort-arrow { font-size: 8px; color: #3D6DD6; margin-left: 4px; }
   .stock-table td {
       font-family: 'Inter', sans-serif;
-      font-size: 14px; padding: 9px 12px;
+      font-size: 12px; padding: 8px 12px;
       border-bottom: 1px solid #F0F4FC;
       color: #1A2540;
   }
@@ -2827,8 +2829,8 @@ _SORTABLE_TABLE_TEMPLATE = """
   .ticker-badge {
       font-weight: 700; color: #3D6DD6;
       background: rgba(91,141,239,.1);
-      padding: 2px 7px; border-radius: 4px;
-      font-size: 13px;
+      padding: 2px 6px; border-radius: 4px;
+      font-size: 12px;
   }
   .sector-tag {
       font-size: 11px; padding: 2px 7px; border-radius: 3px;
@@ -2916,16 +2918,16 @@ def render_screener() -> None:
     # ── Page-scoped font bump ──────────────────────────────────────────────
     st.markdown("""
     <style>
-    .screener-title { font-size: 22px !important; }
-    .screener-meta  { font-size: 12px !important; }
+    .screener-title { font-size: 20px !important; }
+    .screener-meta  { font-size: 11px !important; }
     </style>
     """, unsafe_allow_html=True)
 
     # ── Minimal main-content title ─────────────────────────────────────────
     st.markdown(
         f"<div class='screener-title' style='font-weight:700;color:#1A2540;"
-        f"padding:20px 0 12px'>📈 Markets Screener"
-        f"<span style='font-size:13px;font-weight:400;color:#4D6080;"
+        f"padding:20px 0 12px;font-family:Inter,sans-serif;font-size:20px'>📈 Markets Screener"
+        f"<span style='font-size:12px;font-weight:400;color:#4D6080;"
         f"margin-left:12px'>{idx_choice}</span></div>",
         unsafe_allow_html=True,
     )
@@ -3112,7 +3114,7 @@ def render_screener() -> None:
         )
 
     st.markdown(
-        f"<div style='font-family:'Inter',sans-serif;font-size:16px;margin-bottom:14px;color:{_txt}'>"
+        f"<div style='font-family:'Inter',sans-serif;font-size:14px;margin-bottom:14px;color:{_txt}'>"
         f"✓ {state_html}"
         f"</div>",
         unsafe_allow_html=True
@@ -3186,11 +3188,11 @@ def render_screener() -> None:
             <div style="background:#F0F4FF;border:1px solid rgba(91,141,239,.2);
                 border-radius:8px;padding:12px 16px;text-align:center;min-height:80px;
                 display:flex;flex-direction:column;justify-content:center">
-              <div style="font-family:'Inter', sans-serif;font-size:10px;font-weight:600;
+              <div style="font-family:'Inter', sans-serif;font-size:9px;font-weight:600;
                    color:#4D6080;letter-spacing:.5px;text-transform:uppercase;
                    margin-bottom:6px;white-space:nowrap;overflow:hidden;
                    text-overflow:ellipsis">{label}</div>
-              <div style="font-family:'Inter', sans-serif;font-size:22px;
+              <div style="font-family:'Inter', sans-serif;font-size:20px;
                    font-weight:700;color:{color};line-height:1">{val}</div>
             </div>
             """, unsafe_allow_html=True)
@@ -3353,7 +3355,7 @@ def render_screener() -> None:
     components.html(table_doc, height=table_height, scrolling=True)
 
     st.markdown(f"""
-    <div style="font-family:'Inter', sans-serif;font-size:11px;color:#6B7A99;
+    <div style="font-family:'Inter', sans-serif;font-size:10px;color:#6B7A99;
         margin-top:8px;text-align:right">
       Data: Yahoo Finance · Weights: live shares × price · Market cap: prev-day close ·
       Showing all {len(direction_pool)} {view.lower()} of {active_count} priced · Click any column header to sort ↕ ·
