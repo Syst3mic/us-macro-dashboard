@@ -76,9 +76,6 @@ section[data-testid="stSidebar"] > div:first-child {
 
 /* ── Hide Streamlit chrome ── */
 #MainMenu, footer, header { visibility: hidden; }
-/* Hide the sidebar collapse/expand toggle so the panel is permanently visible */
-[data-testid="collapsedControl"] { display: none !important; }
-button[kind="header"]            { display: none !important; }
 .block-container { padding: 0 2rem 4rem; }
 
 /* ── Divider ── */
