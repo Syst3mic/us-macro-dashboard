@@ -78,19 +78,22 @@ section[data-testid="stSidebar"] > div:first-child {
 #MainMenu, footer, header { visibility: hidden; }
 .block-container { padding: 0 2rem 4rem; }
 
-/* ── Force sidebar permanently open ── */
-/* Hide the collapse button inside the sidebar so users can't close it */
-button[aria-label="Close sidebar"]   { display: none !important; }
-button[data-testid="collapseSidebar"] { display: none !important; }
-/* If sidebar is somehow collapsed, force it back open */
-section[data-testid="stSidebar"][aria-expanded="false"] {
+/* ── Make sidebar non-collapsible ── */
+/* Hide the << collapse button — Streamlit uses several possible selectors */
+button[aria-label="Close sidebar"],
+button[data-testid="collapseSidebar"],
+[data-testid="stSidebarCollapseButton"],
+section[data-testid="stSidebar"] button[kind="header"],
+section[data-testid="stSidebar"] > div > button:first-child,
+[data-testid="stSidebarHeader"] button { display: none !important; }
+/* Also hide the expand (>) arrow since sidebar is always open */
+[data-testid="collapsedControl"] { display: none !important; }
+/* Force sidebar open even if Streamlit JS collapses it */
+section[data-testid="stSidebar"] {
     transform: translateX(0) !important;
     visibility: visible !important;
-    width: 244px !important;
     min-width: 244px !important;
 }
-/* Keep the expand arrow visible as a fallback */
-[data-testid="collapsedControl"] { display: flex !important; }
 
 /* ── Divider ── */
 hr { border-color: rgba(120,140,200,.1) !important; margin: 0.5rem 0 !important; }
