@@ -79,21 +79,14 @@ section[data-testid="stSidebar"] > div:first-child {
 #MainMenu, footer, header { visibility: hidden; }
 .block-container { padding: 0 2rem 4rem; }
 
-/* ── Make sidebar non-collapsible ── */
-/* Hide the << collapse button — Streamlit uses several possible selectors */
-button[aria-label="Close sidebar"],
-button[data-testid="collapseSidebar"],
+/* ── Sidebar collapse/expand toggle ── */
+/* Restore and style Streamlit's native sidebar collapse (<<) and
+   expand (>>) controls so the sidebar can be minimized for a full-width
+   view (handy on mobile) and re-opened when needed. */
 [data-testid="stSidebarCollapseButton"],
-section[data-testid="stSidebar"] button[kind="header"],
-section[data-testid="stSidebar"] > div > button:first-child,
-[data-testid="stSidebarHeader"] button { display: none !important; }
-/* Also hide the expand (>) arrow since sidebar is always open */
-[data-testid="collapsedControl"] { display: none !important; }
-/* Force sidebar open even if Streamlit JS collapses it */
-section[data-testid="stSidebar"] {
-    transform: translateX(0) !important;
+[data-testid="collapsedControl"] {
+    display: flex !important;
     visibility: visible !important;
-    min-width: 244px !important;
 }
 
 /* ── Divider ── */
