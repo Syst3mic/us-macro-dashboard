@@ -2634,6 +2634,75 @@ def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+@st.cache_data(ttl=21600, show_spinner=False)
+def _fetch_historical_raw(tickers: tuple, target_date_str: str) -> pd.DataFrame:
+    """
+    Cached Yahoo pull of daily bars spanning a window around a past date.
+    The 21-day lookback (vs. the 5-day window used for live/EOD) guards
+    against long weekends and multi-day holiday clusters so there is always
+    a valid prior trading day to diff against. Cached 6h — a backdated
+    report for a fixed date never changes, so this is mostly a safety TTL.
+    """
+    target = datetime.strptime(target_date_str, "%Y-%m-%d").date()
+    start  = target - timedelta(days=21)
+    end    = target + timedelta(days=1)   # yfinance's `end` is exclusive
+    try:
+        return yf.download(
+            list(tickers), start=start.isoformat(), end=end.isoformat(),
+            interval="1d", auto_adjust=True, progress=False, threads=True,
+        )
+    except Exception as e:
+        print(f"Historical fetch failed: {e}")
+        return pd.DataFrame()
+
+
+def fetch_price_data_historical(tickers: tuple, target_date) -> pd.DataFrame:
+    """
+    Historical / backdated: daily bars as of a specific past date.
+    last_close = close on target_date, or the most recent trading day on or
+    before it (so picking a weekend/holiday date snaps back to the last
+    session that actually traded); prev_close = the session before that.
+    """
+    target_date_str = target_date.isoformat() if hasattr(target_date, "isoformat") else str(target_date)
+    target = datetime.strptime(target_date_str, "%Y-%m-%d").date()
+    raw = _fetch_historical_raw(tickers, target_date_str)
+    if raw.empty:
+        return pd.DataFrame()
+    close  = raw["Close"]
+    volume = raw["Volume"]
+
+    rows = []
+    for ticker in tickers:
+        if ticker not in close.columns:
+            continue
+        col = close[ticker].dropna()
+        col = col[col.index.date <= target]
+        if len(col) < 2:
+            continue
+        lc = float(col.iloc[-1])
+        pc = float(col.iloc[-2])
+        if pc == 0:
+            continue
+        chg_pct = (lc / pc - 1) * 100
+        chg_abs = lc - pc
+        try:
+            vcol = volume[ticker].dropna()
+            vcol = vcol[vcol.index.date <= target]
+            vol  = vcol.iloc[-1]
+        except Exception:
+            vol = 0
+        rows.append({
+            "ticker":     ticker,
+            "price":      lc,
+            "chg_pct":    chg_pct,
+            "chg_abs":    chg_abs,
+            "prev_close": pc,
+            "volume":     int(vol) if not pd.isna(vol) else 0,
+            "trade_date": str(col.index[-1].date()),
+        })
+    return pd.DataFrame(rows)
+
+
 def fetch_price_data(tickers: tuple) -> tuple:
     """Router: picks correct fetch based on market state. Returns (DataFrame, state)."""
     state = get_market_state()
@@ -2915,6 +2984,10 @@ def render_screener() -> None:
     etf_label   = "SPY" if idx_choice == "S&P 500" else "QQQ"
     index_label = "S&P 500 Return" if idx_choice == "S&P 500" else "Nasdaq 100 Return"
 
+    # ── Historical mode: set by the sidebar "Date" toggle ──────────────────
+    hist_mode = st.session_state.get("hist_mode", False)
+    hist_date = st.session_state.get("hist_date") if hist_mode else None
+
     # ── Page-scoped font bump ──────────────────────────────────────────────
     st.markdown("""
     <style>
@@ -2924,11 +2997,17 @@ def render_screener() -> None:
     """, unsafe_allow_html=True)
 
     # ── Minimal main-content title ─────────────────────────────────────────
+    _title_date_badge = (
+        f"<span style='font-size:11px;font-weight:700;color:#5B8DEF;"
+        f"background:rgba(91,141,239,.12);border-radius:4px;padding:2px 8px;"
+        f"margin-left:10px'>📅 {hist_date.strftime('%d %b %Y')}</span>"
+        if hist_mode and hist_date else ""
+    )
     st.markdown(
         f"<div class='screener-title' style='font-weight:700;color:#1A2540;"
         f"padding:20px 0 12px;font-family:Inter,sans-serif;font-size:20px'>📈 Market Screener"
         f"<span style='font-size:12px;font-weight:400;color:#4D6080;"
-        f"margin-left:12px'>{idx_choice}</span></div>",
+        f"margin-left:12px'>{idx_choice}</span>{_title_date_badge}</div>",
         unsafe_allow_html=True,
     )
 
@@ -2960,19 +3039,28 @@ def render_screener() -> None:
     tickers_tuple  = tuple(constituents["ticker"].tolist())
     total_universe = len(tickers_tuple)
 
-    # ── Load price data (market-state-aware) ──────────────────────────────
-    market_state = get_market_state()
-    spinner_msgs = {
-        "open":        f"Fetching live prices for {total_universe} stocks (~15min delay)…",
-        "pre":         f"Fetching pre-market prices for {total_universe} stocks (~15min delay)…",
-        "after_hours": f"Fetching after-hours prices for {total_universe} stocks (~15min delay)…",
-        "closed":      f"Fetching EOD prices for {total_universe} stocks…",
-    }
-    with st.spinner(spinner_msgs.get(market_state, "Fetching prices…")):
-        prices, market_state = fetch_price_data(tickers_tuple)
+    # ── Load price data (market-state-aware, or historical if a date is set) ─
+    if hist_mode and hist_date:
+        with st.spinner(f"Fetching {total_universe} stocks as of {hist_date.strftime('%d %b %Y')}…"):
+            prices = fetch_price_data_historical(tickers_tuple, hist_date)
+        market_state = "historical"
+    else:
+        market_state = get_market_state()
+        spinner_msgs = {
+            "open":        f"Fetching live prices for {total_universe} stocks (~15min delay)…",
+            "pre":         f"Fetching pre-market prices for {total_universe} stocks (~15min delay)…",
+            "after_hours": f"Fetching after-hours prices for {total_universe} stocks (~15min delay)…",
+            "closed":      f"Fetching EOD prices for {total_universe} stocks…",
+        }
+        with st.spinner(spinner_msgs.get(market_state, "Fetching prices…")):
+            prices, market_state = fetch_price_data(tickers_tuple)
 
     if prices.empty:
-        st.error("Failed to fetch price data from Yahoo Finance.")
+        st.error(
+            "Failed to fetch price data from Yahoo Finance."
+            + (f" No trading data found on or before {hist_date.strftime('%d %b %Y')}."
+               if hist_mode and hist_date else "")
+        )
         return
 
     # ── Merge constituents + prices ───────────────────────────────────────
@@ -2990,37 +3078,46 @@ def render_screener() -> None:
     # See fetch_recent_splits / _verify_split_adjusted_chg docstrings. This
     # is one extra batched call across the whole universe, then a targeted
     # re-check only for whatever handful of tickers actually split.
-    et_now       = timezone(timedelta(hours=-4))
-    split_bucket = str(datetime.now(et_now).date())
-    with st.spinner("Checking for recent stock splits…"):
-        splits_map = fetch_recent_splits(tickers_tuple, split_bucket)
+    # Skipped in historical mode: this check reconciles TODAY's live print
+    # against a split that happened in the last few days — not meaningful
+    # for an arbitrary past date, whose split-adjustment is already handled
+    # correctly by auto_adjust=True in the historical fetch itself.
+    if not hist_mode:
+        et_now       = timezone(timedelta(hours=-4))
+        split_bucket = str(datetime.now(et_now).date())
+        with st.spinner("Checking for recent stock splits…"):
+            splits_map = fetch_recent_splits(tickers_tuple, split_bucket)
 
-    priced["split_ratio"] = priced["ticker"].map(
-        lambda t: splits_map.get(t, {}).get("ratio"))
-    priced["split_date"] = priced["ticker"].map(
-        lambda t: splits_map.get(t, {}).get("date"))
-    priced["split_tag"] = priced["split_ratio"].apply(
-        lambda r: _split_tag(r) if pd.notna(r) else None)
+        priced["split_ratio"] = priced["ticker"].map(
+            lambda t: splits_map.get(t, {}).get("ratio"))
+        priced["split_date"] = priced["ticker"].map(
+            lambda t: splits_map.get(t, {}).get("date"))
+        priced["split_tag"] = priced["split_ratio"].apply(
+            lambda r: _split_tag(r) if pd.notna(r) else None)
 
-    for tk, info in splits_map.items():
-        mask = priced["ticker"] == tk
-        if not mask.any():
-            continue
-        px = priced.loc[mask, "price"].iloc[0]
-        if pd.isna(px):
-            continue
-        verified = _verify_split_adjusted_chg(tk, info["date"], info["ratio"], float(px))
-        if verified is None:
-            continue
-        existing = priced.loc[mask, "chg_pct"].iloc[0]
-        # Only override if auto_adjust's figure materially disagrees with the
-        # independently-verified one (>1pp) — otherwise auto_adjust already
-        # did its job correctly and the split_tag badge alone is enough.
-        if pd.isna(existing) or abs(verified - float(existing)) > 1.0:
-            corrected_prev_close = float(px) / (1 + verified / 100)
-            priced.loc[mask, "chg_pct"]    = verified
-            priced.loc[mask, "chg_abs"]    = float(px) - corrected_prev_close
-            priced.loc[mask, "prev_close"] = corrected_prev_close
+        for tk, info in splits_map.items():
+            mask = priced["ticker"] == tk
+            if not mask.any():
+                continue
+            px = priced.loc[mask, "price"].iloc[0]
+            if pd.isna(px):
+                continue
+            verified = _verify_split_adjusted_chg(tk, info["date"], info["ratio"], float(px))
+            if verified is None:
+                continue
+            existing = priced.loc[mask, "chg_pct"].iloc[0]
+            # Only override if auto_adjust's figure materially disagrees with the
+            # independently-verified one (>1pp) — otherwise auto_adjust already
+            # did its job correctly and the split_tag badge alone is enough.
+            if pd.isna(existing) or abs(verified - float(existing)) > 1.0:
+                corrected_prev_close = float(px) / (1 + verified / 100)
+                priced.loc[mask, "chg_pct"]    = verified
+                priced.loc[mask, "chg_abs"]    = float(px) - corrected_prev_close
+                priced.loc[mask, "prev_close"] = corrected_prev_close
+    else:
+        priced["split_ratio"] = None
+        priced["split_date"]  = None
+        priced["split_tag"]   = None
 
     # ── Stable weight base: shares × t-1 close over the FULL universe ──────
     # Use the prev_close column emitted by the price-fetch layer — which is
@@ -3105,6 +3202,16 @@ def render_screener() -> None:
             f"<span style='color:{_txt}'> (~15min delay) · "
             f"{active_count} of {total_universe} stocks active · "
             f"as of {now_sgt_str}</span>"
+        )
+    elif market_state == "historical":
+        _picked_str = hist_date.strftime("%d %b %Y") if hist_date else trade_date
+        _snap_note = ""
+        if hist_date and trade_date != "—" and str(hist_date) != trade_date:
+            _snap_note = f" — {_picked_str} was non-trading, showing the nearest prior session"
+        state_html = (
+            f"<span style='color:#5B8DEF;font-weight:700'>📅 HISTORICAL</span>"
+            f"<span style='color:{_txt}'> · showing {trade_date} official close{_snap_note} · "
+            f"{active_count} stocks</span>"
         )
     else:
         state_html = (
@@ -3222,28 +3329,34 @@ def render_screener() -> None:
     # Cached 24h; computed once per day across the whole universe.
     pool_tickers = tuple(direction_pool["ticker"].tolist())
     if pool_tickers:
-        try:
-            raw_prev = yf.download(
-                list(pool_tickers), period="7d", interval="1d",
-                auto_adjust=True, progress=False, threads=True,
-            )
-            prev_prices = tuple()
-            if not raw_prev.empty:
-                pc_close = raw_prev["Close"]
-                et       = timezone(timedelta(hours=-4))
-                today_et = datetime.now(et).date()
-                pp = []
-                for tk in pool_tickers:
-                    if tk not in pc_close.columns:
-                        continue
-                    colp = pc_close[tk].dropna()
-                    completed = colp[[d != today_et for d in colp.index.map(lambda x: x.date())]]
-                    series = completed if not completed.empty else colp
-                    if not series.empty:
-                        pp.append((tk, float(series.iloc[-1])))
-                prev_prices = tuple(pp)
-        except Exception:
-            prev_prices = tuple()
+        if hist_mode:
+            # Reuse the prev_close already fetched for the picked historical
+            # date — re-pulling "recent" bars here would silently give
+            # today's market caps instead of the backdated ones.
+            prev_prices = tuple(zip(direction_pool["ticker"], direction_pool["prev_close"]))
+        else:
+            try:
+                raw_prev = yf.download(
+                    list(pool_tickers), period="7d", interval="1d",
+                    auto_adjust=True, progress=False, threads=True,
+                )
+                prev_prices = tuple()
+                if not raw_prev.empty:
+                    pc_close = raw_prev["Close"]
+                    et       = timezone(timedelta(hours=-4))
+                    today_et = datetime.now(et).date()
+                    pp = []
+                    for tk in pool_tickers:
+                        if tk not in pc_close.columns:
+                            continue
+                        colp = pc_close[tk].dropna()
+                        completed = colp[[d != today_et for d in colp.index.map(lambda x: x.date())]]
+                        series = completed if not completed.empty else colp
+                        if not series.empty:
+                            pp.append((tk, float(series.iloc[-1])))
+                    prev_prices = tuple(pp)
+            except Exception:
+                prev_prices = tuple()
 
         with st.spinner("Fetching market caps (prev close)…"):
             mktcap_map = fetch_market_caps(pool_tickers, prev_prices)
@@ -3274,10 +3387,14 @@ def render_screener() -> None:
     with pd.ExcelWriter(xlsx_buf, engine="openpyxl") as writer:
         export_df.to_excel(writer, sheet_name=f"{etf_label} {view}", index=False)
     xlsx_buf.seek(0)
+    _fname_date = (
+        f"asof_{trade_date.replace('-', '')}" if hist_mode and trade_date != "—"
+        else datetime.now(sgt).strftime('%Y%m%d_%H%M')
+    )
     fname = (
         f"{etf_label}_{view.lower()}_"
         f"{('all' if sector_sel == 'All' else sector_sel.replace(' ', '_'))}_"
-        f"{datetime.now(sgt).strftime('%Y%m%d_%H%M')}.xlsx"
+        f"{_fname_date}.xlsx"
     )
     col_dl, col_pad = st.columns([2, 8])
     with col_dl:
@@ -3544,6 +3661,35 @@ def main():
                 if st.button("Nasdaq 100", key="btn_ndx100", use_container_width=True):
                     st.session_state["idx_choice"] = "Nasdaq 100"
                     st.rerun()
+
+            st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
+
+            # Date — backdate the entire report to a specific past trading
+            # day. Off by default (live/EOD data as before). Picking a
+            # weekend/holiday date snaps to the last session that traded.
+            st.markdown('<div class="sb-section-label">Date</div>', unsafe_allow_html=True)
+            _et_now   = timezone(timedelta(hours=-4))
+            _today_et = datetime.now(_et_now).date()
+
+            hist_mode = st.checkbox(
+                "View a past date",
+                value=st.session_state.get("hist_mode", False),
+                key="sb_hist_mode",
+            )
+            st.session_state["hist_mode"] = hist_mode
+
+            if hist_mode:
+                _default_date = st.session_state.get("hist_date", _today_et - timedelta(days=1))
+                if _default_date > _today_et:
+                    _default_date = _today_et
+                picked_date = st.date_input(
+                    "Date",
+                    value=_default_date,
+                    max_value=_today_et,
+                    key="sb_hist_date",
+                    label_visibility="collapsed",
+                )
+                st.session_state["hist_date"] = picked_date
 
             st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
 
