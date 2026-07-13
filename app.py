@@ -14,13 +14,22 @@ from datetime import datetime, timezone, timedelta
 import yfinance as yf
 
 # ─────────────────────────────────────────────────────────────────────────────
+# SIDEBAR TOGGLE STATE
+# Must be read before set_page_config (which must run before any other
+# Streamlit command) so the sidebar starts in whatever state the user last
+# left it in via the toggle button.
+# ─────────────────────────────────────────────────────────────────────────────
+if "sidebar_open" not in st.session_state:
+    st.session_state["sidebar_open"] = True
+
+# ─────────────────────────────────────────────────────────────────────────────
 # PAGE CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="US Macro Dashboard",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="expanded" if st.session_state["sidebar_open"] else "collapsed",
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -80,13 +89,43 @@ section[data-testid="stSidebar"] > div:first-child {
 .block-container { padding: 0 2rem 4rem; }
 
 /* ── Sidebar collapse/expand toggle ── */
-/* Restore and style Streamlit's native sidebar collapse (<<) and
-   expand (>>) controls so the sidebar can be minimized for a full-width
-   view (handy on mobile) and re-opened when needed. */
+/* Streamlit's own native collapse/expand controls are hidden — their
+   underlying element changes name across Streamlit versions, which is
+   what caused the button to vanish. Instead we render our own toggle
+   button (see .st-key-sidebar_toggle_btn below) that is always visible
+   and fully under our control, whether the sidebar is open or closed. */
+button[aria-label="Close sidebar"],
+button[data-testid="collapseSidebar"],
 [data-testid="stSidebarCollapseButton"],
-[data-testid="collapsedControl"] {
-    display: flex !important;
-    visibility: visible !important;
+[data-testid="collapsedControl"],
+[data-testid="stSidebarHeader"] button,
+section[data-testid="stSidebar"] button[kind="header"],
+section[data-testid="stSidebar"] > div > button:first-child {
+    display: none !important;
+}
+
+/* Our own always-visible sidebar toggle button */
+.st-key-sidebar_toggle_btn {
+    position: sticky;
+    top: 8px;
+    z-index: 999;
+    width: fit-content;
+    margin: 4px 0 12px;
+}
+.st-key-sidebar_toggle_btn button {
+    background: #F4F6FA !important;
+    border: 1px solid rgba(0,0,0,.15) !important;
+    border-radius: 8px !important;
+    color: #1A2540 !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    padding: 6px 14px !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+.st-key-sidebar_toggle_btn button:hover {
+    background: #E8ECF5 !important;
+    border-color: rgba(91,141,239,.5) !important;
+    color: #1A2540 !important;
 }
 
 /* ── Divider ── */
@@ -3389,6 +3428,15 @@ def main():
     if "sector_sel"         not in st.session_state: st.session_state["sector_sel"]         = "All"
     if "available_sectors"  not in st.session_state: st.session_state["available_sectors"]  = ["All"]
     if "pool_size"          not in st.session_state: st.session_state["pool_size"]          = 50
+
+    # ── Sidebar toggle button ────────────────────────────────────────────
+    # Always rendered at the top of the main content area (not inside the
+    # sidebar), so it stays visible whether the sidebar is open or closed —
+    # this is the only control for showing/hiding the sidebar.
+    toggle_label = "\u00ab  Hide sidebar" if st.session_state["sidebar_open"] else "\u2630  Show sidebar"
+    if st.button(toggle_label, key="sidebar_toggle_btn"):
+        st.session_state["sidebar_open"] = not st.session_state["sidebar_open"]
+        st.rerun()
 
     # ── Sidebar ────────────────────────────────────────────────────────────
     # All navigation and Markets controls live here. Streamlit re-runs the
