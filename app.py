@@ -3136,14 +3136,48 @@ def render_screener() -> None:
     else:
         priced["weight"] = 0.0
 
-    # ── Weighted index return (true SPY/QQQ move) ─────────────────────────
+    # ── Weighted index return (bottom-up estimate, used for Top-N Contrib) ──
     # Each name contributes weight_i × chg_pct_i over the FULL-universe weight
     # base. Names with no current print are treated as flat (0% change) — the
     # same way the ETF's own price treats a constituent that hasn't traded yet.
     # Non-priceable cash holdings contribute 0% and are excluded from the base,
-    # so this tracks the priced-equity portion of the ETF.
+    # so this tracks the priced-equity portion of the ETF. This bottom-up
+    # figure can drift from the ETF's own live tape pre/post-market (thin,
+    # unsynchronized constituent prints), so it is no longer used for the
+    # headline Return badge below — only as the weight base for Top-N Contrib.
     priced["chg_for_idx"] = priced["chg_pct"].fillna(0.0)
     weighted_return = float((priced["weight"] * priced["chg_for_idx"]).sum())
+
+    # ── Headline index return = SPY / QQQ's OWN price change ───────────────
+    # The user wants the headline "S&P 500 Return" / "Nasdaq 100 Return" badge
+    # to match the ETF's actual tape tick-for-tick, at any point in the
+    # session — not a bottom-up constituent estimate. Re-use the exact same
+    # session-aware routing (live 2-min bars / pre/after-hours / EOD /
+    # historical) already used for the constituent universe above, just
+    # pointed at the ETF ticker itself, so the same market-state branch and
+    # hist_date apply consistently to both.
+    try:
+        if hist_mode and hist_date:
+            etf_prices = fetch_price_data_historical((etf_label,), hist_date)
+        elif market_state == "open":
+            etf_prices = fetch_price_data_live((etf_label,))
+        elif market_state in ("pre", "after_hours"):
+            etf_prices = fetch_price_data_extended((etf_label,), market_state)
+        else:
+            etf_prices = fetch_price_data_eod((etf_label,))
+    except Exception as e:
+        print(f"ETF return fetch failed [{etf_label}]: {e}")
+        etf_prices = pd.DataFrame()
+
+    if not etf_prices.empty and etf_prices["chg_pct"].notna().any():
+        etf_row      = etf_prices[etf_prices["ticker"] == etf_label]
+        index_return = float(etf_row["chg_pct"].iloc[0]) if not etf_row.empty else weighted_return
+        index_return_is_live = True
+    else:
+        # Fallback: if the ETF's own quote fails to fetch, fall back to the
+        # bottom-up weighted estimate rather than showing nothing.
+        index_return = weighted_return
+        index_return_is_live = False
 
     # Count of names actually carrying a live print (for the status line).
     priced_with_quote = int(priced["price"].notna().sum())
@@ -3288,7 +3322,7 @@ def render_screener() -> None:
         (c3, "Unchanged",     f"{unchanged}",             "#4D6080"),
         (c4, top_n_label,     f"{top_n_avg:+.2f}%",       "#0CA86C" if top_n_avg          >= 0 else "#C8303F"),
         (c5, top_n_contrib_label, f"{top_n_contrib_bps:+.1f}bps", "#0CA86C" if top_n_contrib_bps >= 0 else "#C8303F"),
-        (c6, index_label, f"{weighted_return:+.2f}%", "#0CA86C" if weighted_return    >= 0 else "#C8303F"),
+        (c6, index_label, f"{index_return:+.2f}%", "#0CA86C" if index_return    >= 0 else "#C8303F"),
     ]:
         with col:
             st.markdown(f"""
@@ -3305,14 +3339,18 @@ def render_screener() -> None:
             """, unsafe_allow_html=True)
 
     # ── Cache footnotes for sidebar "About" section ──────────────────────
+    _etf_return_note = (
+        f"ⓘ {index_label} = {etf_label}'s own live price change"
+        if index_return_is_live else
+        f"ⓘ {index_label} = bottom-up weighted estimate "
+        f"({etf_label}'s own quote was unavailable)"
+    )
     st.session_state["screener_about_main"] = (
-        f"ⓘ {etf_label} Return = Σ(weightᵢ × chgᵢ) over the full {total_universe}-name base; "
+        f"{_etf_return_note}. "
+        f"Top {top_n} {view} Contrib = those same {top_n} names' index-weighted share of the "
+        f"move, in basis points (Σ weightᵢ × chgᵢ over the full {total_universe}-name base; "
         f"{quoted_weight:.1f}% of index weight is currently quoted "
-        f"({priced_with_quote}/{total_universe} names), the rest assumed flat. "
-        f"Top {top_n} {view} Contrib = those same {top_n} names' share of that move, "
-        f"in basis points (Σ weightᵢ × chgᵢ). "
-        f"Pre/after-hours figures will differ from the ETF's own live quote due to "
-        f"thin, unsynchronized constituent prints."
+        f"({priced_with_quote}/{total_universe} names), the rest assumed flat)."
     )
     if cash_count > 0:
         names_str = ", ".join(cash_names[:6]) + ("…" if cash_count > 6 else "")
