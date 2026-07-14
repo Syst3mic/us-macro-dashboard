@@ -10,7 +10,7 @@ import html
 import requests
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 import yfinance as yf
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -3520,6 +3520,481 @@ def render_screener() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# EVENTS CALENDAR — CONFIG
+# ─────────────────────────────────────────────────────────────────────────────
+# FOMC meeting calendar, taken directly from the Federal Reserve's own
+# published schedule (federalreserve.gov). 2026 dates are confirmed; 2027
+# dates are the Fed's own "tentative" schedule (announced 05 Sep 2025),
+# confirmed meeting-by-meeting as each one approaches — per the Fed's own
+# disclosure this almost never moves. Each tuple is (decision date, whether
+# the meeting carries a Summary of Economic Projections / dot plot).
+FOMC_DATES = [
+    (date(2026, 1, 28), False),
+    (date(2026, 3, 18), True),
+    (date(2026, 4, 29), False),
+    (date(2026, 6, 17), True),
+    (date(2026, 7, 29), False),
+    (date(2026, 9, 16), True),
+    (date(2026, 10, 28), False),
+    (date(2026, 12, 9), True),
+    (date(2027, 1, 27), False),
+    (date(2027, 3, 17), True),
+    (date(2027, 4, 28), False),
+    (date(2027, 6, 9), True),
+    (date(2027, 7, 28), False),
+    (date(2027, 9, 15), True),
+    (date(2027, 10, 27), False),
+    (date(2027, 12, 8), True),
+]
+
+# FRED "release" IDs whose /fred/release/dates calendar mirrors the source
+# agency's own official forward schedule (BLS/BEA/Census typically publish
+# these 6-18 months ahead). Risk scores are a fixed editorial importance
+# tier per release type (documented in the sidebar About panel) — NOT a
+# computed historical-volatility measure.
+FRED_CALENDAR_RELEASES = {
+    "nfp":     {"release_id": 50, "name": "Employment Situation (NFP + Unemployment)",
+                "category": "Labor",     "risk_score": 95},
+    "cpi":     {"release_id": 10, "name": "CPI / Core CPI",
+                "category": "Inflation", "risk_score": 92},
+    "corepce": {"release_id": 54, "name": "Core PCE (Fed's Preferred Gauge)",
+                "category": "Inflation", "risk_score": 90},
+    "retail":  {"release_id": 9,  "name": "Retail Sales",
+                "category": "Growth",    "risk_score": 75},
+    "ppi":     {"release_id": 46, "name": "PPI (Final Demand)",
+                "category": "Inflation", "risk_score": 72},
+}
+UMICH_RELEASE_ID = 91   # "Surveys of Consumers" — posts 2 dates/month (prelim, final)
+
+EVENT_CATEGORY_COLORS = {
+    "Fed":       "#A78BFA",
+    "Labor":     "#5B8DEF",
+    "Inflation": "#F0485A",
+    "Growth":    "#4D6080",
+    "Sentiment": "#F59E0B",
+}
+
+BACKDROP_TICKERS = [
+    ("Gold",          "GLD"),
+    ("Dollar",        "UUP"),
+    ("Long Duration", "TLT"),
+    ("Russell 2000",  "IWM"),
+    ("Nasdaq 100",    "QQQ"),
+    ("S&P 500",       "SPY"),
+]
+BACKDROP_HORIZONS = [("1D", 1), ("1W", 5), ("1M", 21), ("3M", 63), ("6M", 126), ("1Y", 252)]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EVENTS CALENDAR — DATA FETCH
+# ─────────────────────────────────────────────────────────────────────────────
+@st.cache_data(ttl=21600, show_spinner=False)
+def _fetch_fred_release_dates_raw(release_id: int) -> list:
+    """
+    Scheduled/actual dates for a FRED release (fred/release/dates), most-
+    recent-first. FRED mirrors each source agency's OWN published release
+    calendar, so forward dates here are genuine official schedule entries,
+    not an estimate. Cached 6h; callers key on today's date so this rebuilds
+    at most once/day.
+    """
+    fred_key = "bc1f32b397114934e95d879ec2646074"
+    url = (
+        f"https://api.stlouisfed.org/fred/release/dates"
+        f"?release_id={release_id}&api_key={fred_key}"
+        f"&file_type=json&sort_order=desc&limit=40"
+    )
+    try:
+        resp = requests.get(url, timeout=20)
+        resp.raise_for_status()
+        data = resp.json()
+        return [d["date"] for d in data.get("release_dates", [])]
+    except Exception as e:
+        print(f"FRED release-dates fetch failed [{release_id}]: {e}")
+        return []
+
+
+def _next_release_dates(release_id: int, today: date, n: int = 3) -> list:
+    """Next n scheduled dates on/after `today` for a release, ascending."""
+    raw    = _fetch_fred_release_dates_raw(release_id)
+    parsed = sorted(datetime.strptime(d, "%Y-%m-%d").date() for d in raw)
+    future = [d for d in parsed if d >= today]
+    return future[:n]
+
+
+@st.cache_data(ttl=21600, show_spinner=False)
+def build_events_calendar(cache_bucket: str) -> pd.DataFrame:
+    """
+    Builds the forward-looking US macro events calendar. cache_bucket is
+    today's ET date string (rebuild-once-per-day cache key).
+
+    Sources: FOMC = Federal Reserve's own published calendar (hardcoded
+    above). CPI/PPI/Core PCE/Retail Sales/NFP = FRED's release-date
+    calendar, which mirrors BLS/BEA/Census's own official schedules.
+    ADP = derived — always the Wednesday 2 days before the Employment
+    Situation release. Michigan Sentiment = FRED's Surveys of Consumers
+    calendar, which posts 2 dates/month (prelim, then final) — split
+    accordingly.
+    """
+    today = datetime.strptime(cache_bucket, "%Y-%m-%d").date()
+    rows  = []
+
+    for d, has_sep in FOMC_DATES:
+        if d < today:
+            continue
+        name = "FOMC Decision" + (" (+ SEP / Dot Plot)" if has_sep else "")
+        tentative = d.year >= 2027
+        if tentative:
+            name += " *"
+        rows.append({"date": d, "name": name, "category": "Fed",
+                      "risk_score": 99, "tentative": tentative})
+
+    nfp_cfg = FRED_CALENDAR_RELEASES["nfp"]
+    for d in _next_release_dates(nfp_cfg["release_id"], today, n=3):
+        rows.append({"date": d, "name": nfp_cfg["name"], "category": "Labor",
+                      "risk_score": nfp_cfg["risk_score"], "tentative": False})
+        adp_d = d - timedelta(days=2)   # ADP's standing Wednesday-before-payrolls slot
+        if adp_d >= today:
+            rows.append({"date": adp_d, "name": "ADP Employment Report",
+                          "category": "Labor", "risk_score": 60, "tentative": False})
+
+    for key in ("cpi", "corepce", "retail", "ppi"):
+        cfg = FRED_CALENDAR_RELEASES[key]
+        for d in _next_release_dates(cfg["release_id"], today, n=3):
+            rows.append({"date": d, "name": cfg["name"], "category": cfg["category"],
+                          "risk_score": cfg["risk_score"], "tentative": False})
+
+    umich_dates = sorted(set(_next_release_dates(UMICH_RELEASE_ID, today, n=8)))
+    by_month = {}
+    for d in umich_dates:
+        by_month.setdefault((d.year, d.month), []).append(d)
+    for _, ds in by_month.items():
+        ds = sorted(ds)
+        if len(ds) >= 1:
+            rows.append({"date": ds[0], "name": "Michigan Sentiment (Prelim)",
+                          "category": "Sentiment", "risk_score": 50, "tentative": False})
+        if len(ds) >= 2:
+            rows.append({"date": ds[1], "name": "Michigan Sentiment (Final)",
+                          "category": "Sentiment", "risk_score": 35, "tentative": False})
+
+    if not rows:
+        return pd.DataFrame(columns=["date", "name", "category", "risk_score", "tentative", "days_away"])
+
+    df = (pd.DataFrame(rows)
+          .drop_duplicates(subset=["date", "name"])
+          .sort_values("date")
+          .reset_index(drop=True))
+    df["days_away"] = df["date"].apply(lambda d: (d - today).days)
+    df["date"]      = pd.to_datetime(df["date"])
+    return df
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def fetch_market_backdrop(cache_bucket: str):
+    """
+    Trailing returns for the backdrop tickers + VIX level/1D change.
+    Horizons use standard trading-day conventions (1W≈5d, 1M≈21d, 3M≈63d,
+    6M≈126d, 1Y≈252d) applied to the most recent daily close, so every
+    horizon is anchored off the same latest print. cache_bucket = today's
+    ET date (rebuild-once-per-day); ttl=900s is just a backstop.
+    """
+    tickers = [tk for _, tk in BACKDROP_TICKERS] + ["^VIX"]
+    try:
+        raw = yf.download(tickers, period="2y", interval="1d",
+                           auto_adjust=True, progress=False, threads=True)
+    except Exception as e:
+        print(f"Market backdrop fetch failed: {e}")
+        return pd.DataFrame(), None, None
+
+    if raw.empty or "Close" not in raw:
+        return pd.DataFrame(), None, None
+    close = raw["Close"]
+
+    rows = []
+    for label, tk in BACKDROP_TICKERS:
+        if tk not in close.columns:
+            continue
+        col = close[tk].dropna()
+        if col.empty:
+            continue
+        last = float(col.iloc[-1])
+        row  = {"label": label, "ticker": tk, "last": last}
+        for h_label, n in BACKDROP_HORIZONS:
+            if len(col) > n:
+                base = float(col.iloc[-1 - n])
+                row[h_label] = (last / base - 1) * 100 if base else None
+            else:
+                row[h_label] = None
+        rows.append(row)
+    backdrop_df = pd.DataFrame(rows)
+
+    vix_last, vix_chg = None, None
+    if "^VIX" in close.columns:
+        vix_col = close["^VIX"].dropna()
+        if len(vix_col) >= 2:
+            vix_last = float(vix_col.iloc[-1])
+            vix_chg  = vix_last - float(vix_col.iloc[-2])
+
+    return backdrop_df, vix_last, vix_chg
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EVENTS CALENDAR — DISPLAY HELPERS
+# ─────────────────────────────────────────────────────────────────────────────
+def _fmt_days_away(n: int) -> str:
+    if n == 0: return "Today"
+    if n == 1: return "Tomorrow"
+    return f"in {n} days"
+
+
+def _diverging_bg(v, vmax=20.0):
+    """
+    Background + text colour for a signed % cell, RdYlGn-style: deep red at
+    -vmax, pale cream at 0, deep green at +vmax. Returns (bg_css, text_css).
+    """
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return "#F4F6FA", "#8898BB"
+    t = max(-1.0, min(1.0, v / vmax))
+    stops = [
+        (-1.00, (178, 24, 43)),
+        (-0.50, (244, 165, 130)),
+        (0.00,  (255, 247, 214)),
+        (0.50,  (166, 217, 106)),
+        (1.00,  (26, 152, 80)),
+    ]
+    r = g = b = 0
+    for i in range(len(stops) - 1):
+        t0, c0 = stops[i]
+        t1, c1 = stops[i + 1]
+        if t0 <= t <= t1:
+            f = (t - t0) / (t1 - t0) if t1 != t0 else 0
+            r = int(c0[0] + f * (c1[0] - c0[0]))
+            g = int(c0[1] + f * (c1[1] - c0[1]))
+            b = int(c0[2] + f * (c1[2] - c0[2]))
+            break
+    luminance = 0.299 * r + 0.587 * g + 0.114 * b
+    text = "#1A2540" if luminance > 140 else "#FFFFFF"
+    return f"rgb({r},{g},{b})", text
+
+
+def _event_card_html(label: str, value_html: str, sub_html: str, accent: str = "#1A2540") -> str:
+    return f"""
+    <div style="background:#F0F4FF;border:1px solid rgba(91,141,239,.2);
+        border-radius:8px;padding:14px 16px;min-height:96px;
+        display:flex;flex-direction:column;justify-content:center;gap:5px">
+      <div style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
+           color:#4D6080;letter-spacing:.5px;text-transform:uppercase;
+           white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{label}</div>
+      <div style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700;
+           color:{accent};line-height:1.25">{value_html}</div>
+      <div style="font-family:'Inter',sans-serif;font-size:10.5px;color:#8898BB;
+           line-height:1.3">{sub_html}</div>
+    </div>
+    """
+
+
+def render_backdrop_table_html(df: pd.DataFrame) -> str:
+    if df.empty:
+        return "<div class='sb-footnote'>Backdrop data unavailable.</div>"
+    horizon_labels = [h for h, _ in BACKDROP_HORIZONS]
+    header_cells   = "".join(f"<th>{h}</th>" for h in horizon_labels)
+    rows_html = ""
+    for _, row in df.iterrows():
+        cells = ""
+        for h in horizon_labels:
+            v = row.get(h)
+            bg, txt = _diverging_bg(v)
+            disp = f"{v:+.2f}%" if v is not None and not pd.isna(v) else "—"
+            cells += (
+                f"<td style='background:{bg};color:{txt};border-radius:4px'>{disp}</td>"
+            )
+        rows_html += f"""
+        <tr>
+          <td>{row['label']}
+            <span style="color:#8898BB;font-weight:400;font-size:10px"> {row['ticker']}</span></td>
+          {cells}
+        </tr>"""
+    return f"""
+    <table class="backdrop-table">
+      <thead><tr><th>Asset</th>{header_cells}</tr></thead>
+      <tbody>{rows_html}</tbody>
+    </table>"""
+
+
+def make_catalyst_tape(df: pd.DataFrame, today: date, window_days: int = 180) -> go.Figure:
+    window_df = df[df["days_away"].between(0, window_days)].copy()
+    fig = go.Figure()
+    for cat, color in EVENT_CATEGORY_COLORS.items():
+        cat_df = window_df[window_df["category"] == cat]
+        if cat_df.empty:
+            continue
+        fig.add_trace(go.Scatter(
+            x=cat_df["date"], y=cat_df["risk_score"],
+            mode="markers", name=cat,
+            marker=dict(size=13, color=color, line=dict(width=1, color="rgba(255,255,255,.7)")),
+            customdata=cat_df["name"],
+            hovertemplate="<b>%{customdata}</b><br>%{x|%d %b %Y}<br>Risk score: %{y}<extra></extra>",
+        ))
+    fig.add_vline(
+        x=pd.Timestamp(today), line_dash="dot", line_width=1.5,
+        line_color="rgba(26,37,64,.45)",
+        annotation_text="Today", annotation_position="top",
+        annotation_font=dict(color="#1A2540", size=11),
+    )
+    fig.update_layout(
+        height=380,
+        margin=dict(l=0, r=0, t=34, b=0),
+        paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF",
+        font=dict(family="Inter, sans-serif", color="#4D6080", size=11),
+        xaxis=dict(showgrid=False, zeroline=False, tickfont=dict(size=11, color="#1A2540")),
+        yaxis=dict(title="Risk score", range=[20, 108], showgrid=True,
+                    gridcolor="rgba(0,0,0,.06)", zeroline=False,
+                    tickfont=dict(size=10, color="#1A2540")),
+        legend=dict(orientation="h", yanchor="bottom", y=1.04, xanchor="left", x=0,
+                    font=dict(size=11, color="#1A2540")),
+        hoverlabel=dict(bgcolor="#F0F4FF", bordercolor="rgba(91,141,239,.3)",
+                         font=dict(family="Inter, sans-serif", size=12, color="#1A2540")),
+    )
+    return fig
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EVENTS CALENDAR — PAGE RENDERER
+# ─────────────────────────────────────────────────────────────────────────────
+def render_events_calendar() -> None:
+    et       = timezone(timedelta(hours=-4))
+    today_et = datetime.now(et).date()
+    cache_bucket = str(today_et)
+
+    st.markdown(
+        f"<div style='font-weight:700;color:#1A2540;padding:20px 0 4px;"
+        f"font-family:Inter,sans-serif;font-size:20px'>🗓️ Events Calendar"
+        f"<span style='font-size:12px;font-weight:400;color:#4D6080;margin-left:12px'>"
+        f"US Macro &amp; Fed Catalysts</span></div>"
+        f"<div style='font-family:Inter,sans-serif;font-size:12px;color:#4D6080;"
+        f"margin-bottom:18px'>Visual-first event risk and the next catalyst cluster worth watching.</div>",
+        unsafe_allow_html=True,
+    )
+
+    with st.spinner("Loading events calendar…"):
+        events_df = build_events_calendar(cache_bucket)
+    with st.spinner("Loading market backdrop…"):
+        backdrop_df, vix_last, vix_chg = fetch_market_backdrop(cache_bucket)
+
+    if events_df.empty:
+        st.error("Could not load the events calendar (FRED release-calendar fetch failed). Try refreshing.")
+        return
+
+    # ── Summary cards ───────────────────────────────────────────────────────
+    next_row  = events_df.iloc[0]
+    near_df   = events_df[events_df["days_away"] <= 30]
+    highest   = (near_df if not near_df.empty else events_df).sort_values("risk_score", ascending=False).iloc[0]
+    next7     = events_df[events_df["days_away"] <= 7]
+    next7_hi  = int((next7["risk_score"] >= 90).sum())
+
+    tape_df = events_df[events_df["days_away"] <= 180].sort_values("date").reset_index(drop=True)
+    dlist   = tape_df["date"].tolist()
+    clustered = set()
+    for i in range(len(dlist)):
+        for j in range(len(dlist)):
+            if i != j and abs((dlist[i] - dlist[j]).days) <= 2:
+                clustered.add(dlist[i])
+                break
+    clustered_days = len(clustered)
+
+    if vix_last is None:
+        vix_tag, vix_accent = "Unavailable", "#4D6080"
+    elif vix_last < 15:
+        vix_tag, vix_accent = "Very calm", "#0CA86C"
+    elif vix_last < 20:
+        vix_tag, vix_accent = "Calm", "#0CA86C"
+    elif vix_last < 25:
+        vix_tag, vix_accent = "Elevated", "#F59E0B"
+    elif vix_last < 35:
+        vix_tag, vix_accent = "Stressed", "#C8303F"
+    else:
+        vix_tag, vix_accent = "Crisis-level", "#C8303F"
+
+    c1, c2, c3, c4, c5 = st.columns(5, gap="medium")
+    with c1:
+        st.markdown(_event_card_html(
+            "Next Catalyst", next_row["name"],
+            f"{_fmt_days_away(int(next_row['days_away']))} · {next_row['date'].strftime('%d %b %Y')}",
+        ), unsafe_allow_html=True)
+    with c2:
+        st.markdown(_event_card_html(
+            "Highest Risk (30d)", highest["name"],
+            f"Risk score {int(highest['risk_score'])}",
+            accent="#C8303F" if highest["risk_score"] >= 90 else "#1A2540",
+        ), unsafe_allow_html=True)
+    with c3:
+        st.markdown(_event_card_html(
+            "Next 7 Days", str(len(next7)),
+            f"{next7_hi} high-risk event(s)",
+        ), unsafe_allow_html=True)
+    with c4:
+        st.markdown(_event_card_html(
+            "Clustered Days", str(clustered_days),
+            "Same-day or ±2-day catalysts (6mo)",
+        ), unsafe_allow_html=True)
+    with c5:
+        vix_val = f"VIX {vix_last:.1f}" if vix_last is not None else "VIX —"
+        vix_sub = f"{vix_tag} · {vix_chg:+.2f} 1D" if vix_chg is not None else vix_tag
+        st.markdown(_event_card_html("Vol Backdrop", vix_val, vix_sub, accent=vix_accent), unsafe_allow_html=True)
+
+    st.markdown("<div style='margin-top:22px'></div>", unsafe_allow_html=True)
+
+    # ── Catalyst tape ────────────────────────────────────────────────────────
+    st.markdown(
+        "<div style='font-family:Inter,sans-serif;font-size:14px;font-weight:700;"
+        "color:#1A2540;margin-bottom:2px'>Catalyst Tape — Next 6 Months</div>"
+        "<div style='font-family:Inter,sans-serif;font-size:10.5px;color:#8898BB;"
+        "margin-bottom:6px'>* 2026 FOMC dates are confirmed; 2027 dates are the "
+        "Fed's own tentative schedule.</div>",
+        unsafe_allow_html=True,
+    )
+    fig = make_catalyst_tape(events_df, today_et)
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key="catalyst_tape")
+
+    # ── Market backdrop ──────────────────────────────────────────────────────
+    st.markdown(
+        "<div style='font-family:Inter,sans-serif;font-size:14px;font-weight:700;"
+        "color:#1A2540;margin:14px 0 8px'>Market Backdrop — Trailing Returns</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("""
+    <style>
+    .backdrop-table { width:100%; border-collapse:collapse; font-family:'Inter',sans-serif; font-size:12.5px; }
+    .backdrop-table th { text-align:center; padding:9px 10px; font-size:10px; font-weight:700;
+        letter-spacing:.5px; text-transform:uppercase; color:#4D6080; background:#EEF2FC;
+        border-bottom:1px solid rgba(91,141,239,.15); }
+    .backdrop-table th:first-child { text-align:left; }
+    .backdrop-table td { padding:9px 10px; text-align:center; font-weight:600;
+        border-bottom:1px solid rgba(91,141,239,.06); }
+    .backdrop-table td:first-child { text-align:left; font-weight:600; color:#1A2540; }
+    </style>
+    """, unsafe_allow_html=True)
+    st.markdown(render_backdrop_table_html(backdrop_df), unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="font-family:'Inter', sans-serif;font-size:10px;color:#6B7A99;
+        margin-top:8px;text-align:right">
+      Prices: Yahoo Finance (auto-adjusted daily close) · Horizons ≈ 1 / 5 / 21 / 63 / 126 / 252
+      trading days back from the latest close
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Cache sidebar About footnote ─────────────────────────────────────────
+    st.session_state["events_about"] = (
+        "ⓘ Risk score is a fixed importance tier per release type (FOMC 99 · "
+        "NFP 95 · CPI 92 · Core PCE 90 · Retail Sales 75 · PPI 72 · ADP 60 · "
+        "Michigan Prelim 50 · Final 35) — a static editorial weighting, not a "
+        "computed historical-volatility measure. Dates: FOMC from the Federal "
+        "Reserve's own published calendar (2027 is the Fed's tentative "
+        "schedule); CPI/PPI/Core PCE/Retail Sales/NFP from FRED's release-date "
+        "calendar, which mirrors BLS/BEA/Census's own official schedules; "
+        "ADP = NFP date − 2 days (its standing Wednesday-before-payrolls slot); "
+        "Michigan Sentiment splits FRED's two monthly dates into Prelim/Final."
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────────────────────────────────────
 def _on_top_n_slider():
@@ -3558,8 +4033,10 @@ def main():
     # whole script on every interaction, so sidebar widgets simply write to
     # session_state and the main content area reads from it.
 
-    is_macro   = st.session_state["page"] == "MACRO"
-    is_markets = not is_macro
+    page_cur   = st.session_state["page"]
+    is_macro   = page_cur == "MACRO"
+    is_markets = page_cur == "MARKETS"
+    is_events  = page_cur == "EVENTS"
 
     # ── White background for all pages ────────────────────────────────────
     st.markdown("""
@@ -3610,11 +4087,16 @@ def main():
     mk_bd  = "rgba(91,141,239,.7)"   if is_markets else "rgba(91,141,239,.2)"
     mk_fw  = "700"                   if is_markets else "400"
     mk_col = _act_col                if is_markets else _ina_col
+    ev_bg  = "rgba(91,141,239,.22)"  if is_events  else "transparent"
+    ev_bd  = "rgba(91,141,239,.7)"   if is_events  else "rgba(91,141,239,.2)"
+    ev_fw  = "700"                   if is_events  else "400"
+    ev_col = _act_col                if is_events  else _ina_col
 
     st.markdown(f"""
     <style>
     button[aria-label="📊  Macro"]     {{ background:{m_bg}!important;  border-color:{m_bd}!important;  font-weight:{m_fw}!important; color:{m_col}!important; }}
     button[aria-label="📈  Market Screener"]   {{ background:{mk_bg}!important; border-color:{mk_bd}!important; font-weight:{mk_fw}!important; color:{mk_col}!important; }}
+    button[aria-label="🗓️  Events Calendar"]   {{ background:{ev_bg}!important; border-color:{ev_bd}!important; font-weight:{ev_fw}!important; color:{ev_col}!important; }}
     button[aria-label="S&P 500"]       {{ background:{sp_bg}!important; border-color:{sp_bd}!important; font-weight:{sp_fw}!important; color:{sp_col}!important; }}
     button[aria-label="Nasdaq 100"]    {{ background:{ndx_bg}!important;border-color:{ndx_bd}!important;font-weight:{ndx_fw}!important;color:{ndx_col}!important;}}
     button[aria-label="Gainers"]       {{ background:{g_bg}!important;  border-color:{g_bd}!important;  font-weight:{g_fw}!important;  color:{g_col}!important; }}
@@ -3637,6 +4119,9 @@ def main():
             st.rerun()
         if st.button("📈  Market Screener", key="btn_markets", use_container_width=True):
             st.session_state["page"] = "MARKETS"
+            st.rerun()
+        if st.button("🗓️  Events Calendar", key="btn_events", use_container_width=True):
+            st.session_state["page"] = "EVENTS"
             st.rerun()
 
         # ── Macro section navigation (only when on Macro tab) ─────────────
@@ -3822,9 +4307,33 @@ def main():
             </div>
             """, unsafe_allow_html=True)
 
+        # ── Events Calendar controls (only when on Events tab) ────────────
+        if is_events:
+            st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
+            st.markdown('<div class="sb-section-label">About</div>', unsafe_allow_html=True)
+            events_about = st.session_state.get("events_about", "")
+            if events_about:
+                st.markdown(f'<div class="sb-footnote">{events_about}</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(
+                    '<div class="sb-footnote">Load the calendar to see methodology details.</div>',
+                    unsafe_allow_html=True,
+                )
+            st.markdown("""
+            <div class="sb-footnote" style="margin-top:8px">
+              <b style="color:#1A2540">Sources</b><br>Federal Reserve · FRED Release Calendar · Yahoo Finance<br><br>
+              <b style="color:#1A2540">Coverage</b><br>FOMC · NFP · ADP · CPI · Core PCE · PPI · Retail Sales · Michigan Sentiment<br><br>
+              <b style="color:#1A2540">Cache</b><br>Calendar refreshes daily · Backdrop prices 15 min
+            </div>
+            """, unsafe_allow_html=True)
+
     # ── Route to page ──────────────────────────────────────────────────────
     if st.session_state["page"] == "MARKETS":
         render_screener()
+        return
+
+    if st.session_state["page"] == "EVENTS":
+        render_events_calendar()
         return
 
     # ── Expanded chart view ────────────────────────────────────────────────
