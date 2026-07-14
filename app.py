@@ -3821,27 +3821,21 @@ def render_backdrop_table_html(df: pd.DataFrame) -> str:
     horizon_labels = [h for h, _ in BACKDROP_HORIZONS] + ["YTD"]
     header_cells   = "".join(f"<th>{h}</th>" for h in horizon_labels)
 
-    # Colour scale is auto-scaled PER COLUMN: each horizon saturates red/green
-    # at its own max |move| (floor of 2%), so a 1D column (typically ±1-3%)
-    # gets just as much visual contrast as a 1Y column (typically ±15-30%),
-    # rather than every column sharing one fixed clamp that washes out the
-    # shorter horizons.
-    col_vmax = {}
-    for h in horizon_labels:
-        vals = df[h].dropna() if h in df.columns else pd.Series(dtype=float)
-        col_vmax[h] = max(2.0, float(vals.abs().max())) if not vals.empty else 2.0
+    # Colour scale is ONE consistent scale across the whole table (not
+    # per-column), computed from the actual max |move| present in the data
+    # (floor of 5%) — so colour intensity always tracks absolute magnitude
+    # the same way everywhere: a -12% cell is always darker than a -2% cell,
+    # no matter which column either sits in.
+    all_vals = pd.concat([df[h] for h in horizon_labels if h in df.columns]).dropna()
+    vmax = max(5.0, float(all_vals.abs().max())) if not all_vals.empty else 20.0
 
     rows_html = ""
     for _, row in df.iterrows():
         cells = ""
         for h in horizon_labels:
             v = row.get(h)
-            bg, txt = _diverging_bg(v, vmax=col_vmax[h])
-            if v is None or (isinstance(v, float) and pd.isna(v)):
-                disp = "—"
-            else:
-                arrow = "▲" if v > 0 else ("▼" if v < 0 else "●")
-                disp = f"{arrow} {abs(v):.2f}%"
+            bg, txt = _diverging_bg(v, vmax=vmax)
+            disp = f"{v:+.2f}%" if v is not None and not pd.isna(v) else "—"
             cells += f"<td style='background:{bg};color:{txt};border-radius:3px'>{disp}</td>"
         rows_html += f"""
         <tr>
@@ -4005,8 +3999,8 @@ def render_events_calendar() -> None:
     )
     st.markdown("""
     <style>
-    .backdrop-table { width:100%; border-collapse:collapse; font-family:'Inter',sans-serif; font-size:12px; }
-    .backdrop-table th { text-align:center; padding:10px 9px; font-size:9.5px; font-weight:700;
+    .backdrop-table { width:100%; border-collapse:collapse; font-family:'Inter',sans-serif; font-size:12.5px; }
+    .backdrop-table th { text-align:center; padding:10px 9px; font-size:10px; font-weight:700;
         letter-spacing:.7px; text-transform:uppercase; color:#4D6080; background:#EEF2FC;
         font-family:'SFMono-Regular','JetBrains Mono','Roboto Mono',Consolas,monospace;
         border-bottom:1px solid rgba(91,141,239,.25); border-right:1px solid rgba(91,141,239,.10); }
@@ -4029,8 +4023,9 @@ def render_events_calendar() -> None:
 
     st.markdown(
         "<div style='font-family:Inter,sans-serif;font-size:10px;color:#8898BB;margin-top:6px'>"
-        "Colour scale is auto-scaled per column — each horizon saturates red/green at its own "
-        "max |move|, so 1D and 1Y are equally legible.</div>",
+        "Colour scale is one consistent scale across the whole table, based on the largest move "
+        "actually present — so colour intensity always tracks absolute magnitude the same way "
+        "everywhere.</div>",
         unsafe_allow_html=True,
     )
 
@@ -4045,17 +4040,6 @@ def render_events_calendar() -> None:
     """, unsafe_allow_html=True)
 
     # ── Cache sidebar About footnote ─────────────────────────────────────────
-    st.session_state["events_about"] = (
-        "ⓘ Risk score is a fixed importance tier per release type (FOMC 99 · "
-        "NFP 95 · CPI 92 · Core PCE 90 · Retail Sales 75 · PPI 72 · ADP 60 · "
-        "Michigan Prelim 50 · Final 35) — a static editorial weighting, not a "
-        "computed historical-volatility measure. Dates: FOMC from the Federal "
-        "Reserve's own published calendar (2027 is the Fed's tentative "
-        "schedule); CPI/PPI/Core PCE/Retail Sales/NFP from FRED's release-date "
-        "calendar, which mirrors BLS/BEA/Census's own official schedules; "
-        "ADP = NFP date − 2 days (its standing Wednesday-before-payrolls slot); "
-        "Michigan Sentiment splits FRED's two monthly dates into Prelim/Final."
-    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -4375,16 +4359,8 @@ def main():
         if is_events:
             st.markdown('<hr class="sb-divider">', unsafe_allow_html=True)
             st.markdown('<div class="sb-section-label">About</div>', unsafe_allow_html=True)
-            events_about = st.session_state.get("events_about", "")
-            if events_about:
-                st.markdown(f'<div class="sb-footnote">{events_about}</div>', unsafe_allow_html=True)
-            else:
-                st.markdown(
-                    '<div class="sb-footnote">Load the calendar to see methodology details.</div>',
-                    unsafe_allow_html=True,
-                )
             st.markdown("""
-            <div class="sb-footnote" style="margin-top:8px">
+            <div class="sb-footnote">
               <b style="color:#1A2540">Sources</b><br>Federal Reserve · FRED Release Calendar · Yahoo Finance<br><br>
               <b style="color:#1A2540">Coverage</b><br>FOMC · NFP · ADP · CPI · Core PCE · PPI · Retail Sales · Michigan Sentiment<br><br>
               <b style="color:#1A2540">Cache</b><br>Calendar refreshes daily · Backdrop prices 15 min
