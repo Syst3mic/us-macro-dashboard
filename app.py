@@ -3582,7 +3582,7 @@ BACKDROP_TICKERS = [
     ("Nasdaq 100",    "QQQ"),
     ("S&P 500",       "SPY"),
 ]
-BACKDROP_HORIZONS = [("1D", 1), ("1W", 5), ("1M", 21), ("3M", 63), ("6M", 126), ("1Y", 252)]
+BACKDROP_HORIZONS = [("1D", 1), ("1W", 7), ("1M", 30), ("3M", 90), ("6M", 180), ("1Y", 365)]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # EVENTS CALENDAR — DATA FETCH
@@ -3691,14 +3691,19 @@ def build_events_calendar(cache_bucket: str) -> pd.DataFrame:
 def fetch_market_backdrop(cache_bucket: str):
     """
     Trailing returns for the backdrop tickers + VIX level/1D change.
-    Horizons use standard trading-day conventions (1W≈5d, 1M≈21d, 3M≈63d,
-    6M≈126d, 1Y≈252d) applied to the most recent daily close, so every
-    horizon is anchored off the same latest print. cache_bucket = today's
-    ET date (rebuild-once-per-day); ttl=900s is just a backstop.
+    Horizons use ACTUAL calendar days back from the latest close (1W=7d,
+    1M=30d, 3M=90d, 6M=180d, 1Y=365d) — not trading-day counts. For each
+    horizon we look up the price as of that calendar date via pandas'
+    asof(): if the target date lands on a weekend/holiday (a non-trading
+    day), asof naturally resolves to the last trading day AT OR BEFORE it.
+    YTD compares against the last trading close of the prior calendar year
+    (i.e. as of 31 Dec, same asof logic). cache_bucket = today's ET date
+    (rebuild-once-per-day); ttl=900s is just a backstop. Fetches 3y of
+    history so even the 1Y/YTD lookups have safe buffer at the boundary.
     """
     tickers = [tk for _, tk in BACKDROP_TICKERS] + ["^VIX"]
     try:
-        raw = yf.download(tickers, period="2y", interval="1d",
+        raw = yf.download(tickers, period="3y", interval="1d",
                            auto_adjust=True, progress=False, threads=True)
     except Exception as e:
         print(f"Market backdrop fetch failed: {e}")
@@ -3708,6 +3713,12 @@ def fetch_market_backdrop(cache_bucket: str):
         return pd.DataFrame(), None, None, None
     close = raw["Close"]
 
+    def _asof_pct(col: pd.Series, last_val: float, target: pd.Timestamp):
+        base = col.asof(target)
+        if base is None or (isinstance(base, float) and pd.isna(base)) or base == 0:
+            return None
+        return (last_val / float(base) - 1) * 100
+
     rows = []
     for label, tk in BACKDROP_TICKERS:
         if tk not in close.columns:
@@ -3715,14 +3726,14 @@ def fetch_market_backdrop(cache_bucket: str):
         col = close[tk].dropna()
         if col.empty:
             continue
-        last = float(col.iloc[-1])
-        row  = {"label": label, "ticker": tk, "last": last}
-        for h_label, n in BACKDROP_HORIZONS:
-            if len(col) > n:
-                base = float(col.iloc[-1 - n])
-                row[h_label] = (last / base - 1) * 100 if base else None
-            else:
-                row[h_label] = None
+        last_date = col.index[-1]
+        last      = float(col.iloc[-1])
+        row       = {"label": label, "ticker": tk, "last": last}
+        for h_label, n_days in BACKDROP_HORIZONS:
+            target = last_date - pd.Timedelta(days=n_days)
+            row[h_label] = _asof_pct(col, last, target)
+        ytd_target = pd.Timestamp(year=last_date.year - 1, month=12, day=31)
+        row["YTD"] = _asof_pct(col, last, ytd_target)
         rows.append(row)
     backdrop_df = pd.DataFrame(rows)
 
@@ -3795,7 +3806,7 @@ def _event_card_html(label: str, value_html: str, sub_html: str, accent: str = "
 def render_backdrop_table_html(df: pd.DataFrame) -> str:
     if df.empty:
         return "<div class='sb-footnote'>Backdrop data unavailable.</div>"
-    horizon_labels = [h for h, _ in BACKDROP_HORIZONS]
+    horizon_labels = [h for h, _ in BACKDROP_HORIZONS] + ["YTD"]
     header_cells   = "".join(f"<th>{h}</th>" for h in horizon_labels)
     rows_html = ""
     for _, row in df.iterrows():
@@ -3906,24 +3917,11 @@ def render_events_calendar() -> None:
     clustered_days = len(clustered)
 
     # Level tag is purely descriptive (where VIX sits in absolute terms).
-    # Colour is separate and tracks the DIRECTION of the 1D move: VIX rising
-    # means volatility is increasing (bad news for risk assets) → red;
-    # VIX falling → green. This is the opposite convention from an equity
-    # index card, which is intentional — a rising vol gauge is the negative
-    # signal here.
-    if vix_last is None:
-        vix_tag = "Unavailable"
-    elif vix_last < 15:
-        vix_tag = "Very calm"
-    elif vix_last < 20:
-        vix_tag = "Calm"
-    elif vix_last < 25:
-        vix_tag = "Elevated"
-    elif vix_last < 35:
-        vix_tag = "Stressed"
-    else:
-        vix_tag = "Crisis-level"
-
+    # Colour tracks the DIRECTION of the 1D move: VIX rising means
+    # volatility is increasing (bad news for risk assets) → red; VIX
+    # falling → green. This is the opposite convention from an equity
+    # index card, which is intentional — a rising vol gauge is the
+    # negative signal here.
     if vix_chg is None:
         vix_dir_color = "#4D6080"
     elif vix_chg > 0:
@@ -3957,10 +3955,7 @@ def render_events_calendar() -> None:
         ), unsafe_allow_html=True)
     with c5:
         vix_val = f"VIX {vix_last:.1f}" if vix_last is not None else "VIX —"
-        if vix_chg is not None and vix_chg_pct is not None:
-            vix_sub = f"{vix_tag} · {vix_chg:+.2f} ({vix_chg_pct:+.1f}%) 1D"
-        else:
-            vix_sub = vix_tag
+        vix_sub = f"{vix_chg_pct:+.1f}% 1D" if vix_chg_pct is not None else "1D change unavailable"
         st.markdown(_event_card_html("Vol Backdrop", vix_val, vix_sub, accent=vix_dir_color), unsafe_allow_html=True)
 
     st.markdown("<div style='margin-top:22px'></div>", unsafe_allow_html=True)
@@ -4000,8 +3995,9 @@ def render_events_calendar() -> None:
     st.markdown("""
     <div style="font-family:'Inter', sans-serif;font-size:10px;color:#6B7A99;
         margin-top:8px;text-align:right">
-      Prices: Yahoo Finance (auto-adjusted daily close) · Horizons ≈ 1 / 5 / 21 / 63 / 126 / 252
-      trading days back from the latest close
+      Prices: Yahoo Finance (auto-adjusted daily close) · Horizons = actual calendar days back
+      (1D/1W/1M/3M/6M/1Y = 1/7/30/90/180/365 days) — a non-trading target date resolves to the
+      last trading day at or before it · YTD = vs. last close of the prior calendar year
     </div>
     """, unsafe_allow_html=True)
 
