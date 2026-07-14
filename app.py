@@ -3702,10 +3702,10 @@ def fetch_market_backdrop(cache_bucket: str):
                            auto_adjust=True, progress=False, threads=True)
     except Exception as e:
         print(f"Market backdrop fetch failed: {e}")
-        return pd.DataFrame(), None, None
+        return pd.DataFrame(), None, None, None
 
     if raw.empty or "Close" not in raw:
-        return pd.DataFrame(), None, None
+        return pd.DataFrame(), None, None, None
     close = raw["Close"]
 
     rows = []
@@ -3726,14 +3726,16 @@ def fetch_market_backdrop(cache_bucket: str):
         rows.append(row)
     backdrop_df = pd.DataFrame(rows)
 
-    vix_last, vix_chg = None, None
+    vix_last, vix_chg, vix_chg_pct = None, None, None
     if "^VIX" in close.columns:
         vix_col = close["^VIX"].dropna()
         if len(vix_col) >= 2:
             vix_last = float(vix_col.iloc[-1])
-            vix_chg  = vix_last - float(vix_col.iloc[-2])
+            vix_prev = float(vix_col.iloc[-2])
+            vix_chg  = vix_last - vix_prev
+            vix_chg_pct = (vix_last / vix_prev - 1) * 100 if vix_prev else None
 
-    return backdrop_df, vix_last, vix_chg
+    return backdrop_df, vix_last, vix_chg, vix_chg_pct
 
 # ─────────────────────────────────────────────────────────────────────────────
 # EVENTS CALENDAR — DISPLAY HELPERS
@@ -3832,11 +3834,16 @@ def make_catalyst_tape(df: pd.DataFrame, today: date, window_days: int = 180) ->
             customdata=cat_df["name"],
             hovertemplate="<b>%{customdata}</b><br>%{x|%d %b %Y}<br>Risk score: %{y}<extra></extra>",
         ))
-    fig.add_vline(
-        x=pd.Timestamp(today), line_dash="dot", line_width=1.5,
-        line_color="rgba(26,37,64,.45)",
-        annotation_text="Today", annotation_position="top",
-        annotation_font=dict(color="#1A2540", size=11),
+    today_ts = pd.Timestamp(today)
+    fig.add_shape(
+        type="line", xref="x", yref="paper",
+        x0=today_ts, x1=today_ts, y0=0, y1=1,
+        line=dict(dash="dot", width=1.5, color="rgba(26,37,64,.45)"),
+    )
+    fig.add_annotation(
+        x=today_ts, y=1, yref="paper", yanchor="bottom",
+        text="Today", showarrow=False,
+        font=dict(color="#1A2540", size=11),
     )
     fig.update_layout(
         height=380,
@@ -3875,7 +3882,7 @@ def render_events_calendar() -> None:
     with st.spinner("Loading events calendar…"):
         events_df = build_events_calendar(cache_bucket)
     with st.spinner("Loading market backdrop…"):
-        backdrop_df, vix_last, vix_chg = fetch_market_backdrop(cache_bucket)
+        backdrop_df, vix_last, vix_chg, vix_chg_pct = fetch_market_backdrop(cache_bucket)
 
     if events_df.empty:
         st.error("Could not load the events calendar (FRED release-calendar fetch failed). Try refreshing.")
@@ -3898,18 +3905,33 @@ def render_events_calendar() -> None:
                 break
     clustered_days = len(clustered)
 
+    # Level tag is purely descriptive (where VIX sits in absolute terms).
+    # Colour is separate and tracks the DIRECTION of the 1D move: VIX rising
+    # means volatility is increasing (bad news for risk assets) → red;
+    # VIX falling → green. This is the opposite convention from an equity
+    # index card, which is intentional — a rising vol gauge is the negative
+    # signal here.
     if vix_last is None:
-        vix_tag, vix_accent = "Unavailable", "#4D6080"
+        vix_tag = "Unavailable"
     elif vix_last < 15:
-        vix_tag, vix_accent = "Very calm", "#0CA86C"
+        vix_tag = "Very calm"
     elif vix_last < 20:
-        vix_tag, vix_accent = "Calm", "#0CA86C"
+        vix_tag = "Calm"
     elif vix_last < 25:
-        vix_tag, vix_accent = "Elevated", "#F59E0B"
+        vix_tag = "Elevated"
     elif vix_last < 35:
-        vix_tag, vix_accent = "Stressed", "#C8303F"
+        vix_tag = "Stressed"
     else:
-        vix_tag, vix_accent = "Crisis-level", "#C8303F"
+        vix_tag = "Crisis-level"
+
+    if vix_chg is None:
+        vix_dir_color = "#4D6080"
+    elif vix_chg > 0:
+        vix_dir_color = "#C8303F"   # VIX up → more volatile → red
+    elif vix_chg < 0:
+        vix_dir_color = "#0CA86C"   # VIX down → calmer → green
+    else:
+        vix_dir_color = "#4D6080"
 
     c1, c2, c3, c4, c5 = st.columns(5, gap="medium")
     with c1:
@@ -3935,8 +3957,11 @@ def render_events_calendar() -> None:
         ), unsafe_allow_html=True)
     with c5:
         vix_val = f"VIX {vix_last:.1f}" if vix_last is not None else "VIX —"
-        vix_sub = f"{vix_tag} · {vix_chg:+.2f} 1D" if vix_chg is not None else vix_tag
-        st.markdown(_event_card_html("Vol Backdrop", vix_val, vix_sub, accent=vix_accent), unsafe_allow_html=True)
+        if vix_chg is not None and vix_chg_pct is not None:
+            vix_sub = f"{vix_tag} · {vix_chg:+.2f} ({vix_chg_pct:+.1f}%) 1D"
+        else:
+            vix_sub = vix_tag
+        st.markdown(_event_card_html("Vol Backdrop", vix_val, vix_sub, accent=vix_dir_color), unsafe_allow_html=True)
 
     st.markdown("<div style='margin-top:22px'></div>", unsafe_allow_html=True)
 
