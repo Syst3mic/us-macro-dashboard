@@ -669,6 +669,7 @@ def fetch_bls_data() -> dict:
         "startyear":       str(start_year),
         "endyear":         str(end_year),
         "registrationkey": api_key,
+        "calculations":    True,       # request BLS pre-computed pct changes
     }
     resp = requests.post(
         "https://api.bls.gov/publicAPI/v2/timeseries/data/",
@@ -691,9 +692,12 @@ def fetch_bls_data() -> dict:
             if obs["period"] == "M13" or obs["value"] in ("-", ""):
                 continue
             month = int(obs["period"][1:])
+            calcs = obs.get("calculations", {}).get("pct_changes", {})
             rows.append({
-                "date":  pd.Timestamp(year=int(obs["year"]), month=month, day=1),
-                "value": float(obs["value"]),
+                "date":    pd.Timestamp(year=int(obs["year"]), month=month, day=1),
+                "value":   float(obs["value"]),
+                "mom_bls": float(calcs["1"])  if "1"  in calcs else None,  # BLS 1-month %chg
+                "yoy_bls": float(calcs["12"]) if "12" in calcs else None,  # BLS 12-month %chg
             })
         df = pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
         result[key] = df
@@ -765,13 +769,26 @@ def fetch_fred_data() -> dict:
 def compute_series(df: pd.DataFrame, transform: str) -> pd.DataFrame:
     df = df.copy()
     if transform == "price_index":
-        # MoM from the seasonally adjusted level; YoY from the unadjusted (NSA)
-        # level when available (BLS headline over-the-year convention). FRED
-        # cards (e.g. Core PCE) carry no `value_nsa` column and correctly keep
-        # their SA-based YoY via the fallback below.
-        df["mom"] = df["value"].pct_change(1) * 100
-        yoy_src   = df["value_nsa"] if "value_nsa" in df.columns else df["value"]
-        df["yoy"] = yoy_src.pct_change(12) * 100
+        # Prefer BLS pre-computed %changes (from calculations block in the API
+        # response) — these match official headline prints exactly because BLS
+        # computes them from internal unrounded index levels. Fall back to
+        # pct_change() only for data points where the BLS didn't return calcs
+        # (e.g. the oldest observations at the start of the history window).
+        # FRED cards (Core PCE) carry no mom_bls/yoy_bls columns and correctly
+        # use the pct_change() fallback throughout.
+        if "mom_bls" in df.columns:
+            derived_mom = df["value"].pct_change(1) * 100
+            df["mom"] = df["mom_bls"].fillna(derived_mom)
+        else:
+            df["mom"] = df["value"].pct_change(1) * 100
+
+        if "yoy_bls" in df.columns:
+            yoy_src      = df["value_nsa"] if "value_nsa" in df.columns else df["value"]
+            derived_yoy  = yoy_src.pct_change(12) * 100
+            df["yoy"] = df["yoy_bls"].fillna(derived_yoy)
+        else:
+            yoy_src   = df["value_nsa"] if "value_nsa" in df.columns else df["value"]
+            df["yoy"] = yoy_src.pct_change(12) * 100
     elif transform in ("rate", "nfp"):
         df["mom"] = df["value"].diff(1)
         df["yoy"] = df["value"].diff(12)
