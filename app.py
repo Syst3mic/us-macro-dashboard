@@ -3822,12 +3822,13 @@ def render_backdrop_table_html(df: pd.DataFrame) -> str:
     header_cells   = "".join(f"<th>{h}</th>" for h in horizon_labels)
 
     # Colour scale is ONE consistent scale across the whole table (not
-    # per-column), computed from the actual max |move| present in the data
-    # (floor of 5%) — so colour intensity always tracks absolute magnitude
-    # the same way everywhere: a -12% cell is always darker than a -2% cell,
-    # no matter which column either sits in.
-    all_vals = pd.concat([df[h] for h in horizon_labels if h in df.columns]).dropna()
-    vmax = max(5.0, float(all_vals.abs().max())) if not all_vals.empty else 20.0
+    # per-column) so intensity always tracks absolute magnitude the same way
+    # everywhere. It's fixed at a sensible clamp (±15%) rather than derived
+    # from the single largest move present — using the literal data max as
+    # vmax meant one outlier (e.g. a +30%+ 1Y move) stretched the whole
+    # scale so that genuinely large moves like -15.67% still looked pale.
+    # Anything at or beyond ±15% simply renders as the deepest red/green.
+    vmax = 15.0
 
     rows_html = ""
     for _, row in df.iterrows():
@@ -3999,7 +4000,7 @@ def render_events_calendar() -> None:
     )
     st.markdown("""
     <style>
-    .backdrop-table { width:100%; border-collapse:collapse; font-family:'Inter',sans-serif; font-size:12.5px; }
+    .backdrop-table { width:100%; border-collapse:collapse; font-family:'Inter',sans-serif; font-size:12px; }
     .backdrop-table th { text-align:center; padding:10px 9px; font-size:10px; font-weight:700;
         letter-spacing:.7px; text-transform:uppercase; color:#4D6080; background:#EEF2FC;
         font-family:'SFMono-Regular','JetBrains Mono','Roboto Mono',Consolas,monospace;
@@ -4023,9 +4024,9 @@ def render_events_calendar() -> None:
 
     st.markdown(
         "<div style='font-family:Inter,sans-serif;font-size:10px;color:#8898BB;margin-top:6px'>"
-        "Colour scale is one consistent scale across the whole table, based on the largest move "
-        "actually present — so colour intensity always tracks absolute magnitude the same way "
-        "everywhere.</div>",
+        "Colour scale is one consistent scale across the whole table, fixed at ±15% — a -12% cell "
+        "is always darker than a -2% cell, and any move at or beyond ±15% renders as the deepest "
+        "red/green.</div>",
         unsafe_allow_html=True,
     )
 
