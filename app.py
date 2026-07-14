@@ -3582,7 +3582,14 @@ BACKDROP_TICKERS = [
     ("Nasdaq 100",    "QQQ"),
     ("S&P 500",       "SPY"),
 ]
-BACKDROP_HORIZONS = [("1D", 1), ("1W", 7), ("1M", 30), ("3M", 90), ("6M", 180), ("1Y", 365)]
+BACKDROP_HORIZONS = [
+    ("1D", pd.DateOffset(days=1)),
+    ("1W", pd.DateOffset(days=7)),
+    ("1M", pd.DateOffset(months=1)),
+    ("3M", pd.DateOffset(months=3)),
+    ("6M", pd.DateOffset(months=6)),
+    ("1Y", pd.DateOffset(years=1)),
+]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # EVENTS CALENDAR — DATA FETCH
@@ -3691,11 +3698,13 @@ def build_events_calendar(cache_bucket: str) -> pd.DataFrame:
 def fetch_market_backdrop(cache_bucket: str):
     """
     Trailing returns for the backdrop tickers + VIX level/1D change.
-    Horizons use ACTUAL calendar days back from the latest close (1W=7d,
-    1M=30d, 3M=90d, 6M=180d, 1Y=365d) — not trading-day counts. For each
-    horizon we look up the price as of that calendar date via pandas'
-    asof(): if the target date lands on a weekend/holiday (a non-trading
-    day), asof naturally resolves to the last trading day AT OR BEFORE it.
+    Horizons are anchored to the SAME calendar day-of-month, N months/years
+    back (e.g. today 13 Jul 2026 → 1M target is 13 Jun 2026, 3M target is
+    13 Apr 2026, 1Y target is 13 Jul 2025) via pd.DateOffset, not a fixed
+    day-count. For each horizon we look up the price as of that target date
+    via pandas' asof(): if the target lands on a weekend/holiday (a
+    non-trading day), asof naturally resolves to the last trading day AT OR
+    BEFORE it (walking back one day at a time until a trading day is found).
     YTD compares against the last trading close of the prior calendar year
     (i.e. as of 31 Dec, same asof logic). cache_bucket = today's ET date
     (rebuild-once-per-day); ttl=900s is just a backstop. Fetches 3y of
@@ -3729,8 +3738,8 @@ def fetch_market_backdrop(cache_bucket: str):
         last_date = col.index[-1]
         last      = float(col.iloc[-1])
         row       = {"label": label, "ticker": tk, "last": last}
-        for h_label, n_days in BACKDROP_HORIZONS:
-            target = last_date - pd.Timedelta(days=n_days)
+        for h_label, offset in BACKDROP_HORIZONS:
+            target = last_date - offset
             row[h_label] = _asof_pct(col, last, target)
         ytd_target = pd.Timestamp(year=last_date.year - 1, month=12, day=31)
         row["YTD"] = _asof_pct(col, last, ytd_target)
@@ -3995,9 +4004,10 @@ def render_events_calendar() -> None:
     st.markdown("""
     <div style="font-family:'Inter', sans-serif;font-size:10px;color:#6B7A99;
         margin-top:8px;text-align:right">
-      Prices: Yahoo Finance (auto-adjusted daily close) · Horizons = actual calendar days back
-      (1D/1W/1M/3M/6M/1Y = 1/7/30/90/180/365 days) — a non-trading target date resolves to the
-      last trading day at or before it · YTD = vs. last close of the prior calendar year
+      Prices: Yahoo Finance (auto-adjusted daily close) · Horizons anchor to the same
+      day-of-month N months/years back (1M/3M/6M/1Y; 1D/1W = 1/7 calendar days) —
+      a non-trading anchor date resolves to the last trading day at or before it ·
+      YTD = vs. last close of the prior calendar year
     </div>
     """, unsafe_allow_html=True)
 
