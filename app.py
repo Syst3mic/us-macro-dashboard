@@ -3602,12 +3602,19 @@ def _fetch_fred_release_dates_raw(release_id: int) -> list:
     calendar, so forward dates here are genuine official schedule entries,
     not an estimate. Cached 6h; callers key on today's date so this rebuilds
     at most once/day.
+
+    include_release_dates_with_no_data=true is REQUIRED here — FRED's
+    default (false) excludes any release date that doesn't have data
+    attached yet, which by definition excludes every future/scheduled
+    date. Without this flag every category except the hardcoded FOMC
+    calendar silently returns zero forward dates.
     """
     fred_key = "bc1f32b397114934e95d879ec2646074"
     url = (
         f"https://api.stlouisfed.org/fred/release/dates"
         f"?release_id={release_id}&api_key={fred_key}"
-        f"&file_type=json&sort_order=desc&limit=40"
+        f"&file_type=json&sort_order=desc&limit=60"
+        f"&include_release_dates_with_no_data=true"
     )
     try:
         resp = requests.get(url, timeout=20)
