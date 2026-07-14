@@ -3945,18 +3945,9 @@ def render_events_calendar() -> None:
     )
 
     with st.spinner("Loading events calendar…"):
-        events_df, events_diag = build_events_calendar(cache_bucket)
+        events_df, _events_diag = build_events_calendar(cache_bucket)
     with st.spinner("Loading market backdrop…"):
         backdrop_df, vix_last, vix_chg, vix_chg_pct = fetch_market_backdrop(cache_bucket)
-
-    with st.expander("🔧 Data source diagnostics"):
-        st.dataframe(pd.DataFrame(events_diag), use_container_width=True, hide_index=True)
-        st.caption(
-            "raw_count = dates FRED returned for that release (any date). future_count = how many "
-            "of those are on/after today. If future_count is 0 while raw_count is > 0, FRED is "
-            "responding but hasn't published forward dates for that release yet. If error is not "
-            "None, the request itself failed (check http_status)."
-        )
 
     if events_df.empty:
         st.error("Could not load the events calendar (FRED release-calendar fetch failed). Try refreshing.")
@@ -3967,16 +3958,6 @@ def render_events_calendar() -> None:
     fed_df    = events_df[events_df["category"] == "Fed"]
     next_fomc = fed_df.iloc[0] if not fed_df.empty else None
     next7     = events_df[events_df["days_away"] <= 7]
-
-    tape_df = events_df[events_df["days_away"] <= 180].sort_values("date").reset_index(drop=True)
-    dlist   = tape_df["date"].tolist()
-    clustered = set()
-    for i in range(len(dlist)):
-        for j in range(len(dlist)):
-            if i != j and abs((dlist[i] - dlist[j]).days) <= 2:
-                clustered.add(dlist[i])
-                break
-    clustered_days = len(clustered)
 
     # Level tag is purely descriptive (where VIX sits in absolute terms).
     # Colour tracks the DIRECTION of the 1D move: VIX rising means
@@ -3993,7 +3974,7 @@ def render_events_calendar() -> None:
     else:
         vix_dir_color = "#4D6080"
 
-    c1, c2, c3, c4, c5 = st.columns(5, gap="medium")
+    c1, c2, c3, c4 = st.columns(4, gap="medium")
     with c1:
         st.markdown(_event_card_html(
             "Next Catalyst", next_row["name"],
@@ -4013,11 +3994,6 @@ def render_events_calendar() -> None:
             "upcoming event(s)",
         ), unsafe_allow_html=True)
     with c4:
-        st.markdown(_event_card_html(
-            "Clustered Days", str(clustered_days),
-            "Same-day or ±2-day catalysts (6mo)",
-        ), unsafe_allow_html=True)
-    with c5:
         vix_val = f"VIX {vix_last:.1f}" if vix_last is not None else "VIX —"
         vix_sub = (f"<span style='font-weight:700;color:#1A2540'>{vix_chg_pct:+.1f}% 1D</span>"
                    if vix_chg_pct is not None else "1D change unavailable")
@@ -4028,7 +4004,7 @@ def render_events_calendar() -> None:
     # ── Catalyst tape ────────────────────────────────────────────────────────
     st.markdown(
         "<div style='font-family:Inter,sans-serif;font-size:14px;font-weight:700;"
-        "color:#1A2540;margin-bottom:2px'>Catalyst Tape — Next 6 Months</div>"
+        "color:#1A2540;margin-bottom:2px'>Economic Calendar</div>"
         "<div style='font-family:Inter,sans-serif;font-size:10.5px;color:#8898BB;"
         "margin-bottom:6px'>* 2026 FOMC dates are confirmed; 2027 dates are the "
         "Fed's own tentative schedule.</div>",
