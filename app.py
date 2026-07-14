@@ -702,17 +702,29 @@ def fetch_bls_data() -> dict:
         df = pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
         result[key] = df
 
-    # Attach the unadjusted (NSA) level as `value_nsa` so YoY can be computed
-    # on the NSA index — BLS headline 12-month changes are NOT seasonally
-    # adjusted, while month-over-month changes use the SA index. If an NSA
-    # companion is missing, the SA series is left untouched and YoY silently
-    # falls back to SA in compute_series().
+    # Attach the unadjusted (NSA) level as `value_nsa` AND the NSA-sourced
+    # yoy_bls so compute_series uses BLS's own NSA 12-month percent changes
+    # for the YoY headline (BLS convention: YoY = NSA, MoM = SA).
+    # The SA series' own calculations block returns a SA-based YoY which does
+    # NOT match the published headline — the NSA yoy_bls overrides it here.
+    # If an NSA companion is missing the SA series is left untouched and YoY
+    # silently falls back to pct_change(12) on value_nsa in compute_series().
     for k in list(SERIES.keys()):
         nsa_key = f"{k}__nsa"
         if nsa_key in result and k in result:
-            nsa = (result.pop(nsa_key)[["date", "value"]]
-                   .rename(columns={"value": "value_nsa"}))
+            nsa_df = result.pop(nsa_key)
+            # Columns to carry over from NSA series: level + BLS NSA YoY calc
+            nsa_cols = {"value": "value_nsa"}
+            if "yoy_bls" in nsa_df.columns:
+                nsa_cols["yoy_bls"] = "yoy_bls_nsa"
+            nsa = nsa_df[["date"] + list(nsa_cols.keys())].rename(columns=nsa_cols)
             result[k] = result[k].merge(nsa, on="date", how="left")
+            # Prefer NSA yoy_bls over SA yoy_bls — overwrite if present
+            if "yoy_bls_nsa" in result[k].columns:
+                result[k]["yoy_bls"] = result[k]["yoy_bls_nsa"].combine_first(
+                    result[k].get("yoy_bls")
+                )
+                result[k].drop(columns=["yoy_bls_nsa"], inplace=True)
 
     return result
 
