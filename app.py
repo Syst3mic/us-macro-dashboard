@@ -575,7 +575,8 @@ document.addEventListener('keydown', function(e) { if(e.key==='Escape') closeMod
 # ─────────────────────────────────────────────────────────────────────────────
 SERIES = {
     "cpi": {
-        "id": "CUSR0000SA0",
+        "id":     "CUSR0000SA0",     # SA  — used for MoM
+        "id_nsa": "CUUR0000SA0",     # NSA — used for YoY (BLS headline convention)
         "name": "CPI",
         "full": "Consumer Price Index — All Items SA",
         "transform": "price_index",
@@ -583,7 +584,8 @@ SERIES = {
         "unit_mom": "%", "unit_yoy": "%", "dp": 2,
     },
     "corecpi": {
-        "id": "CUSR0000SA0L1E",
+        "id":     "CUSR0000SA0L1E",  # SA  — used for MoM
+        "id_nsa": "CUUR0000SA0L1E",  # NSA — used for YoY (BLS headline convention)
         "name": "Core CPI",
         "full": "CPI ex Food & Energy SA",
         "transform": "price_index",
@@ -591,7 +593,8 @@ SERIES = {
         "unit_mom": "%", "unit_yoy": "%", "dp": 2,
     },
     "ppi": {
-        "id": "WPSFD4",
+        "id":     "WPSFD4",          # SA  — used for MoM
+        "id_nsa": "WPUFD4",          # NSA — used for YoY (mirror of the SA id, S->U)
         "name": "PPI",
         "full": "PPI Final Demand",
         "transform": "price_index",
@@ -654,7 +657,10 @@ FRED_SERIES = {
 def fetch_bls_data() -> dict:
     api_key    = st.secrets["BLS_API_KEY"]
     series_ids = [cfg["id"] for cfg in SERIES.values()]
+    series_ids += [cfg["id_nsa"] for cfg in SERIES.values() if "id_nsa" in cfg]
     id_to_key  = {cfg["id"]: k for k, cfg in SERIES.items()}
+    id_to_key.update({cfg["id_nsa"]: f"{k}__nsa"
+                      for k, cfg in SERIES.items() if "id_nsa" in cfg})
     end_year   = datetime.now().year
     start_year = end_year - 10
 
@@ -691,6 +697,19 @@ def fetch_bls_data() -> dict:
             })
         df = pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
         result[key] = df
+
+    # Attach the unadjusted (NSA) level as `value_nsa` so YoY can be computed
+    # on the NSA index — BLS headline 12-month changes are NOT seasonally
+    # adjusted, while month-over-month changes use the SA index. If an NSA
+    # companion is missing, the SA series is left untouched and YoY silently
+    # falls back to SA in compute_series().
+    for k in list(SERIES.keys()):
+        nsa_key = f"{k}__nsa"
+        if nsa_key in result and k in result:
+            nsa = (result.pop(nsa_key)[["date", "value"]]
+                   .rename(columns={"value": "value_nsa"}))
+            result[k] = result[k].merge(nsa, on="date", how="left")
+
     return result
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -746,8 +765,13 @@ def fetch_fred_data() -> dict:
 def compute_series(df: pd.DataFrame, transform: str) -> pd.DataFrame:
     df = df.copy()
     if transform == "price_index":
-        df["mom"] = df["value"].pct_change(1)  * 100
-        df["yoy"] = df["value"].pct_change(12) * 100
+        # MoM from the seasonally adjusted level; YoY from the unadjusted (NSA)
+        # level when available (BLS headline over-the-year convention). FRED
+        # cards (e.g. Core PCE) carry no `value_nsa` column and correctly keep
+        # their SA-based YoY via the fallback below.
+        df["mom"] = df["value"].pct_change(1) * 100
+        yoy_src   = df["value_nsa"] if "value_nsa" in df.columns else df["value"]
+        df["yoy"] = yoy_src.pct_change(12) * 100
     elif transform in ("rate", "nfp"):
         df["mom"] = df["value"].diff(1)
         df["yoy"] = df["value"].diff(12)
