@@ -3595,7 +3595,7 @@ BACKDROP_HORIZONS = [
 # EVENTS CALENDAR — DATA FETCH
 # ─────────────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=21600, show_spinner=False)
-def _fetch_fred_release_dates_raw(release_id: int) -> list:
+def _fetch_fred_release_dates_raw(release_id: int):
     """
     Scheduled/actual dates for a FRED release (fred/release/dates), most-
     recent-first. FRED mirrors each source agency's OWN published release
@@ -3608,6 +3608,10 @@ def _fetch_fred_release_dates_raw(release_id: int) -> list:
     attached yet, which by definition excludes every future/scheduled
     date. Without this flag every category except the hardcoded FOMC
     calendar silently returns zero forward dates.
+
+    Returns (dates: list[str], diag: dict) — diag carries the HTTP status
+    and either an error message or a snippet of the raw response, so a
+    failure is visible in the UI instead of only a server-log print.
     """
     fred_key = "bc1f32b397114934e95d879ec2646074"
     url = (
@@ -3618,24 +3622,32 @@ def _fetch_fred_release_dates_raw(release_id: int) -> list:
     )
     try:
         resp = requests.get(url, timeout=20)
+        diag = {"http_status": resp.status_code, "error": None}
         resp.raise_for_status()
         data = resp.json()
-        return [d["date"] for d in data.get("release_dates", [])]
+        dates = [d["date"] for d in data.get("release_dates", [])]
+        diag["raw_count"] = len(dates)
+        if not dates:
+            diag["response_snippet"] = str(data)[:300]
+        return dates, diag
     except Exception as e:
-        print(f"FRED release-dates fetch failed [{release_id}]: {e}")
-        return []
+        err = f"{type(e).__name__}: {e}"
+        print(f"FRED release-dates fetch failed [{release_id}]: {err}")
+        return [], {"http_status": None, "error": err, "raw_count": 0}
 
 
-def _next_release_dates(release_id: int, today: date, n: int = 3) -> list:
-    """Next n scheduled dates on/after `today` for a release, ascending."""
-    raw    = _fetch_fred_release_dates_raw(release_id)
+def _next_release_dates(release_id: int, today: date, n: int = 3):
+    """Next n scheduled dates on/after `today` for a release, ascending.
+    Returns (dates, diag) — diag is enriched with the future-date count."""
+    raw, diag = _fetch_fred_release_dates_raw(release_id)
     parsed = sorted(datetime.strptime(d, "%Y-%m-%d").date() for d in raw)
     future = [d for d in parsed if d >= today]
-    return future[:n]
+    diag["future_count"] = len(future)
+    return future[:n], diag
 
 
 @st.cache_data(ttl=21600, show_spinner=False)
-def build_events_calendar(cache_bucket: str) -> pd.DataFrame:
+def build_events_calendar(cache_bucket: str):
     """
     Builds the forward-looking US macro events calendar. cache_bucket is
     today's ET date string (rebuild-once-per-day cache key).
@@ -3647,9 +3659,18 @@ def build_events_calendar(cache_bucket: str) -> pd.DataFrame:
     Situation release. Michigan Sentiment = FRED's Surveys of Consumers
     calendar, which posts 2 dates/month (prelim, then final) — split
     accordingly.
+
+    Returns (df, diagnostics) — diagnostics is a list of per-source dicts
+    (name, release_id, http_status, raw_count, future_count, error) so a
+    silent fetch failure is visible in the UI rather than only server logs.
     """
     today = datetime.strptime(cache_bucket, "%Y-%m-%d").date()
     rows  = []
+    diagnostics = [{
+        "source": "FOMC Decision", "release_id": "hardcoded", "http_status": "n/a",
+        "raw_count": len(FOMC_DATES), "future_count": sum(1 for d, _ in FOMC_DATES if d >= today),
+        "error": None,
+    }]
 
     for d, has_sep in FOMC_DATES:
         if d < today:
@@ -3662,7 +3683,9 @@ def build_events_calendar(cache_bucket: str) -> pd.DataFrame:
                       "risk_score": 99, "tentative": tentative})
 
     nfp_cfg = FRED_CALENDAR_RELEASES["nfp"]
-    for d in _next_release_dates(nfp_cfg["release_id"], today, n=3):
+    nfp_dates, nfp_diag = _next_release_dates(nfp_cfg["release_id"], today, n=3)
+    diagnostics.append({"source": nfp_cfg["name"], "release_id": nfp_cfg["release_id"], **nfp_diag})
+    for d in nfp_dates:
         rows.append({"date": d, "name": nfp_cfg["name"], "category": "Labor",
                       "risk_score": nfp_cfg["risk_score"], "tentative": False})
         adp_d = d - timedelta(days=2)   # ADP's standing Wednesday-before-payrolls slot
@@ -3672,11 +3695,15 @@ def build_events_calendar(cache_bucket: str) -> pd.DataFrame:
 
     for key in ("cpi", "corepce", "retail", "ppi"):
         cfg = FRED_CALENDAR_RELEASES[key]
-        for d in _next_release_dates(cfg["release_id"], today, n=3):
+        dates, diag = _next_release_dates(cfg["release_id"], today, n=3)
+        diagnostics.append({"source": cfg["name"], "release_id": cfg["release_id"], **diag})
+        for d in dates:
             rows.append({"date": d, "name": cfg["name"], "category": cfg["category"],
                           "risk_score": cfg["risk_score"], "tentative": False})
 
-    umich_dates = sorted(set(_next_release_dates(UMICH_RELEASE_ID, today, n=8)))
+    umich_dates_raw, umich_diag = _next_release_dates(UMICH_RELEASE_ID, today, n=8)
+    diagnostics.append({"source": "Michigan Sentiment", "release_id": UMICH_RELEASE_ID, **umich_diag})
+    umich_dates = sorted(set(umich_dates_raw))
     by_month = {}
     for d in umich_dates:
         by_month.setdefault((d.year, d.month), []).append(d)
@@ -3690,7 +3717,8 @@ def build_events_calendar(cache_bucket: str) -> pd.DataFrame:
                           "category": "Sentiment", "risk_score": 35, "tentative": False})
 
     if not rows:
-        return pd.DataFrame(columns=["date", "name", "category", "risk_score", "tentative", "days_away"])
+        empty = pd.DataFrame(columns=["date", "name", "category", "risk_score", "tentative", "days_away"])
+        return empty, diagnostics
 
     df = (pd.DataFrame(rows)
           .drop_duplicates(subset=["date", "name"])
@@ -3698,7 +3726,7 @@ def build_events_calendar(cache_bucket: str) -> pd.DataFrame:
           .reset_index(drop=True))
     df["days_away"] = df["date"].apply(lambda d: (d - today).days)
     df["date"]      = pd.to_datetime(df["date"])
-    return df
+    return df, diagnostics
 
 
 @st.cache_data(ttl=900, show_spinner=False)
@@ -3917,9 +3945,18 @@ def render_events_calendar() -> None:
     )
 
     with st.spinner("Loading events calendar…"):
-        events_df = build_events_calendar(cache_bucket)
+        events_df, events_diag = build_events_calendar(cache_bucket)
     with st.spinner("Loading market backdrop…"):
         backdrop_df, vix_last, vix_chg, vix_chg_pct = fetch_market_backdrop(cache_bucket)
+
+    with st.expander("🔧 Data source diagnostics"):
+        st.dataframe(pd.DataFrame(events_diag), use_container_width=True, hide_index=True)
+        st.caption(
+            "raw_count = dates FRED returned for that release (any date). future_count = how many "
+            "of those are on/after today. If future_count is 0 while raw_count is > 0, FRED is "
+            "responding but hasn't published forward dates for that release yet. If error is not "
+            "None, the request itself failed (check http_status)."
+        )
 
     if events_df.empty:
         st.error("Could not load the events calendar (FRED release-calendar fetch failed). Try refreshing.")
