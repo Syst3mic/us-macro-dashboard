@@ -722,27 +722,36 @@ def fetch_bls_data() -> dict:
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_fred_data() -> dict:
     """
-    Fetch ICSA, ADPNFPCA, UMCSENT from FRED API.
+    Fetch ICSA and Core PCE from FRED API.
+    For Core PCE (price_index transform), also fetches FRED's pre-computed
+    MoM (units=pch) and YoY (units=pc1) percent-change series so
+    compute_series can use official BEA prints rather than deriving them
+    from the rounded index level.
     Server-side GET — no CORS, no proxy needed.
     """
     fred_key = "bc1f32b397114934e95d879ec2646074"
     result   = {}
 
-    for key, cfg in FRED_SERIES.items():
-        # Weekly series: fetch 3 years (156 weeks). Monthly: 10 years.
-        limit = 156 if cfg["freq"] == "Weekly" else 120
-        url   = (
+    def _fred_get(series_id, limit, units=None):
+        url = (
             f"https://api.stlouisfed.org/fred/series/observations"
-            f"?series_id={cfg['id']}"
+            f"?series_id={series_id}"
             f"&api_key={fred_key}"
             f"&file_type=json"
             f"&sort_order=desc"
             f"&limit={limit}"
         )
+        if units:
+            url += f"&units={units}"
+        resp = requests.get(url, timeout=20)
+        resp.raise_for_status()
+        return resp.json()
+
+    for key, cfg in FRED_SERIES.items():
+        # Weekly series: fetch 3 years (156 weeks). Monthly: 10 years.
+        limit = 156 if cfg["freq"] == "Weekly" else 120
         try:
-            resp = requests.get(url, timeout=20)
-            resp.raise_for_status()
-            data = resp.json()
+            data = _fred_get(cfg["id"], limit)
             rows = []
             for obs in data.get("observations", []):
                 if obs["value"] in (".", ""):
@@ -752,9 +761,48 @@ def fetch_fred_data() -> dict:
                     "value": float(obs["value"]),
                 })
             df = pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
+
             # Claims: convert from persons to thousands
             if key == "claims":
                 df["value"] = df["value"] / 1000
+
+            # Core PCE: fetch FRED's pre-computed MoM and YoY pct-change series
+            # so compute_series uses official BEA prints (same principle as the
+            # BLS calculations block for CPI/PPI). FRED exposes these via the
+            # units= parameter: pch = period pct change (MoM), pc1 = pct change
+            # from a year ago (YoY).
+            if key == "corepce" and cfg.get("transform") == "price_index":
+                try:
+                    mom_data = _fred_get(cfg["id"], limit, units="pch")
+                    mom_rows = []
+                    for obs in mom_data.get("observations", []):
+                        if obs["value"] in (".", ""):
+                            continue
+                        mom_rows.append({
+                            "date":    pd.Timestamp(obs["date"]),
+                            "mom_bls": float(obs["value"]),
+                        })
+                    if mom_rows:
+                        mom_df = pd.DataFrame(mom_rows).sort_values("date").reset_index(drop=True)
+                        df = df.merge(mom_df, on="date", how="left")
+                except Exception as e:
+                    print(f"FRED Core PCE MoM fetch failed: {e}")
+
+                try:
+                    yoy_data = _fred_get(cfg["id"], limit, units="pc1")
+                    yoy_rows = []
+                    for obs in yoy_data.get("observations", []):
+                        if obs["value"] in (".", ""):
+                            continue
+                        yoy_rows.append({
+                            "date":    pd.Timestamp(obs["date"]),
+                            "yoy_bls": float(obs["value"]),
+                        })
+                    if yoy_rows:
+                        yoy_df = pd.DataFrame(yoy_rows).sort_values("date").reset_index(drop=True)
+                        df = df.merge(yoy_df, on="date", how="left")
+                except Exception as e:
+                    print(f"FRED Core PCE YoY fetch failed: {e}")
 
             result[key] = df
         except Exception as e:
