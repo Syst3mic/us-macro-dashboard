@@ -4000,24 +4000,24 @@ def render_events_calendar() -> None:
     )
     st.markdown("""
     <style>
-    .backdrop-table { width:100%; border-collapse:collapse; font-family:'Inter',sans-serif; font-size:12px; }
-    .backdrop-table th { text-align:center; padding:10px 9px; font-size:10px; font-weight:700;
-        letter-spacing:.7px; text-transform:uppercase; color:#4D6080; background:#EEF2FC;
-        font-family:'SFMono-Regular','JetBrains Mono','Roboto Mono',Consolas,monospace;
+    .backdrop-table { width:100%; border-collapse:collapse; font-family:'Inter',sans-serif; font-size:14px; }
+    .backdrop-table th { text-align:center; padding:11px 10px; font-size:11.5px; font-weight:700;
+        letter-spacing:.6px; text-transform:uppercase; color:#4D6080; background:#EEF2FC;
+        font-family:'Inter',sans-serif;
         border-bottom:1px solid rgba(91,141,239,.25); border-right:1px solid rgba(91,141,239,.10); }
     .backdrop-table th:first-child { text-align:left; font-family:'Inter',sans-serif; }
     .backdrop-table th:last-child { border-right:none; }
-    .backdrop-table td { padding:9px 9px; text-align:center; font-weight:700;
-        font-family:'SFMono-Regular','JetBrains Mono','Roboto Mono',Consolas,monospace;
+    .backdrop-table td { padding:10px 10px; text-align:center; font-weight:700;
+        font-family:'Inter',sans-serif;
         font-variant-numeric: tabular-nums; letter-spacing:.2px;
         border-bottom:1px solid rgba(91,141,239,.07); border-right:1px solid rgba(91,141,239,.05); }
     .backdrop-table td:last-child { border-right:none; }
     .backdrop-table td:first-child { text-align:left; font-weight:600; color:#1A2540;
         font-family:'Inter',sans-serif; }
     .backdrop-ticker-chip {
-        font-family:'SFMono-Regular','JetBrains Mono','Roboto Mono',Consolas,monospace;
-        font-size:9.5px; font-weight:700; color:#5B8DEF; background:rgba(91,141,239,.10);
-        padding:1px 6px; border-radius:3px; letter-spacing:.3px; margin-left:6px; }
+        font-family:'Inter',sans-serif;
+        font-size:10.5px; font-weight:700; color:#5B8DEF; background:rgba(91,141,239,.10);
+        padding:1px 6px; border-radius:3px; letter-spacing:.2px; margin-left:6px; }
     </style>
     """, unsafe_allow_html=True)
     st.markdown(render_backdrop_table_html(backdrop_df), unsafe_allow_html=True)
