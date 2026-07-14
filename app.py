@@ -3769,7 +3769,10 @@ def _fmt_days_away(n: int) -> str:
 def _diverging_bg(v, vmax=20.0):
     """
     Background + text colour for a signed % cell, RdYlGn-style: deep red at
-    -vmax, pale cream at 0, deep green at +vmax. Returns (bg_css, text_css).
+    -vmax, pale cream at 0, deep green at +vmax. `vmax` is typically computed
+    per-column by the caller (see render_backdrop_table_html) so each
+    horizon's own natural range of movement gets full color contrast.
+    Returns (bg_css, text_css).
     """
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return "#F4F6FA", "#8898BB"
@@ -3817,20 +3820,32 @@ def render_backdrop_table_html(df: pd.DataFrame) -> str:
         return "<div class='sb-footnote'>Backdrop data unavailable.</div>"
     horizon_labels = [h for h, _ in BACKDROP_HORIZONS] + ["YTD"]
     header_cells   = "".join(f"<th>{h}</th>" for h in horizon_labels)
+
+    # Colour scale is auto-scaled PER COLUMN: each horizon saturates red/green
+    # at its own max |move| (floor of 2%), so a 1D column (typically ±1-3%)
+    # gets just as much visual contrast as a 1Y column (typically ±15-30%),
+    # rather than every column sharing one fixed clamp that washes out the
+    # shorter horizons.
+    col_vmax = {}
+    for h in horizon_labels:
+        vals = df[h].dropna() if h in df.columns else pd.Series(dtype=float)
+        col_vmax[h] = max(2.0, float(vals.abs().max())) if not vals.empty else 2.0
+
     rows_html = ""
     for _, row in df.iterrows():
         cells = ""
         for h in horizon_labels:
             v = row.get(h)
-            bg, txt = _diverging_bg(v)
-            disp = f"{v:+.2f}%" if v is not None and not pd.isna(v) else "—"
-            cells += (
-                f"<td style='background:{bg};color:{txt};border-radius:4px'>{disp}</td>"
-            )
+            bg, txt = _diverging_bg(v, vmax=col_vmax[h])
+            if v is None or (isinstance(v, float) and pd.isna(v)):
+                disp = "—"
+            else:
+                arrow = "▲" if v > 0 else ("▼" if v < 0 else "●")
+                disp = f"{arrow} {abs(v):.2f}%"
+            cells += f"<td style='background:{bg};color:{txt};border-radius:3px'>{disp}</td>"
         rows_html += f"""
         <tr>
-          <td>{row['label']}
-            <span style="color:#8898BB;font-weight:400;font-size:10px"> {row['ticker']}</span></td>
+          <td>{row['label']}<span class="backdrop-ticker-chip">{row['ticker']}</span></td>
           {cells}
         </tr>"""
     return f"""
@@ -3964,7 +3979,8 @@ def render_events_calendar() -> None:
         ), unsafe_allow_html=True)
     with c5:
         vix_val = f"VIX {vix_last:.1f}" if vix_last is not None else "VIX —"
-        vix_sub = f"{vix_chg_pct:+.1f}% 1D" if vix_chg_pct is not None else "1D change unavailable"
+        vix_sub = (f"<span style='font-weight:700;color:#1A2540'>{vix_chg_pct:+.1f}% 1D</span>"
+                   if vix_chg_pct is not None else "1D change unavailable")
         st.markdown(_event_card_html("Vol Backdrop", vix_val, vix_sub, accent=vix_dir_color), unsafe_allow_html=True)
 
     st.markdown("<div style='margin-top:22px'></div>", unsafe_allow_html=True)
@@ -3984,22 +4000,39 @@ def render_events_calendar() -> None:
     # ── Market backdrop ──────────────────────────────────────────────────────
     st.markdown(
         "<div style='font-family:Inter,sans-serif;font-size:14px;font-weight:700;"
-        "color:#1A2540;margin:14px 0 8px'>Market Backdrop — Trailing Returns</div>",
+        "color:#1A2540;margin:14px 0 8px'>Market Backdrop (% Δ)</div>",
         unsafe_allow_html=True,
     )
     st.markdown("""
     <style>
-    .backdrop-table { width:100%; border-collapse:collapse; font-family:'Inter',sans-serif; font-size:12.5px; }
-    .backdrop-table th { text-align:center; padding:9px 10px; font-size:10px; font-weight:700;
-        letter-spacing:.5px; text-transform:uppercase; color:#4D6080; background:#EEF2FC;
-        border-bottom:1px solid rgba(91,141,239,.15); }
-    .backdrop-table th:first-child { text-align:left; }
-    .backdrop-table td { padding:9px 10px; text-align:center; font-weight:600;
-        border-bottom:1px solid rgba(91,141,239,.06); }
-    .backdrop-table td:first-child { text-align:left; font-weight:600; color:#1A2540; }
+    .backdrop-table { width:100%; border-collapse:collapse; font-family:'Inter',sans-serif; font-size:12px; }
+    .backdrop-table th { text-align:center; padding:10px 9px; font-size:9.5px; font-weight:700;
+        letter-spacing:.7px; text-transform:uppercase; color:#4D6080; background:#EEF2FC;
+        font-family:'SFMono-Regular','JetBrains Mono','Roboto Mono',Consolas,monospace;
+        border-bottom:1px solid rgba(91,141,239,.25); border-right:1px solid rgba(91,141,239,.10); }
+    .backdrop-table th:first-child { text-align:left; font-family:'Inter',sans-serif; }
+    .backdrop-table th:last-child { border-right:none; }
+    .backdrop-table td { padding:9px 9px; text-align:center; font-weight:700;
+        font-family:'SFMono-Regular','JetBrains Mono','Roboto Mono',Consolas,monospace;
+        font-variant-numeric: tabular-nums; letter-spacing:.2px;
+        border-bottom:1px solid rgba(91,141,239,.07); border-right:1px solid rgba(91,141,239,.05); }
+    .backdrop-table td:last-child { border-right:none; }
+    .backdrop-table td:first-child { text-align:left; font-weight:600; color:#1A2540;
+        font-family:'Inter',sans-serif; }
+    .backdrop-ticker-chip {
+        font-family:'SFMono-Regular','JetBrains Mono','Roboto Mono',Consolas,monospace;
+        font-size:9.5px; font-weight:700; color:#5B8DEF; background:rgba(91,141,239,.10);
+        padding:1px 6px; border-radius:3px; letter-spacing:.3px; margin-left:6px; }
     </style>
     """, unsafe_allow_html=True)
     st.markdown(render_backdrop_table_html(backdrop_df), unsafe_allow_html=True)
+
+    st.markdown(
+        "<div style='font-family:Inter,sans-serif;font-size:10px;color:#8898BB;margin-top:6px'>"
+        "Colour scale is auto-scaled per column — each horizon saturates red/green at its own "
+        "max |move|, so 1D and 1Y are equally legible.</div>",
+        unsafe_allow_html=True,
+    )
 
     st.markdown("""
     <div style="font-family:'Inter', sans-serif;font-size:10px;color:#6B7A99;
