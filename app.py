@@ -3549,20 +3549,19 @@ FOMC_DATES = [
 
 # FRED "release" IDs whose /fred/release/dates calendar mirrors the source
 # agency's own official forward schedule (BLS/BEA/Census typically publish
-# these 6-18 months ahead). Risk scores are a fixed editorial importance
-# tier per release type (documented in the sidebar About panel) — NOT a
-# computed historical-volatility measure.
+# these 6-18 months ahead). Risk scoring is deferred for now — this is a
+# pure forward-looking calendar (date + category only).
 FRED_CALENDAR_RELEASES = {
     "nfp":     {"release_id": 50, "name": "Employment Situation (NFP + Unemployment)",
-                "category": "Labor",     "risk_score": 95},
+                "category": "Labor"},
     "cpi":     {"release_id": 10, "name": "CPI / Core CPI",
-                "category": "Inflation", "risk_score": 92},
+                "category": "Inflation"},
     "corepce": {"release_id": 54, "name": "Core PCE (Fed's Preferred Gauge)",
-                "category": "Inflation", "risk_score": 90},
+                "category": "Inflation"},
     "retail":  {"release_id": 9,  "name": "Retail Sales",
-                "category": "Growth",    "risk_score": 75},
+                "category": "Growth"},
     "ppi":     {"release_id": 46, "name": "PPI (Final Demand)",
-                "category": "Inflation", "risk_score": 72},
+                "category": "Inflation"},
 }
 UMICH_RELEASE_ID = 91   # "Surveys of Consumers" — posts 2 dates/month (prelim, final)
 
@@ -3679,27 +3678,24 @@ def build_events_calendar(cache_bucket: str):
         tentative = d.year >= 2027
         if tentative:
             name += " *"
-        rows.append({"date": d, "name": name, "category": "Fed",
-                      "risk_score": 99, "tentative": tentative})
+        rows.append({"date": d, "name": name, "category": "Fed", "tentative": tentative})
 
     nfp_cfg = FRED_CALENDAR_RELEASES["nfp"]
     nfp_dates, nfp_diag = _next_release_dates(nfp_cfg["release_id"], today, n=3)
     diagnostics.append({"source": nfp_cfg["name"], "release_id": nfp_cfg["release_id"], **nfp_diag})
     for d in nfp_dates:
-        rows.append({"date": d, "name": nfp_cfg["name"], "category": "Labor",
-                      "risk_score": nfp_cfg["risk_score"], "tentative": False})
+        rows.append({"date": d, "name": nfp_cfg["name"], "category": "Labor", "tentative": False})
         adp_d = d - timedelta(days=2)   # ADP's standing Wednesday-before-payrolls slot
         if adp_d >= today:
             rows.append({"date": adp_d, "name": "ADP Employment Report",
-                          "category": "Labor", "risk_score": 60, "tentative": False})
+                          "category": "Labor", "tentative": False})
 
     for key in ("cpi", "corepce", "retail", "ppi"):
         cfg = FRED_CALENDAR_RELEASES[key]
         dates, diag = _next_release_dates(cfg["release_id"], today, n=3)
         diagnostics.append({"source": cfg["name"], "release_id": cfg["release_id"], **diag})
         for d in dates:
-            rows.append({"date": d, "name": cfg["name"], "category": cfg["category"],
-                          "risk_score": cfg["risk_score"], "tentative": False})
+            rows.append({"date": d, "name": cfg["name"], "category": cfg["category"], "tentative": False})
 
     umich_dates_raw, umich_diag = _next_release_dates(UMICH_RELEASE_ID, today, n=8)
     diagnostics.append({"source": "Michigan Sentiment", "release_id": UMICH_RELEASE_ID, **umich_diag})
@@ -3711,13 +3707,13 @@ def build_events_calendar(cache_bucket: str):
         ds = sorted(ds)
         if len(ds) >= 1:
             rows.append({"date": ds[0], "name": "Michigan Sentiment (Prelim)",
-                          "category": "Sentiment", "risk_score": 50, "tentative": False})
+                          "category": "Sentiment", "tentative": False})
         if len(ds) >= 2:
             rows.append({"date": ds[1], "name": "Michigan Sentiment (Final)",
-                          "category": "Sentiment", "risk_score": 35, "tentative": False})
+                          "category": "Sentiment", "tentative": False})
 
     if not rows:
-        empty = pd.DataFrame(columns=["date", "name", "category", "risk_score", "tentative", "days_away"])
+        empty = pd.DataFrame(columns=["date", "name", "category", "tentative", "days_away"])
         return empty, diagnostics
 
     df = (pd.DataFrame(rows)
@@ -3885,6 +3881,10 @@ def render_backdrop_table_html(df: pd.DataFrame) -> str:
     </table>"""
 
 
+CATEGORY_ORDER = ["Fed", "Labor", "Inflation", "Growth", "Sentiment"]
+CATEGORY_Y     = {cat: i for i, cat in enumerate(CATEGORY_ORDER)}
+
+
 def make_catalyst_tape(df: pd.DataFrame, today: date, window_days: int = 180) -> go.Figure:
     window_df = df[df["days_away"].between(0, window_days)].copy()
     fig = go.Figure()
@@ -3893,11 +3893,11 @@ def make_catalyst_tape(df: pd.DataFrame, today: date, window_days: int = 180) ->
         if cat_df.empty:
             continue
         fig.add_trace(go.Scatter(
-            x=cat_df["date"], y=cat_df["risk_score"],
+            x=cat_df["date"], y=[CATEGORY_Y[cat]] * len(cat_df),
             mode="markers", name=cat,
             marker=dict(size=13, color=color, line=dict(width=1, color="rgba(255,255,255,.7)")),
             customdata=cat_df["name"],
-            hovertemplate="<b>%{customdata}</b><br>%{x|%d %b %Y}<br>Risk score: %{y}<extra></extra>",
+            hovertemplate="<b>%{customdata}</b><br>%{x|%d %b %Y}<extra></extra>",
         ))
     today_ts = pd.Timestamp(today)
     fig.add_shape(
@@ -3916,11 +3916,11 @@ def make_catalyst_tape(df: pd.DataFrame, today: date, window_days: int = 180) ->
         paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF",
         font=dict(family="Inter, sans-serif", color="#4D6080", size=11),
         xaxis=dict(showgrid=False, zeroline=False, tickfont=dict(size=11, color="#1A2540")),
-        yaxis=dict(title="Risk score", range=[20, 108], showgrid=True,
+        yaxis=dict(range=[-0.6, len(CATEGORY_ORDER) - 0.4], showgrid=True,
                     gridcolor="rgba(0,0,0,.06)", zeroline=False,
-                    tickfont=dict(size=10, color="#1A2540")),
-        legend=dict(orientation="h", yanchor="bottom", y=1.04, xanchor="left", x=0,
-                    font=dict(size=11, color="#1A2540")),
+                    tickvals=list(CATEGORY_Y.values()), ticktext=CATEGORY_ORDER,
+                    tickfont=dict(size=11, color="#1A2540")),
+        showlegend=False,
         hoverlabel=dict(bgcolor="#F0F4FF", bordercolor="rgba(91,141,239,.3)",
                          font=dict(family="Inter, sans-serif", size=12, color="#1A2540")),
     )
@@ -3940,7 +3940,7 @@ def render_events_calendar() -> None:
         f"<span style='font-size:12px;font-weight:400;color:#4D6080;margin-left:12px'>"
         f"US Macro &amp; Fed Catalysts</span></div>"
         f"<div style='font-family:Inter,sans-serif;font-size:12px;color:#4D6080;"
-        f"margin-bottom:18px'>Visual-first event risk and the next catalyst cluster worth watching.</div>",
+        f"margin-bottom:18px'>A forward-looking calendar of the next US macro catalysts worth watching.</div>",
         unsafe_allow_html=True,
     )
 
@@ -3964,10 +3964,9 @@ def render_events_calendar() -> None:
 
     # ── Summary cards ───────────────────────────────────────────────────────
     next_row  = events_df.iloc[0]
-    near_df   = events_df[events_df["days_away"] <= 30]
-    highest   = (near_df if not near_df.empty else events_df).sort_values("risk_score", ascending=False).iloc[0]
+    fed_df    = events_df[events_df["category"] == "Fed"]
+    next_fomc = fed_df.iloc[0] if not fed_df.empty else None
     next7     = events_df[events_df["days_away"] <= 7]
-    next7_hi  = int((next7["risk_score"] >= 90).sum())
 
     tape_df = events_df[events_df["days_away"] <= 180].sort_values("date").reset_index(drop=True)
     dlist   = tape_df["date"].tolist()
@@ -4001,15 +4000,17 @@ def render_events_calendar() -> None:
             f"{_fmt_days_away(int(next_row['days_away']))} · {next_row['date'].strftime('%d %b %Y')}",
         ), unsafe_allow_html=True)
     with c2:
-        st.markdown(_event_card_html(
-            "Highest Risk (30d)", highest["name"],
-            f"Risk score {int(highest['risk_score'])}",
-            accent="#C8303F" if highest["risk_score"] >= 90 else "#1A2540",
-        ), unsafe_allow_html=True)
+        if next_fomc is not None:
+            st.markdown(_event_card_html(
+                "Next FOMC", next_fomc["name"],
+                f"{_fmt_days_away(int(next_fomc['days_away']))} · {next_fomc['date'].strftime('%d %b %Y')}",
+            ), unsafe_allow_html=True)
+        else:
+            st.markdown(_event_card_html("Next FOMC", "—", "None scheduled in range"), unsafe_allow_html=True)
     with c3:
         st.markdown(_event_card_html(
             "Next 7 Days", str(len(next7)),
-            f"{next7_hi} high-risk event(s)",
+            "upcoming event(s)",
         ), unsafe_allow_html=True)
     with c4:
         st.markdown(_event_card_html(
