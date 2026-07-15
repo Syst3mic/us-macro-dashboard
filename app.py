@@ -3829,71 +3829,75 @@ def build_events_calendar(cache_bucket: str):
 @st.cache_data(ttl=900, show_spinner=False)
 def fetch_market_backdrop(cache_bucket: str):
     """
-    Fixed version: Reliably returns the most recent COMPLETED daily close.
+    Trailing returns for the backdrop tickers + VIX level/1D change.
+    Horizons are anchored to the SAME calendar day-of-month, N months/years
+    back (e.g. today 13 Jul 2026 → 1M target is 13 Jun 2026, 3M target is
+    13 Apr 2026, 1Y target is 13 Jul 2025) via pd.DateOffset, not a fixed
+    day-count. For each horizon we look up the price as of that target date
+    via pandas' asof(): if the target lands on a weekend/holiday (a
+    non-trading day), asof naturally resolves to the last trading day AT OR
+    BEFORE it (walking back one day at a time until a trading day is found).
+    YTD compares against the last trading close of the prior calendar year
+    (i.e. as of 31 Dec, same asof logic). cache_bucket = today's ET date
+    (rebuild-once-per-day); ttl=900s is just a backstop. Fetches 3y of
+    history so even the 1Y/YTD lookups have safe buffer at the boundary.
     """
     tickers = [tk for _, tk in BACKDROP_TICKERS] + ["^VIX"]
-    
-    et = timezone(timedelta(hours=-4))
-    today_et = datetime.strptime(cache_bucket, "%Y-%m-%d").date()
-    
-    # Fetch last 10 days to ensure we have the latest completed close
-    raw = yf.download(
-        tickers,
-        period="10d",
-        interval="1d",
-        auto_adjust=True,
-        progress=False,
-        threads=True
-    )
-    
-    if raw.empty or "Close" not in raw:
-        return pd.DataFrame(), None, None, None, None
+    # Use explicit start/end instead of period="3y" — the period param
+    # computes its epoch range from the local system clock, which on a
+    # non-US-timezone host can land on or before the latest US close and
+    # silently exclude the most recent trading day. Anchoring to the
+    # ET-aware cache_bucket + 1 day (yfinance end is exclusive) guarantees
+    # the latest US close is always captured.
+    today_et   = datetime.strptime(cache_bucket, "%Y-%m-%d").date()
+    end_date   = today_et + timedelta(days=1)
+    start_date = today_et - timedelta(days=3 * 365 + 30)
+    try:
+        raw = yf.download(tickers, start=str(start_date), end=str(end_date),
+                           interval="1d",
+                           auto_adjust=True, progress=False, threads=True)
+    except Exception as e:
+        print(f"Market backdrop fetch failed: {e}")
+        return pd.DataFrame(), None, None, None
 
+    if raw.empty or "Close" not in raw:
+        return pd.DataFrame(), None, None, None
     close = raw["Close"]
 
-    def get_latest_close(series: pd.Series):
-        """Return the most recent non-NaN close and its date."""
-        valid = series.dropna()
-        if valid.empty:
-            return None, None
-        return valid.index[-1].date(), float(valid.iloc[-1])
+    def _asof_pct(col: pd.Series, last_val: float, target: pd.Timestamp):
+        base = col.asof(target)
+        if base is None or (isinstance(base, float) and pd.isna(base)) or base == 0:
+            return None
+        return (last_val / float(base) - 1) * 100
 
     rows = []
     for label, tk in BACKDROP_TICKERS:
         if tk not in close.columns:
             continue
-        col = close[tk]
-        last_date, last_val = get_latest_close(col)
-        if last_val is None:
+        col = close[tk].dropna()
+        if col.empty:
             continue
-
-        row = {"label": label, "ticker": tk, "last": last_val, "last_date": last_date}
-
+        last_date = col.index[-1]
+        last      = float(col.iloc[-1])
+        row       = {"label": label, "ticker": tk, "last": last}
         for h_label, offset in BACKDROP_HORIZONS:
-            target = pd.Timestamp(last_date) - offset
-            base = col.asof(target)
-            row[h_label] = ((last_val / float(base) - 1) * 100) if base and base != 0 else None
-
-        # YTD
+            target = last_date - offset
+            row[h_label] = _asof_pct(col, last, target)
         ytd_target = pd.Timestamp(year=last_date.year - 1, month=12, day=31)
-        base_ytd = col.asof(ytd_target)
-        row["YTD"] = ((last_val / float(base_ytd) - 1) * 100) if base_ytd and base_ytd != 0 else None
-
+        row["YTD"] = _asof_pct(col, last, ytd_target)
         rows.append(row)
-
     backdrop_df = pd.DataFrame(rows)
 
-    # VIX
-    vix_last = vix_chg = vix_chg_pct = None
+    vix_last, vix_chg, vix_chg_pct = None, None, None
     if "^VIX" in close.columns:
         vix_col = close["^VIX"].dropna()
         if len(vix_col) >= 2:
             vix_last = float(vix_col.iloc[-1])
             vix_prev = float(vix_col.iloc[-2])
-            vix_chg = vix_last - vix_prev
-            vix_chg_pct = (vix_last / vix_prev - 1) * 100 if vix_prev != 0 else None
+            vix_chg  = vix_last - vix_prev
+            vix_chg_pct = (vix_last / vix_prev - 1) * 100 if vix_prev else None
 
-    return backdrop_df, vix_last, vix_chg, vix_chg_pct, today_et
+    return backdrop_df, vix_last, vix_chg, vix_chg_pct
 
 # ─────────────────────────────────────────────────────────────────────────────
 # EVENTS CALENDAR — DISPLAY HELPERS
