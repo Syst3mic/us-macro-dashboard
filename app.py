@@ -741,7 +741,7 @@ def fetch_fred_data() -> dict:
     from the rounded index level.
     Server-side GET — no CORS, no proxy needed.
     """
-    fred_key = "bc1f32b397114934e95d879ec2646074"
+    fred_key = st.secrets["FRED_API_KEY"]
     result   = {}
 
     def _fred_get(series_id, limit, units=None):
@@ -3713,7 +3713,7 @@ def _fetch_fred_release_dates_raw(release_id: int):
     and either an error message or a snippet of the raw response, so a
     failure is visible in the UI instead of only a server-log print.
     """
-    fred_key = "bc1f32b397114934e95d879ec2646074"
+    fred_key = st.secrets["FRED_API_KEY"]
     url = (
         f"https://api.stlouisfed.org/fred/release/dates"
         f"?release_id={release_id}&api_key={fred_key}"
