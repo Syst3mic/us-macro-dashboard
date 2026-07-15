@@ -732,7 +732,7 @@ def fetch_bls_data() -> dict:
 # FRED API FETCH
 # ─────────────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
-def fetch_fred_data() -> dict:
+def fetch_fred_data():
     """
     Fetch ICSA and Core PCE from FRED API.
     For Core PCE (price_index transform), also fetches FRED's pre-computed
@@ -740,9 +740,15 @@ def fetch_fred_data() -> dict:
     compute_series can use official BEA prints rather than deriving them
     from the rounded index level.
     Server-side GET — no CORS, no proxy needed.
+
+    Returns (result: dict, errors: dict) — errors maps series key -> a
+    human-readable diagnostic (HTTP status + FRED's own error message
+    where available) so a failure is visible in the UI instead of only
+    a server-log print.
     """
-    fred_key = "bc1f32b397114934e95d879ec2646074"
+    fred_key = st.secrets["FRED_API_KEY"]
     result   = {}
+    errors   = {}
 
     def _fred_get(series_id, limit, units=None):
         url = (
@@ -817,11 +823,20 @@ def fetch_fred_data() -> dict:
                     print(f"FRED Core PCE YoY fetch failed: {e}")
 
             result[key] = df
+        except requests.exceptions.HTTPError as e:
+            status = e.response.status_code if e.response is not None else "?"
+            detail = e.response.text[:200] if e.response is not None else str(e)
+            msg = f"HTTP {status} — {detail}"
+            errors[key] = msg
+            print(f"FRED fetch failed [{key}]: {msg}")
+            result[key] = pd.DataFrame(columns=["date", "value"])
         except Exception as e:
-            print(f"FRED fetch failed [{key}]: {e}")
+            msg = f"{type(e).__name__}: {e}"
+            errors[key] = msg
+            print(f"FRED fetch failed [{key}]: {msg}")
             result[key] = pd.DataFrame(columns=["date", "value"])
 
-    return result
+    return result, errors
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TRANSFORMATIONS
@@ -1219,7 +1234,7 @@ def render_card(key: str, cfg: dict, df) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # FRED CARD RENDERER
 # ─────────────────────────────────────────────────────────────────────────────
-def render_fred_card(key: str, cfg: dict, df) -> None:
+def render_fred_card(key: str, cfg: dict, df, error: str = None) -> None:
     """
     Renders a card for FRED-sourced indicators.
     Layout:
@@ -1227,6 +1242,10 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
       ADP      — headline = latest MoM print (K),    badge = vs same month prior year
       Sentiment— headline = latest index level,       badge = MoM change + YoY comparison
     Chart shows actual prints (no MoM/YoY toggle), with expand button.
+
+    `error`, when set, is the diagnostic captured by fetch_fred_data() for
+    this series (HTTP status + FRED's own error message) — shown instead of
+    a bare "Data unavailable" so a failure is actionable from the UI alone.
     """
     color = cfg["color"]
 
@@ -1248,7 +1267,10 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
         </div>
         """, unsafe_allow_html=True)
         if df is None or df.empty:
-            st.warning("Data unavailable", icon="⚠️")
+            if error:
+                st.warning(f"Data unavailable — {error}", icon="⚠️")
+            else:
+                st.warning("Data unavailable", icon="⚠️")
             return
         # Use compute_series + same stat/chart logic as BLS price_index cards
         df_c  = compute_series(df, "price_index")
@@ -1318,7 +1340,10 @@ def render_fred_card(key: str, cfg: dict, df) -> None:
     """, unsafe_allow_html=True)
 
     if df is None or df.empty or len(df) < 2:
-        st.warning("Data unavailable", icon="⚠️")
+        if error:
+            st.warning(f"Data unavailable — {error}", icon="⚠️")
+        else:
+            st.warning("Data unavailable", icon="⚠️")
         return
 
     df = df.sort_values("date").reset_index(drop=True)
@@ -3713,14 +3738,14 @@ def _fetch_fred_release_dates_raw(release_id: int):
     and either an error message or a snippet of the raw response, so a
     failure is visible in the UI instead of only a server-log print.
     """
-    fred_key = "bc1f32b397114934e95d879ec2646074"
-    url = (
-        f"https://api.stlouisfed.org/fred/release/dates"
-        f"?release_id={release_id}&api_key={fred_key}"
-        f"&file_type=json&sort_order=desc&limit=60"
-        f"&include_release_dates_with_no_data=true"
-    )
     try:
+        fred_key = st.secrets["FRED_API_KEY"]
+        url = (
+            f"https://api.stlouisfed.org/fred/release/dates"
+            f"?release_id={release_id}&api_key={fred_key}"
+            f"&file_type=json&sort_order=desc&limit=60"
+            f"&include_release_dates_with_no_data=true"
+        )
         resp = requests.get(url, timeout=20)
         diag = {"http_status": resp.status_code, "error": None}
         resp.raise_for_status()
@@ -4614,10 +4639,10 @@ def main():
             st.error(f"❌ BLS API error: {e}")
             st.stop()
         try:
-            fred_data = fetch_fred_data()
+            fred_data, fred_errors = fetch_fred_data()
         except Exception as e:
             st.error(f"❌ FRED API error: {e}")
-            fred_data = {}
+            fred_data, fred_errors = {}, {}
 
     # ── Status + refresh row ───────────────────────────────────────────────
     bls_loaded  = len(all_data)
@@ -4655,7 +4680,7 @@ def main():
         cols_pce = st.columns(3, gap="medium")
         with cols_pce[0]:
             with st.container(border=True):
-                render_fred_card("corepce", FRED_SERIES["corepce"], fred_data.get("corepce"))
+                render_fred_card("corepce", FRED_SERIES["corepce"], fred_data.get("corepce"), fred_errors.get("corepce"))
 
     # ── LABOR: Unemployment · NFP · Initial Claims ────────────────────────
     elif macro_section == "Labour Markets":
@@ -4670,7 +4695,7 @@ def main():
         cols_labor2 = st.columns(2, gap="medium")
         with cols_labor2[0]:
             with st.container(border=True):
-                render_fred_card("claims", FRED_SERIES["claims"], fred_data.get("claims"))
+                render_fred_card("claims", FRED_SERIES["claims"], fred_data.get("claims"), fred_errors.get("claims"))
 
 
 
