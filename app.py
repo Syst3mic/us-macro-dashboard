@@ -8,82 +8,10 @@ import streamlit as st
 import streamlit.components.v1 as components
 import html
 import requests
-import time
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime, timezone, timedelta, date
 import yfinance as yf
-from requests.adapters import HTTPAdapter
-try:
-    from urllib3.util.retry import Retry
-except Exception:                       # very old urllib3 layout
-    from requests.packages.urllib3.util.retry import Retry
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SHARED HTTP SESSION
-# ─────────────────────────────────────────────────────────────────────────────
-# Streamlit Community Cloud routes outbound traffic through shared egress
-# infrastructure. Some API front-ends (WAF/CDN layers — FRED's included
-# since its late-2025 API v2 migration) reject requests that arrive with no
-# browser-like User-Agent, returning a 403 *before* the request reaches the
-# application layer (which is why FRED's own "bad key" 400 never shows — the
-# 403 is injected upstream). A plain `requests.get()` sends a `python-requests/x`
-# UA and gets flagged as a bot. Setting a real browser UA on a persistent
-# session (with automatic retry/backoff on the transient 403/429/5xx codes
-# these edge layers throw) is what makes the calls go through. yfinance is
-# pointed at this same session too, so its Yahoo calls inherit the UA and
-# retries — the fix for the stale-date / rate-limit problem on Community Cloud.
-_BROWSER_UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
-)
-
-
-def _build_http_session() -> requests.Session:
-    s = requests.Session()
-    s.headers.update({
-        "User-Agent":      _BROWSER_UA,
-        "Accept":          "application/json, text/plain, */*",
-        "Accept-Language": "en-US,en;q=0.9",
-    })
-    retry = Retry(
-        total=4, connect=3, read=3,
-        backoff_factor=1.2,                       # 0s, 1.2s, 2.4s, 4.8s
-        status_forcelist=(403, 429, 500, 502, 503, 504),
-        allowed_methods=frozenset(["GET", "POST"]),
-        raise_on_status=False,
-    )
-    adapter = HTTPAdapter(max_retries=retry, pool_connections=20, pool_maxsize=20)
-    s.mount("https://", adapter)
-    s.mount("http://", adapter)
-    return s
-
-
-@st.cache_resource(show_spinner=False)
-def get_http_session() -> requests.Session:
-    """One shared, browser-headed session for the whole app (cached across
-    reruns). Used for FRED, BLS, and — via yf_session() — Yahoo."""
-    return _build_http_session()
-
-
-def yf_session() -> requests.Session:
-    """
-    A session suitable to hand to yfinance so its Yahoo calls carry the
-    browser UA + retry policy. yfinance stores a crumb/cookie on the session
-    it's given; we keep a dedicated cached instance (not the FRED/BLS one) so
-    those Yahoo cookies don't ride along on government-API requests.
-
-    Uses @st.cache_resource rather than st.session_state because several
-    callers run inside @st.cache_data functions, where touching
-    session_state is unreliable.
-    """
-    return _get_yf_session_cached()
-
-
-@st.cache_resource(show_spinner=False)
-def _get_yf_session_cached() -> requests.Session:
-    return _build_http_session()
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGE CONFIG
@@ -743,7 +671,7 @@ def fetch_bls_data() -> dict:
         "registrationkey": api_key,
         "calculations":    True,       # request BLS pre-computed pct changes
     }
-    resp = get_http_session().post(
+    resp = requests.post(
         "https://api.bls.gov/publicAPI/v2/timeseries/data/",
         json=payload, timeout=30,
     )
@@ -804,7 +732,7 @@ def fetch_bls_data() -> dict:
 # FRED API FETCH
 # ─────────────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
-def fetch_fred_data():
+def fetch_fred_data() -> dict:
     """
     Fetch ICSA and Core PCE from FRED API.
     For Core PCE (price_index transform), also fetches FRED's pre-computed
@@ -812,16 +740,9 @@ def fetch_fred_data():
     compute_series can use official BEA prints rather than deriving them
     from the rounded index level.
     Server-side GET — no CORS, no proxy needed.
-
-    Returns (result: dict, errors: dict) — errors maps series key -> a
-    human-readable diagnostic (HTTP status + FRED's own error message
-    where available) so a failure is visible in the UI instead of only
-    a server-log print.
     """
-    fred_key = st.secrets["FRED_API_KEY"]
+    fred_key = "bc1f32b397114934e95d879ec2646074"
     result   = {}
-    errors   = {}
-    sess     = get_http_session()
 
     def _fred_get(series_id, limit, units=None):
         url = (
@@ -834,7 +755,7 @@ def fetch_fred_data():
         )
         if units:
             url += f"&units={units}"
-        resp = sess.get(url, timeout=20)
+        resp = requests.get(url, timeout=20)
         resp.raise_for_status()
         return resp.json()
 
@@ -896,20 +817,11 @@ def fetch_fred_data():
                     print(f"FRED Core PCE YoY fetch failed: {e}")
 
             result[key] = df
-        except requests.exceptions.HTTPError as e:
-            status = e.response.status_code if e.response is not None else "?"
-            detail = e.response.text[:200] if e.response is not None else str(e)
-            msg = f"HTTP {status} — {detail}"
-            errors[key] = msg
-            print(f"FRED fetch failed [{key}]: {msg}")
-            result[key] = pd.DataFrame(columns=["date", "value"])
         except Exception as e:
-            msg = f"{type(e).__name__}: {e}"
-            errors[key] = msg
-            print(f"FRED fetch failed [{key}]: {msg}")
+            print(f"FRED fetch failed [{key}]: {e}")
             result[key] = pd.DataFrame(columns=["date", "value"])
 
-    return result, errors
+    return result
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TRANSFORMATIONS
@@ -1307,7 +1219,7 @@ def render_card(key: str, cfg: dict, df) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # FRED CARD RENDERER
 # ─────────────────────────────────────────────────────────────────────────────
-def render_fred_card(key: str, cfg: dict, df, error: str = None) -> None:
+def render_fred_card(key: str, cfg: dict, df) -> None:
     """
     Renders a card for FRED-sourced indicators.
     Layout:
@@ -1315,10 +1227,6 @@ def render_fred_card(key: str, cfg: dict, df, error: str = None) -> None:
       ADP      — headline = latest MoM print (K),    badge = vs same month prior year
       Sentiment— headline = latest index level,       badge = MoM change + YoY comparison
     Chart shows actual prints (no MoM/YoY toggle), with expand button.
-
-    `error`, when set, is the diagnostic captured by fetch_fred_data() for
-    this series (HTTP status + FRED's own error message) — shown instead of
-    a bare "Data unavailable" so a failure is actionable from the UI alone.
     """
     color = cfg["color"]
 
@@ -1340,10 +1248,7 @@ def render_fred_card(key: str, cfg: dict, df, error: str = None) -> None:
         </div>
         """, unsafe_allow_html=True)
         if df is None or df.empty:
-            if error:
-                st.warning(f"Data unavailable — {error}", icon="⚠️")
-            else:
-                st.warning("Data unavailable", icon="⚠️")
+            st.warning("Data unavailable", icon="⚠️")
             return
         # Use compute_series + same stat/chart logic as BLS price_index cards
         df_c  = compute_series(df, "price_index")
@@ -1413,10 +1318,7 @@ def render_fred_card(key: str, cfg: dict, df, error: str = None) -> None:
     """, unsafe_allow_html=True)
 
     if df is None or df.empty or len(df) < 2:
-        if error:
-            st.warning(f"Data unavailable — {error}", icon="⚠️")
-        else:
-            st.warning("Data unavailable", icon="⚠️")
+        st.warning("Data unavailable", icon="⚠️")
         return
 
     df = df.sort_values("date").reset_index(drop=True)
@@ -2224,7 +2126,7 @@ def _fill_missing_sectors(df: pd.DataFrame) -> pd.DataFrame:
 
     def _fetch_one(tk):
         try:
-            info = yf.Ticker(tk, session=yf_session()).info
+            info = yf.Ticker(tk).info
             sec  = info.get("sector", "")
             return tk, sec if sec else "—"
         except Exception:
@@ -2532,7 +2434,7 @@ def _fetch_prev_close(tickers: list) -> dict:
     try:
         raw = yf.download(
             tickers, period="7d", interval="1d",
-            auto_adjust=True, progress=False, threads=True, session=yf_session(),
+            auto_adjust=True, progress=False, threads=True,
         )
         if raw.empty:
             return {}
@@ -2596,7 +2498,7 @@ def fetch_price_data_live(tickers: tuple) -> pd.DataFrame:
     try:
         raw = yf.download(
             list(tickers), period="1d", interval="2m",
-            auto_adjust=True, progress=False, threads=True, session=yf_session(),
+            auto_adjust=True, progress=False, threads=True,
         )
         if raw.empty or raw["Close"].empty:
             return fetch_price_data_eod(tickers)
@@ -2669,7 +2571,7 @@ def _pre_market_prev_close(tickers: list, ref_date) -> dict:
         raw = yf.download(
             tickers, period="5d", interval="2m",
             auto_adjust=True, prepost=False, progress=False,
-            threads=True, group_by="ticker", session=yf_session(),
+            threads=True, group_by="ticker",
         )
         if raw.empty:
             return {}
@@ -2702,7 +2604,7 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
         raw = yf.download(
             list(tickers), period="1d", interval="1m",
             auto_adjust=True, prepost=True, progress=False,
-            threads=True, group_by="ticker", session=yf_session(),
+            threads=True, group_by="ticker",
         )
         if raw.empty:
             return fetch_price_data_eod(tickers)
@@ -2769,58 +2671,6 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=900, show_spinner=False)
-def _yahoo_ground_truth_date(ticker: str = "SPY"):
-    """
-    What Yahoo actually has as the latest session, fetched in isolation
-    (single ticker, no threading, no batch) so it's essentially immune to
-    the rate-limiting Yahoo has been enforcing on yfinance's bulk download()
-    endpoint since Nov 2024 (ranaroussi/yfinance issues #2128, #2422, #2614:
-    a burst of hundreds of tickers routinely trips a 429 partway through,
-    and yfinance doesn't always surface that as a clean error — tickers
-    caught by it just silently come back with a stale last row). A single
-    isolated request essentially never trips that threshold, so this is a
-    reliable reference point to check the bulk fetches against.
-    """
-    try:
-        hist = yf.Ticker(ticker, session=yf_session()).history(
-            period="5d", interval="1d", auto_adjust=False)
-        if hist.empty:
-            return None
-        return hist.index[-1].date()
-    except Exception as e:
-        print(f"Ground-truth date fetch failed [{ticker}]: {e}")
-        return None
-
-
-def _chunked_download(tickers: list, chunk_size: int = 80, pause: float = 1.0, **kwargs) -> pd.DataFrame:
-    """
-    yf.download() across a large ticker list in one call is exactly the
-    pattern that trips Yahoo's rate limiter (community-reported threshold
-    is roughly 950 tickers in a single burst, but real-world reports of
-    throttling well below that are common — see the yfinance issues cited
-    in _yahoo_ground_truth_date's docstring). Splitting into smaller chunks
-    with a short pause between them is the standard community mitigation:
-    each burst stays comfortably under the threshold that tends to trigger
-    a 429 or a silently-stale partial response.
-    """
-    frames = []
-    sess = yf_session()
-    for i in range(0, len(tickers), chunk_size):
-        chunk = tickers[i:i + chunk_size]
-        try:
-            part = yf.download(chunk, progress=False, session=sess, **kwargs)
-            if not part.empty:
-                frames.append(part)
-        except Exception as e:
-            print(f"Chunked download failed [{i}:{i + chunk_size}]: {e}")
-        if i + chunk_size < len(tickers):
-            time.sleep(pause)
-    if not frames:
-        return pd.DataFrame()
-    return pd.concat(frames, axis=1)
-
-
-@st.cache_data(ttl=900, show_spinner=False)
 def _fetch_eod_raw(tickers: tuple, cache_bucket: str) -> pd.DataFrame:
     """
     Cached Yahoo pull for daily EOD bars. `cache_bucket` (the Eastern
@@ -2830,20 +2680,11 @@ def _fetch_eod_raw(tickers: tuple, cache_bucket: str) -> pd.DataFrame:
     that could span a market-close transition and serve yesterday's bars
     for up to an hour into the new session. The ttl=900 is just a backstop
     in case Yahoo posts an official close late within an unchanged bucket.
-
-    auto_adjust=False (raw close), not True — see _chunked_download's and
-    this function's git history for the adjusted-close-lag issue this
-    avoided. On top of that, fetches in chunks of 80 tickers via
-    _chunked_download rather than one 500+-ticker burst: Yahoo has been
-    aggressively rate-limiting yfinance's bulk endpoint since Nov 2024, and
-    a single giant multi-ticker call is exactly the pattern that trips it —
-    confirmed here after ruling out caching/deployment as the cause of the
-    stale-date issue this was tracking down.
     """
     try:
-        return _chunked_download(
-            list(tickers), chunk_size=80, pause=1.0,
-            period="5d", interval="1d", auto_adjust=False, threads=True,
+        return yf.download(
+            list(tickers), period="5d", interval="1d",
+            auto_adjust=True, progress=False, threads=True,
         )
     except Exception as e:
         print(f"EOD fetch failed: {e}")
@@ -2854,34 +2695,10 @@ def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
     """
     EOD / closed / fallback: daily bars.
     last_close = most recent session's official close; prev_close = the one before.
-
-    The cache bucket is keyed on Yahoo's OWN latest available session date
-    (from the isolated ground-truth fetch), not merely today's ET date. This
-    is the core fix for the stale-date problem: keying on today's date meant
-    that if the batch briefly came back one session behind (Community Cloud
-    egress throttling / Yahoo's bulk-endpoint lag), that stale frame got
-    cached under today's bucket and served until the TTL expired. Keying on
-    the actual latest-session date means the instant Yahoo has the new
-    session, the bucket changes and forces a fresh pull — and if the batch
-    still lags the ground truth, we retry once before giving up.
     """
-    et         = timezone(timedelta(hours=-4))
-    truth_date = _yahoo_ground_truth_date("SPY")
-    truth_key  = truth_date.isoformat() if truth_date else str(datetime.now(et).date())
-    cache_bucket = f"{truth_key}_{get_market_state()}"
-
+    et           = timezone(timedelta(hours=-4))
+    cache_bucket = f"{datetime.now(et).date()}_{get_market_state()}"
     raw = _fetch_eod_raw(tickers, cache_bucket)
-    # If the batch is behind Yahoo's actual latest session, the chunked pull
-    # got throttled mid-way. Clear this bucket and retry once.
-    if truth_date is not None and not raw.empty and "Close" in raw:
-        try:
-            batch_last = raw["Close"].dropna(how="all").index[-1].date()
-            if batch_last < truth_date:
-                _fetch_eod_raw.clear()
-                raw = _fetch_eod_raw(tickers, cache_bucket)
-        except Exception:
-            pass
-
     if raw.empty:
         return pd.DataFrame()
     close  = raw["Close"]
@@ -2934,7 +2751,6 @@ def _fetch_historical_raw(tickers: tuple, target_date_str: str) -> pd.DataFrame:
         return yf.download(
             list(tickers), start=start.isoformat(), end=end.isoformat(),
             interval="1d", auto_adjust=True, progress=False, threads=True,
-            session=yf_session(),
         )
     except Exception as e:
         print(f"Historical fetch failed: {e}")
@@ -3037,7 +2853,7 @@ def fetch_market_caps(tickers: tuple, prev_prices: tuple) -> dict:
     result    = {}
     for tk in tickers:
         try:
-            shares = yf.Ticker(tk, session=yf_session()).fast_info.shares
+            shares = yf.Ticker(tk).fast_info.shares
             pc     = price_map.get(tk)
             if shares and pc and not pd.isna(shares) and not pd.isna(pc):
                 result[tk] = float(shares) * float(pc)
@@ -3075,7 +2891,6 @@ def fetch_recent_splits(tickers: tuple, cache_bucket: str, lookback_days: int = 
         raw = yf.download(
             list(tickers), period="10d", interval="1d",
             auto_adjust=True, actions=True, progress=False, threads=True,
-            session=yf_session(),
         )
         if raw.empty or "Stock Splits" not in raw.columns.get_level_values(0):
             return {}
@@ -3122,7 +2937,6 @@ def _verify_split_adjusted_chg(ticker: str, split_date, ratio: float,
         raw = yf.download(
             ticker, period="10d", interval="1d",
             auto_adjust=False, progress=False, threads=False,
-            session=yf_session(),
         )
         if raw.empty:
             return None
@@ -3548,42 +3362,6 @@ def render_screener() -> None:
         unsafe_allow_html=True
     )
 
-    # Diagnostic safety net: compares the batched EOD fetch this screener
-    # uses against an isolated single-ticker fetch of the same benchmark.
-    # If they disagree, Yahoo is rate-limiting the 500+-ticker bulk request
-    # (a known, current yfinance/Yahoo issue — see _yahoo_ground_truth_date's
-    # docstring), not a bug in the app's date logic.
-    _ground_truth = _yahoo_ground_truth_date("SPY")
-    _trade_date_obj = None
-    if trade_date != "—":
-        try:
-            _trade_date_obj = datetime.strptime(trade_date, "%Y-%m-%d").date()
-        except ValueError:
-            pass
-    with st.expander("Data freshness diagnostic"):
-        st.caption(
-            "Compares the batched EOD fetch this screener uses against an "
-            "isolated single-ticker fetch of the same instrument (SPY). A "
-            "mismatch means Yahoo is throttling the bulk request, not a "
-            "code bug — the batch is fetched in chunks of 80 tickers with "
-            "a pause between them specifically to reduce that risk."
-        )
-        _c1, _c2 = st.columns(2)
-        with _c1:
-            st.metric("Batch fetch (this screener)", trade_date if trade_date != "—" else "—")
-        with _c2:
-            st.metric("Isolated single-ticker fetch",
-                      _ground_truth.strftime("%Y-%m-%d") if _ground_truth else "—")
-        if _trade_date_obj and _ground_truth:
-            if _trade_date_obj < _ground_truth:
-                st.warning(
-                    f"The batched fetch is behind by {(_ground_truth - _trade_date_obj).days} "
-                    f"session(s) — Yahoo is throttling the bulk request.",
-                    icon="⚠️",
-                )
-            else:
-                st.success("Batch and isolated fetch agree — no rate-limiting detected right now.")
-
     # ── Read controls from session_state (all set by sidebar) ───────────────
     # Update the available sectors cache so the sidebar selectbox has the
     # correct options on the next rerun.
@@ -3700,7 +3478,6 @@ def render_screener() -> None:
                 raw_prev = yf.download(
                     list(pool_tickers), period="7d", interval="1d",
                     auto_adjust=True, progress=False, threads=True,
-                    session=yf_session(),
                 )
                 prev_prices = tuple()
                 if not raw_prev.empty:
@@ -3936,15 +3713,15 @@ def _fetch_fred_release_dates_raw(release_id: int):
     and either an error message or a snippet of the raw response, so a
     failure is visible in the UI instead of only a server-log print.
     """
+    fred_key = "bc1f32b397114934e95d879ec2646074"
+    url = (
+        f"https://api.stlouisfed.org/fred/release/dates"
+        f"?release_id={release_id}&api_key={fred_key}"
+        f"&file_type=json&sort_order=desc&limit=60"
+        f"&include_release_dates_with_no_data=true"
+    )
     try:
-        fred_key = st.secrets["FRED_API_KEY"]
-        url = (
-            f"https://api.stlouisfed.org/fred/release/dates"
-            f"?release_id={release_id}&api_key={fred_key}"
-            f"&file_type=json&sort_order=desc&limit=60"
-            f"&include_release_dates_with_no_data=true"
-        )
-        resp = get_http_session().get(url, timeout=20)
+        resp = requests.get(url, timeout=20)
         diag = {"http_status": resp.status_code, "error": None}
         resp.raise_for_status()
         data = resp.json()
@@ -4064,48 +3841,18 @@ def fetch_market_backdrop(cache_bucket: str):
     (i.e. as of 31 Dec, same asof logic). cache_bucket = today's ET date
     (rebuild-once-per-day); ttl=900s is just a backstop. Fetches 3y of
     history so even the 1Y/YTD lookups have safe buffer at the boundary.
-
-    Uses auto_adjust=False to get BOTH raw Close and dividend/split-adjusted
-    Close in one call. The adjusted series is what drives the horizon %
-    math (correct for multi-month/YTD/1Y total-return comparisons), but
-    yfinance's adjusted-close recompute for the newest bar is known to lag
-    the raw close by hours — even once the session has closed and its raw
-    price is already posted. Left alone, that meant "last" silently fell
-    back to the prior session for hours after today's close, with no error.
-    _patched_close() fixes this by appending the raw close for any tail
-    session(s) missing from the adjusted series — a one-day (or few-day at
-    most) raw-vs-adjusted difference is immaterial against 1M+ horizons.
-
-    Returns (backdrop_df, vix_last, vix_chg, vix_chg_pct, as_of) — `as_of`
-    is the resolved latest session date (the most common `last_date` across
-    tickers), surfaced in the UI so a future staleness issue is visible at
-    a glance instead of requiring another round of debugging.
     """
     tickers = [tk for _, tk in BACKDROP_TICKERS] + ["^VIX"]
     try:
-        raw = _chunked_download(tickers, chunk_size=80, pause=1.0,
-                                 period="3y", interval="1d",
-                                 auto_adjust=False, threads=True)
+        raw = yf.download(tickers, period="3y", interval="1d",
+                           auto_adjust=True, progress=False, threads=True)
     except Exception as e:
         print(f"Market backdrop fetch failed: {e}")
-        return pd.DataFrame(), None, None, None, None
+        return pd.DataFrame(), None, None, None
 
-    if raw.empty or "Close" not in raw or "Adj Close" not in raw:
-        return pd.DataFrame(), None, None, None, None
-    close     = raw["Close"]       # raw — reliably fresh, no adjustment lag
-    adj_close = raw["Adj Close"]   # dividend/split-adjusted — used for the % math
-
-    def _patched_close(tk: str) -> pd.Series:
-        raw_col = close[tk].dropna()     if tk in close.columns     else pd.Series(dtype=float)
-        adj_col = adj_close[tk].dropna() if tk in adj_close.columns else pd.Series(dtype=float)
-        if raw_col.empty:
-            return adj_col
-        if adj_col.empty:
-            return raw_col
-        if raw_col.index[-1] > adj_col.index[-1]:
-            tail = raw_col[raw_col.index > adj_col.index[-1]]
-            adj_col = pd.concat([adj_col, tail]).sort_index()
-        return adj_col
+    if raw.empty or "Close" not in raw:
+        return pd.DataFrame(), None, None, None
+    close = raw["Close"]
 
     def _asof_pct(col: pd.Series, last_val: float, target: pd.Timestamp):
         base = col.asof(target)
@@ -4114,14 +3861,14 @@ def fetch_market_backdrop(cache_bucket: str):
         return (last_val / float(base) - 1) * 100
 
     rows = []
-    last_dates = []
     for label, tk in BACKDROP_TICKERS:
-        col = _patched_close(tk)
+        if tk not in close.columns:
+            continue
+        col = close[tk].dropna()
         if col.empty:
             continue
         last_date = col.index[-1]
         last      = float(col.iloc[-1])
-        last_dates.append(last_date)
         row       = {"label": label, "ticker": tk, "last": last}
         for h_label, offset in BACKDROP_HORIZONS:
             target = last_date - offset
@@ -4130,17 +3877,17 @@ def fetch_market_backdrop(cache_bucket: str):
         row["YTD"] = _asof_pct(col, last, ytd_target)
         rows.append(row)
     backdrop_df = pd.DataFrame(rows)
-    as_of = pd.Series(last_dates).value_counts().idxmax().date() if last_dates else None
 
     vix_last, vix_chg, vix_chg_pct = None, None, None
-    vix_col = _patched_close("^VIX")
-    if len(vix_col) >= 2:
-        vix_last = float(vix_col.iloc[-1])
-        vix_prev = float(vix_col.iloc[-2])
-        vix_chg  = vix_last - vix_prev
-        vix_chg_pct = (vix_last / vix_prev - 1) * 100 if vix_prev else None
+    if "^VIX" in close.columns:
+        vix_col = close["^VIX"].dropna()
+        if len(vix_col) >= 2:
+            vix_last = float(vix_col.iloc[-1])
+            vix_prev = float(vix_col.iloc[-2])
+            vix_chg  = vix_last - vix_prev
+            vix_chg_pct = (vix_last / vix_prev - 1) * 100 if vix_prev else None
 
-    return backdrop_df, vix_last, vix_chg, vix_chg_pct, as_of
+    return backdrop_df, vix_last, vix_chg, vix_chg_pct
 
 # ─────────────────────────────────────────────────────────────────────────────
 # EVENTS CALENDAR — DISPLAY HELPERS
@@ -4301,15 +4048,7 @@ def render_events_calendar() -> None:
     with st.spinner("Loading events calendar…"):
         events_df, _events_diag = build_events_calendar(cache_bucket)
     with st.spinner("Loading market backdrop…"):
-        # Key the backdrop on Yahoo's actual latest session (not today's ET
-        # date) so a briefly-throttled fetch can't get cached as the latest.
-        _truth = _yahoo_ground_truth_date("SPY")
-        _bd_bucket = _truth.isoformat() if _truth else cache_bucket
-        backdrop_df, vix_last, vix_chg, vix_chg_pct, backdrop_as_of = fetch_market_backdrop(_bd_bucket)
-        # If the batch still lags Yahoo's latest, retry once with a cleared bucket.
-        if _truth is not None and backdrop_as_of is not None and backdrop_as_of < _truth:
-            fetch_market_backdrop.clear()
-            backdrop_df, vix_last, vix_chg, vix_chg_pct, backdrop_as_of = fetch_market_backdrop(_bd_bucket)
+        backdrop_df, vix_last, vix_chg, vix_chg_pct = fetch_market_backdrop(cache_bucket)
 
     if events_df.empty:
         st.error("Could not load the events calendar (FRED release-calendar fetch failed). Try refreshing.")
@@ -4381,22 +4120,6 @@ def render_events_calendar() -> None:
         "color:#1A2540;margin:14px 0 8px'>Market Backdrop (% Δ)</div>",
         unsafe_allow_html=True,
     )
-    # Persistent "as of" caption — previously this table showed no date at
-    # all, so a stale fetch was invisible unless you cross-checked it
-    # against another source. Flagged red if it doesn't match the isolated
-    # ground-truth fetch (single ticker, no batching — effectively immune
-    # to Yahoo's rate limiting on the bulk endpoint, so it's a reliable
-    # reference for "what should today's latest session actually be").
-    _ground_truth = _yahoo_ground_truth_date("SPY")
-    if backdrop_as_of is not None:
-        _stale = _ground_truth is not None and backdrop_as_of < _ground_truth
-        _color = "#F0485A" if _stale else "#8898BB"
-        _note  = "  ⚠ behind Yahoo's latest session — see diagnostic below" if _stale else ""
-        st.markdown(
-            f"<div style='font-family:Inter,sans-serif;font-size:10.5px;color:{_color};"
-            f"margin:-4px 0 8px'>As of {backdrop_as_of.strftime('%d %b %Y')} close{_note}</div>",
-            unsafe_allow_html=True,
-        )
     st.markdown("""
     <style>
     .backdrop-table { width:100%; border-collapse:collapse; font-family:'Inter',sans-serif; font-size:14px; }
@@ -4420,36 +4143,6 @@ def render_events_calendar() -> None:
     </style>
     """, unsafe_allow_html=True)
     st.markdown(render_backdrop_table_html(backdrop_df), unsafe_allow_html=True)
-
-    # Diagnostic safety net: compares the batched fetch this table actually
-    # used against an isolated single-ticker fetch of the same benchmark.
-    # If they disagree, that's Yahoo's rate limiting on the bulk endpoint in
-    # action (see _yahoo_ground_truth_date's docstring) — not a code bug.
-    with st.expander("Data freshness diagnostic"):
-        st.caption(
-            "Compares the batched fetch this table uses against an isolated "
-            "single-ticker fetch of the same instrument. If the two dates "
-            "disagree, Yahoo is rate-limiting the batched/bulk request — "
-            "this is a known, current yfinance/Yahoo issue, not a bug in "
-            "the app's date logic."
-        )
-        _batch_date = backdrop_as_of
-        _c1, _c2 = st.columns(2)
-        with _c1:
-            st.metric("Batch fetch (this table)",
-                      _batch_date.strftime("%d %b %Y") if _batch_date else "—")
-        with _c2:
-            st.metric("Isolated single-ticker fetch",
-                      _ground_truth.strftime("%d %b %Y") if _ground_truth else "—")
-        if _batch_date and _ground_truth:
-            if _batch_date < _ground_truth:
-                st.warning(
-                    f"The batched fetch is behind by {(_ground_truth - _batch_date).days} "
-                    f"session(s) — Yahoo is throttling the bulk request.",
-                    icon="⚠️",
-                )
-            else:
-                st.success("Batch and isolated fetch agree — no rate-limiting detected right now.")
 
     st.markdown(
         "<div style='font-family:Inter,sans-serif;font-size:10px;color:#8898BB;margin-top:6px'>"
@@ -4921,10 +4614,10 @@ def main():
             st.error(f"❌ BLS API error: {e}")
             st.stop()
         try:
-            fred_data, fred_errors = fetch_fred_data()
+            fred_data = fetch_fred_data()
         except Exception as e:
             st.error(f"❌ FRED API error: {e}")
-            fred_data, fred_errors = {}, {}
+            fred_data = {}
 
     # ── Status + refresh row ───────────────────────────────────────────────
     bls_loaded  = len(all_data)
@@ -4962,7 +4655,7 @@ def main():
         cols_pce = st.columns(3, gap="medium")
         with cols_pce[0]:
             with st.container(border=True):
-                render_fred_card("corepce", FRED_SERIES["corepce"], fred_data.get("corepce"), fred_errors.get("corepce"))
+                render_fred_card("corepce", FRED_SERIES["corepce"], fred_data.get("corepce"))
 
     # ── LABOR: Unemployment · NFP · Initial Claims ────────────────────────
     elif macro_section == "Labour Markets":
@@ -4977,7 +4670,7 @@ def main():
         cols_labor2 = st.columns(2, gap="medium")
         with cols_labor2[0]:
             with st.container(border=True):
-                render_fred_card("claims", FRED_SERIES["claims"], fred_data.get("claims"), fred_errors.get("claims"))
+                render_fred_card("claims", FRED_SERIES["claims"], fred_data.get("claims"))
 
 
 
