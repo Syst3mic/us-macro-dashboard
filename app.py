@@ -3843,8 +3843,18 @@ def fetch_market_backdrop(cache_bucket: str):
     history so even the 1Y/YTD lookups have safe buffer at the boundary.
     """
     tickers = [tk for _, tk in BACKDROP_TICKERS] + ["^VIX"]
+    # Use explicit start/end instead of period="3y" — the period param
+    # computes its epoch range from the local system clock, which on a
+    # non-US-timezone host can land on or before the latest US close and
+    # silently exclude the most recent trading day. Anchoring to the
+    # ET-aware cache_bucket + 1 day (yfinance end is exclusive) guarantees
+    # the latest US close is always captured.
+    today_et   = datetime.strptime(cache_bucket, "%Y-%m-%d").date()
+    end_date   = today_et + timedelta(days=1)
+    start_date = today_et - timedelta(days=3 * 365 + 30)
     try:
-        raw = yf.download(tickers, period="3y", interval="1d",
+        raw = yf.download(tickers, start=str(start_date), end=str(end_date),
+                           interval="1d",
                            auto_adjust=True, progress=False, threads=True)
     except Exception as e:
         print(f"Market backdrop fetch failed: {e}")
