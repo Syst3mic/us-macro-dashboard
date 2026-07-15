@@ -2705,11 +2705,22 @@ def _fetch_eod_raw(tickers: tuple, cache_bucket: str) -> pd.DataFrame:
     that could span a market-close transition and serve yesterday's bars
     for up to an hour into the new session. The ttl=900 is just a backstop
     in case Yahoo posts an official close late within an unchanged bucket.
+
+    auto_adjust=False (raw close), not True. yfinance's auto_adjust=True
+    recomputes the split/dividend-adjusted price across the *entire* history
+    on every call, and that recompute for the newest bar is known to lag
+    Yahoo's raw close by hours — even once the session's raw close is
+    already posted. That lag was silently making the screener report
+    yesterday's close as "latest" well after today's had actually posted
+    (dropna() quietly removed the NaN adjusted value for the newest date).
+    Raw close is also the more correct baseline for a single-day %-change
+    anyway — it's what actually printed, not a total-return-adjusted proxy
+    that can jump around ex-dividend dates.
     """
     try:
         return yf.download(
             list(tickers), period="5d", interval="1d",
-            auto_adjust=True, progress=False, threads=True,
+            auto_adjust=False, progress=False, threads=True,
         )
     except Exception as e:
         print(f"EOD fetch failed: {e}")
@@ -3866,18 +3877,47 @@ def fetch_market_backdrop(cache_bucket: str):
     (i.e. as of 31 Dec, same asof logic). cache_bucket = today's ET date
     (rebuild-once-per-day); ttl=900s is just a backstop. Fetches 3y of
     history so even the 1Y/YTD lookups have safe buffer at the boundary.
+
+    Uses auto_adjust=False to get BOTH raw Close and dividend/split-adjusted
+    Close in one call. The adjusted series is what drives the horizon %
+    math (correct for multi-month/YTD/1Y total-return comparisons), but
+    yfinance's adjusted-close recompute for the newest bar is known to lag
+    the raw close by hours — even once the session has closed and its raw
+    price is already posted. Left alone, that meant "last" silently fell
+    back to the prior session for hours after today's close, with no error.
+    _patched_close() fixes this by appending the raw close for any tail
+    session(s) missing from the adjusted series — a one-day (or few-day at
+    most) raw-vs-adjusted difference is immaterial against 1M+ horizons.
+
+    Returns (backdrop_df, vix_last, vix_chg, vix_chg_pct, as_of) — `as_of`
+    is the resolved latest session date (the most common `last_date` across
+    tickers), surfaced in the UI so a future staleness issue is visible at
+    a glance instead of requiring another round of debugging.
     """
     tickers = [tk for _, tk in BACKDROP_TICKERS] + ["^VIX"]
     try:
         raw = yf.download(tickers, period="3y", interval="1d",
-                           auto_adjust=True, progress=False, threads=True)
+                           auto_adjust=False, progress=False, threads=True)
     except Exception as e:
         print(f"Market backdrop fetch failed: {e}")
-        return pd.DataFrame(), None, None, None
+        return pd.DataFrame(), None, None, None, None
 
-    if raw.empty or "Close" not in raw:
-        return pd.DataFrame(), None, None, None
-    close = raw["Close"]
+    if raw.empty or "Close" not in raw or "Adj Close" not in raw:
+        return pd.DataFrame(), None, None, None, None
+    close     = raw["Close"]       # raw — reliably fresh, no adjustment lag
+    adj_close = raw["Adj Close"]   # dividend/split-adjusted — used for the % math
+
+    def _patched_close(tk: str) -> pd.Series:
+        raw_col = close[tk].dropna()     if tk in close.columns     else pd.Series(dtype=float)
+        adj_col = adj_close[tk].dropna() if tk in adj_close.columns else pd.Series(dtype=float)
+        if raw_col.empty:
+            return adj_col
+        if adj_col.empty:
+            return raw_col
+        if raw_col.index[-1] > adj_col.index[-1]:
+            tail = raw_col[raw_col.index > adj_col.index[-1]]
+            adj_col = pd.concat([adj_col, tail]).sort_index()
+        return adj_col
 
     def _asof_pct(col: pd.Series, last_val: float, target: pd.Timestamp):
         base = col.asof(target)
@@ -3886,14 +3926,14 @@ def fetch_market_backdrop(cache_bucket: str):
         return (last_val / float(base) - 1) * 100
 
     rows = []
+    last_dates = []
     for label, tk in BACKDROP_TICKERS:
-        if tk not in close.columns:
-            continue
-        col = close[tk].dropna()
+        col = _patched_close(tk)
         if col.empty:
             continue
         last_date = col.index[-1]
         last      = float(col.iloc[-1])
+        last_dates.append(last_date)
         row       = {"label": label, "ticker": tk, "last": last}
         for h_label, offset in BACKDROP_HORIZONS:
             target = last_date - offset
@@ -3902,17 +3942,17 @@ def fetch_market_backdrop(cache_bucket: str):
         row["YTD"] = _asof_pct(col, last, ytd_target)
         rows.append(row)
     backdrop_df = pd.DataFrame(rows)
+    as_of = pd.Series(last_dates).value_counts().idxmax().date() if last_dates else None
 
     vix_last, vix_chg, vix_chg_pct = None, None, None
-    if "^VIX" in close.columns:
-        vix_col = close["^VIX"].dropna()
-        if len(vix_col) >= 2:
-            vix_last = float(vix_col.iloc[-1])
-            vix_prev = float(vix_col.iloc[-2])
-            vix_chg  = vix_last - vix_prev
-            vix_chg_pct = (vix_last / vix_prev - 1) * 100 if vix_prev else None
+    vix_col = _patched_close("^VIX")
+    if len(vix_col) >= 2:
+        vix_last = float(vix_col.iloc[-1])
+        vix_prev = float(vix_col.iloc[-2])
+        vix_chg  = vix_last - vix_prev
+        vix_chg_pct = (vix_last / vix_prev - 1) * 100 if vix_prev else None
 
-    return backdrop_df, vix_last, vix_chg, vix_chg_pct
+    return backdrop_df, vix_last, vix_chg, vix_chg_pct, as_of
 
 # ─────────────────────────────────────────────────────────────────────────────
 # EVENTS CALENDAR — DISPLAY HELPERS
@@ -4073,7 +4113,7 @@ def render_events_calendar() -> None:
     with st.spinner("Loading events calendar…"):
         events_df, _events_diag = build_events_calendar(cache_bucket)
     with st.spinner("Loading market backdrop…"):
-        backdrop_df, vix_last, vix_chg, vix_chg_pct = fetch_market_backdrop(cache_bucket)
+        backdrop_df, vix_last, vix_chg, vix_chg_pct, backdrop_as_of = fetch_market_backdrop(cache_bucket)
 
     if events_df.empty:
         st.error("Could not load the events calendar (FRED release-calendar fetch failed). Try refreshing.")
@@ -4145,6 +4185,20 @@ def render_events_calendar() -> None:
         "color:#1A2540;margin:14px 0 8px'>Market Backdrop (% Δ)</div>",
         unsafe_allow_html=True,
     )
+    # Persistent "as of" caption — previously this table showed no date at
+    # all, so a stale fetch was invisible unless you cross-checked it
+    # against another source. Flag it in red if the resolved session is
+    # more than 3 calendar days behind today (generous enough to cover any
+    # normal weekend/holiday gap, but not a genuine staleness bug).
+    if backdrop_as_of is not None:
+        _stale = (today_et - backdrop_as_of).days > 3
+        _color = "#F0485A" if _stale else "#8898BB"
+        _note  = "  ⚠ looks stale — check the diagnostic below" if _stale else ""
+        st.markdown(
+            f"<div style='font-family:Inter,sans-serif;font-size:10.5px;color:{_color};"
+            f"margin:-4px 0 8px'>As of {backdrop_as_of.strftime('%d %b %Y')} close{_note}</div>",
+            unsafe_allow_html=True,
+        )
     st.markdown("""
     <style>
     .backdrop-table { width:100%; border-collapse:collapse; font-family:'Inter',sans-serif; font-size:14px; }
@@ -4168,6 +4222,32 @@ def render_events_calendar() -> None:
     </style>
     """, unsafe_allow_html=True)
     st.markdown(render_backdrop_table_html(backdrop_df), unsafe_allow_html=True)
+
+    # Diagnostic safety net: raw vs. adjusted close for the last few sessions
+    # of one benchmark ticker, so a future date mismatch can be confirmed in
+    # a couple of clicks instead of another full debugging round.
+    with st.expander("Data freshness diagnostic"):
+        st.caption(
+            "Raw close (unadjusted) reflects the true latest session the moment "
+            "Yahoo posts it. Adjusted close (dividend/split-adjusted, used for "
+            "the % math above) can lag the raw close by hours on the newest bar — "
+            "if 'adj' is blank on the most recent date below while 'raw' isn't, "
+            "that's the lag in action, and it's being patched automatically."
+        )
+        _diag_tk = "^VIX"
+        try:
+            _diag = yf.download(_diag_tk, period="7d", interval="1d",
+                                 auto_adjust=False, progress=False)
+            if not _diag.empty:
+                _dcols = ["Close", "Adj Close"] if "Adj Close" in _diag.columns else ["Close"]
+                _dshow = _diag[_dcols].tail(5).rename(
+                    columns={"Close": "raw", "Adj Close": "adj"})
+                _dshow.index = _dshow.index.date
+                st.dataframe(_dshow, use_container_width=True)
+            else:
+                st.caption("No diagnostic data returned.")
+        except Exception as _e:
+            st.caption(f"Diagnostic fetch failed: {_e}")
 
     st.markdown(
         "<div style='font-family:Inter,sans-serif;font-size:10px;color:#8898BB;margin-top:6px'>"
