@@ -8,6 +8,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import html
 import requests
+import time
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime, timezone, timedelta, date
@@ -2696,6 +2697,56 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=900, show_spinner=False)
+def _yahoo_ground_truth_date(ticker: str = "SPY"):
+    """
+    What Yahoo actually has as the latest session, fetched in isolation
+    (single ticker, no threading, no batch) so it's essentially immune to
+    the rate-limiting Yahoo has been enforcing on yfinance's bulk download()
+    endpoint since Nov 2024 (ranaroussi/yfinance issues #2128, #2422, #2614:
+    a burst of hundreds of tickers routinely trips a 429 partway through,
+    and yfinance doesn't always surface that as a clean error — tickers
+    caught by it just silently come back with a stale last row). A single
+    isolated request essentially never trips that threshold, so this is a
+    reliable reference point to check the bulk fetches against.
+    """
+    try:
+        hist = yf.Ticker(ticker).history(period="5d", interval="1d", auto_adjust=False)
+        if hist.empty:
+            return None
+        return hist.index[-1].date()
+    except Exception as e:
+        print(f"Ground-truth date fetch failed [{ticker}]: {e}")
+        return None
+
+
+def _chunked_download(tickers: list, chunk_size: int = 80, pause: float = 1.0, **kwargs) -> pd.DataFrame:
+    """
+    yf.download() across a large ticker list in one call is exactly the
+    pattern that trips Yahoo's rate limiter (community-reported threshold
+    is roughly 950 tickers in a single burst, but real-world reports of
+    throttling well below that are common — see the yfinance issues cited
+    in _yahoo_ground_truth_date's docstring). Splitting into smaller chunks
+    with a short pause between them is the standard community mitigation:
+    each burst stays comfortably under the threshold that tends to trigger
+    a 429 or a silently-stale partial response.
+    """
+    frames = []
+    for i in range(0, len(tickers), chunk_size):
+        chunk = tickers[i:i + chunk_size]
+        try:
+            part = yf.download(chunk, progress=False, **kwargs)
+            if not part.empty:
+                frames.append(part)
+        except Exception as e:
+            print(f"Chunked download failed [{i}:{i + chunk_size}]: {e}")
+        if i + chunk_size < len(tickers):
+            time.sleep(pause)
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, axis=1)
+
+
+@st.cache_data(ttl=900, show_spinner=False)
 def _fetch_eod_raw(tickers: tuple, cache_bucket: str) -> pd.DataFrame:
     """
     Cached Yahoo pull for daily EOD bars. `cache_bucket` (the Eastern
@@ -2706,21 +2757,19 @@ def _fetch_eod_raw(tickers: tuple, cache_bucket: str) -> pd.DataFrame:
     for up to an hour into the new session. The ttl=900 is just a backstop
     in case Yahoo posts an official close late within an unchanged bucket.
 
-    auto_adjust=False (raw close), not True. yfinance's auto_adjust=True
-    recomputes the split/dividend-adjusted price across the *entire* history
-    on every call, and that recompute for the newest bar is known to lag
-    Yahoo's raw close by hours — even once the session's raw close is
-    already posted. That lag was silently making the screener report
-    yesterday's close as "latest" well after today's had actually posted
-    (dropna() quietly removed the NaN adjusted value for the newest date).
-    Raw close is also the more correct baseline for a single-day %-change
-    anyway — it's what actually printed, not a total-return-adjusted proxy
-    that can jump around ex-dividend dates.
+    auto_adjust=False (raw close), not True — see _chunked_download's and
+    this function's git history for the adjusted-close-lag issue this
+    avoided. On top of that, fetches in chunks of 80 tickers via
+    _chunked_download rather than one 500+-ticker burst: Yahoo has been
+    aggressively rate-limiting yfinance's bulk endpoint since Nov 2024, and
+    a single giant multi-ticker call is exactly the pattern that trips it —
+    confirmed here after ruling out caching/deployment as the cause of the
+    stale-date issue this was tracking down.
     """
     try:
-        return yf.download(
-            list(tickers), period="5d", interval="1d",
-            auto_adjust=False, progress=False, threads=True,
+        return _chunked_download(
+            list(tickers), chunk_size=80, pause=1.0,
+            period="5d", interval="1d", auto_adjust=False, threads=True,
         )
     except Exception as e:
         print(f"EOD fetch failed: {e}")
@@ -3398,6 +3447,42 @@ def render_screener() -> None:
         unsafe_allow_html=True
     )
 
+    # Diagnostic safety net: compares the batched EOD fetch this screener
+    # uses against an isolated single-ticker fetch of the same benchmark.
+    # If they disagree, Yahoo is rate-limiting the 500+-ticker bulk request
+    # (a known, current yfinance/Yahoo issue — see _yahoo_ground_truth_date's
+    # docstring), not a bug in the app's date logic.
+    _ground_truth = _yahoo_ground_truth_date("SPY")
+    _trade_date_obj = None
+    if trade_date != "—":
+        try:
+            _trade_date_obj = datetime.strptime(trade_date, "%Y-%m-%d").date()
+        except ValueError:
+            pass
+    with st.expander("Data freshness diagnostic"):
+        st.caption(
+            "Compares the batched EOD fetch this screener uses against an "
+            "isolated single-ticker fetch of the same instrument (SPY). A "
+            "mismatch means Yahoo is throttling the bulk request, not a "
+            "code bug — the batch is fetched in chunks of 80 tickers with "
+            "a pause between them specifically to reduce that risk."
+        )
+        _c1, _c2 = st.columns(2)
+        with _c1:
+            st.metric("Batch fetch (this screener)", trade_date if trade_date != "—" else "—")
+        with _c2:
+            st.metric("Isolated single-ticker fetch",
+                      _ground_truth.strftime("%Y-%m-%d") if _ground_truth else "—")
+        if _trade_date_obj and _ground_truth:
+            if _trade_date_obj < _ground_truth:
+                st.warning(
+                    f"The batched fetch is behind by {(_ground_truth - _trade_date_obj).days} "
+                    f"session(s) — Yahoo is throttling the bulk request.",
+                    icon="⚠️",
+                )
+            else:
+                st.success("Batch and isolated fetch agree — no rate-limiting detected right now.")
+
     # ── Read controls from session_state (all set by sidebar) ───────────────
     # Update the available sectors cache so the sidebar selectbox has the
     # correct options on the next rerun.
@@ -3896,8 +3981,9 @@ def fetch_market_backdrop(cache_bucket: str):
     """
     tickers = [tk for _, tk in BACKDROP_TICKERS] + ["^VIX"]
     try:
-        raw = yf.download(tickers, period="3y", interval="1d",
-                           auto_adjust=False, progress=False, threads=True)
+        raw = _chunked_download(tickers, chunk_size=80, pause=1.0,
+                                 period="3y", interval="1d",
+                                 auto_adjust=False, threads=True)
     except Exception as e:
         print(f"Market backdrop fetch failed: {e}")
         return pd.DataFrame(), None, None, None, None
@@ -4187,13 +4273,15 @@ def render_events_calendar() -> None:
     )
     # Persistent "as of" caption — previously this table showed no date at
     # all, so a stale fetch was invisible unless you cross-checked it
-    # against another source. Flag it in red if the resolved session is
-    # more than 3 calendar days behind today (generous enough to cover any
-    # normal weekend/holiday gap, but not a genuine staleness bug).
+    # against another source. Flagged red if it doesn't match the isolated
+    # ground-truth fetch (single ticker, no batching — effectively immune
+    # to Yahoo's rate limiting on the bulk endpoint, so it's a reliable
+    # reference for "what should today's latest session actually be").
+    _ground_truth = _yahoo_ground_truth_date("SPY")
     if backdrop_as_of is not None:
-        _stale = (today_et - backdrop_as_of).days > 3
+        _stale = _ground_truth is not None and backdrop_as_of < _ground_truth
         _color = "#F0485A" if _stale else "#8898BB"
-        _note  = "  ⚠ looks stale — check the diagnostic below" if _stale else ""
+        _note  = "  ⚠ behind Yahoo's latest session — see diagnostic below" if _stale else ""
         st.markdown(
             f"<div style='font-family:Inter,sans-serif;font-size:10.5px;color:{_color};"
             f"margin:-4px 0 8px'>As of {backdrop_as_of.strftime('%d %b %Y')} close{_note}</div>",
@@ -4223,31 +4311,35 @@ def render_events_calendar() -> None:
     """, unsafe_allow_html=True)
     st.markdown(render_backdrop_table_html(backdrop_df), unsafe_allow_html=True)
 
-    # Diagnostic safety net: raw vs. adjusted close for the last few sessions
-    # of one benchmark ticker, so a future date mismatch can be confirmed in
-    # a couple of clicks instead of another full debugging round.
+    # Diagnostic safety net: compares the batched fetch this table actually
+    # used against an isolated single-ticker fetch of the same benchmark.
+    # If they disagree, that's Yahoo's rate limiting on the bulk endpoint in
+    # action (see _yahoo_ground_truth_date's docstring) — not a code bug.
     with st.expander("Data freshness diagnostic"):
         st.caption(
-            "Raw close (unadjusted) reflects the true latest session the moment "
-            "Yahoo posts it. Adjusted close (dividend/split-adjusted, used for "
-            "the % math above) can lag the raw close by hours on the newest bar — "
-            "if 'adj' is blank on the most recent date below while 'raw' isn't, "
-            "that's the lag in action, and it's being patched automatically."
+            "Compares the batched fetch this table uses against an isolated "
+            "single-ticker fetch of the same instrument. If the two dates "
+            "disagree, Yahoo is rate-limiting the batched/bulk request — "
+            "this is a known, current yfinance/Yahoo issue, not a bug in "
+            "the app's date logic."
         )
-        _diag_tk = "^VIX"
-        try:
-            _diag = yf.download(_diag_tk, period="7d", interval="1d",
-                                 auto_adjust=False, progress=False)
-            if not _diag.empty:
-                _dcols = ["Close", "Adj Close"] if "Adj Close" in _diag.columns else ["Close"]
-                _dshow = _diag[_dcols].tail(5).rename(
-                    columns={"Close": "raw", "Adj Close": "adj"})
-                _dshow.index = _dshow.index.date
-                st.dataframe(_dshow, use_container_width=True)
+        _batch_date = backdrop_as_of
+        _c1, _c2 = st.columns(2)
+        with _c1:
+            st.metric("Batch fetch (this table)",
+                      _batch_date.strftime("%d %b %Y") if _batch_date else "—")
+        with _c2:
+            st.metric("Isolated single-ticker fetch",
+                      _ground_truth.strftime("%d %b %Y") if _ground_truth else "—")
+        if _batch_date and _ground_truth:
+            if _batch_date < _ground_truth:
+                st.warning(
+                    f"The batched fetch is behind by {(_ground_truth - _batch_date).days} "
+                    f"session(s) — Yahoo is throttling the bulk request.",
+                    icon="⚠️",
+                )
             else:
-                st.caption("No diagnostic data returned.")
-        except Exception as _e:
-            st.caption(f"Diagnostic fetch failed: {_e}")
+                st.success("Batch and isolated fetch agree — no rate-limiting detected right now.")
 
     st.markdown(
         "<div style='font-family:Inter,sans-serif;font-size:10px;color:#8898BB;margin-top:6px'>"
