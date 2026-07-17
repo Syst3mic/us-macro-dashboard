@@ -4041,8 +4041,8 @@ def make_catalyst_tape(df: pd.DataFrame, today: date, window_days: int = 180) ->
 # EVENTS CALENDAR — PAGE RENDERER
 # ─────────────────────────────────────────────────────────────────────────────
 def render_events_calendar() -> None:
-    et       = timezone(timedelta(hours=-4))
-    today_et = datetime.now(et).date()
+    sgt      = timezone(timedelta(hours=8))
+    today_et = datetime.now(sgt).date()
     cache_bucket = str(today_et)
 
     st.markdown(
