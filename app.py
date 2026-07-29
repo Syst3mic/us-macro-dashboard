@@ -2702,11 +2702,16 @@ def _fetch_eod_raw(tickers: tuple, et_date_str: str) -> pd.DataFrame:
 def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
     """
     Always returns the MOST RECENT COMPLETED trading session's prices.
-    Uses explicit ET-anchored dates (not period=) and strips any partial bar
-    for today, matching the pattern in _fetch_prev_close and fetch_market_backdrop.
+
+    Key insight: SGT is 12 h ahead of ET.  At 10 AM SGT July 29, ET is still
+    July 28 -- so today_et = July 28.  Filtering close.index < July 28 would
+    strip the July 28 session we actually want.  The partial-bar guard must
+    run ONLY when the market is open (the sole moment a true intraday daily
+    bar exists).  After-hours / closed / pre: the last daily bar is a
+    completed official close and must not be stripped.
     """
-    et         = timezone(timedelta(hours=-4))
-    today_et   = datetime.now(et).date()
+    et          = timezone(timedelta(hours=-4))
+    today_et    = datetime.now(et).date()
     et_date_str = str(today_et)
 
     raw = _fetch_eod_raw(tickers, et_date_str)
@@ -2716,15 +2721,15 @@ def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
     close  = raw["Close"]
     volume = raw.get("Volume", pd.DataFrame())
 
-    # Strip any intraday/partial bar that yfinance may include for today
-    # (same guard used in _fetch_prev_close and fetch_market_backdrop).
-    completed_idx = [d for d in close.index if d.date() < today_et]
-    if not completed_idx:
-        return pd.DataFrame()
-    close = close.loc[completed_idx]
-    if isinstance(volume, pd.DataFrame) and not volume.empty:
-        vol_idx = [d for d in volume.index if d.date() < today_et]
-        volume  = volume.loc[vol_idx] if vol_idx else pd.DataFrame()
+    # Only strip today's partial bar during live market hours.
+    if get_market_state() == "open":
+        completed_idx = [d for d in close.index if d.date() < today_et]
+        if not completed_idx:
+            return pd.DataFrame()
+        close = close.loc[completed_idx]
+        if isinstance(volume, pd.DataFrame) and not volume.empty:
+            vol_idx = [d for d in volume.index if d.date() < today_et]
+            volume  = volume.loc[vol_idx] if vol_idx else pd.DataFrame()
 
     rows = []
     for ticker in tickers:
@@ -3894,15 +3899,16 @@ def fetch_market_backdrop(cache_bucket: str):
         return pd.DataFrame(), None, None, None
     close = raw["Close"]
 
-    # Always use the last COMPLETED session — strip any partial/intraday bar
-    # that yfinance may include for the current calendar day when the US
-    # equity market is open.  Anchoring to ET date keeps the cutoff correct
-    # regardless of where the server clock sits.
-    et = timezone(timedelta(hours=-4))
+    # Strip today's partial bar ONLY when the US market is currently open.
+    # At 10 AM SGT July 29 ET is still July 28; unconditionally filtering
+    # < today_ET would exclude the July 28 session we want to show.
+    # Outside open hours the last daily bar is always the completed close.
+    et            = timezone(timedelta(hours=-4))
     today_date_et = datetime.now(et).date()
-    completed_idx = [d for d in close.index if d.date() < today_date_et]
-    if completed_idx:
-        close = close.loc[completed_idx]
+    if get_market_state() == "open":
+        completed_idx = [d for d in close.index if d.date() < today_date_et]
+        if completed_idx:
+            close = close.loc[completed_idx]
 
     def _asof_pct(col: pd.Series, last_val: float, target: pd.Timestamp):
         base = col.asof(target)
