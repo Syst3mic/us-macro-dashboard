@@ -2671,20 +2671,16 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=900, show_spinner=False)
-def _fetch_eod_raw(tickers: tuple, cache_bucket: str) -> pd.DataFrame:
-    """
-    Cached Yahoo pull for daily EOD bars. `cache_bucket` (the Eastern
-    calendar date + current session state) is not used inside the function —
-    its only job is to force a fresh Yahoo pull the instant the trading day
-    or session state changes, rather than trusting a blind wall-clock TTL
-    that could span a market-close transition and serve yesterday's bars
-    for up to an hour into the new session. The ttl=900 is just a backstop
-    in case Yahoo posts an official close late within an unchanged bucket.
-    """
+def _fetch_eod_raw(tickers: tuple) -> pd.DataFrame:
+    """Fetch enough history to reliably get the last two completed sessions."""
     try:
         return yf.download(
-            list(tickers), period="5d", interval="1d",
-            auto_adjust=True, progress=False, threads=True,
+            list(tickers),
+            period="10d",           # Increased from 5d for safety
+            interval="1d",
+            auto_adjust=True,
+            progress=False,
+            threads=True,
         )
     except Exception as e:
         print(f"EOD fetch failed: {e}")
@@ -2693,45 +2689,52 @@ def _fetch_eod_raw(tickers: tuple, cache_bucket: str) -> pd.DataFrame:
 
 def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
     """
-    EOD / closed / fallback: daily bars.
-    last_close = most recent session's official close; prev_close = the one before.
+    Always returns the MOST RECENT COMPLETED trading session's prices.
+    This fixes the bug where on July 29 it was showing July 27 instead of July 28.
     """
-    et           = timezone(timedelta(hours=-4))
-    cache_bucket = f"{datetime.now(et).date()}_{get_market_state()}"
-    raw = _fetch_eod_raw(tickers, cache_bucket)
-    if raw.empty:
+    raw = _fetch_eod_raw(tickers)
+    if raw.empty or "Close" not in raw or raw["Close"].empty:
         return pd.DataFrame()
+
     close  = raw["Close"]
-    volume = raw["Volume"]
-    if len(close) < 2:
-        return pd.DataFrame()
+    volume = raw.get("Volume", pd.DataFrame())
 
     rows = []
     for ticker in tickers:
         if ticker not in close.columns:
             continue
+
         col = close[ticker].dropna()
         if len(col) < 2:
             continue
+
+        # Last completed session
         lc = float(col.iloc[-1])
-        pc = float(col.iloc[-2])
+        pc = float(col.iloc[-2])   # Previous completed session
+
         if pc == 0:
             continue
+
         chg_pct = (lc / pc - 1) * 100
         chg_abs = lc - pc
+
+        # Volume
         try:
-            vol = volume[ticker].dropna().iloc[-1]
+            vol_col = volume[ticker].dropna() if ticker in volume.columns else pd.Series()
+            vol = int(vol_col.iloc[-1]) if not vol_col.empty else 0
         except Exception:
             vol = 0
+
         rows.append({
             "ticker":     ticker,
             "price":      lc,            # full precision; rounded only at display
             "chg_pct":    chg_pct,       # full precision; weighted sum needs it
             "chg_abs":    chg_abs,
             "prev_close": pc,            # t-1 anchor for the weight base
-            "volume":     int(vol) if not pd.isna(vol) else 0,
+            "volume":     vol,
             "trade_date": str(col.index[-1].date()),
         })
+
     return pd.DataFrame(rows)
 
 
@@ -3863,6 +3866,16 @@ def fetch_market_backdrop(cache_bucket: str):
     if raw.empty or "Close" not in raw:
         return pd.DataFrame(), None, None, None
     close = raw["Close"]
+
+    # Always use the last COMPLETED session — strip any partial/intraday bar
+    # that yfinance may include for the current calendar day when the US
+    # equity market is open.  Anchoring to ET date keeps the cutoff correct
+    # regardless of where the server clock sits.
+    et = timezone(timedelta(hours=-4))
+    today_date_et = datetime.now(et).date()
+    completed_idx = [d for d in close.index if d.date() < today_date_et]
+    if completed_idx:
+        close = close.loc[completed_idx]
 
     def _asof_pct(col: pd.Series, last_val: float, target: pd.Timestamp):
         base = col.asof(target)
