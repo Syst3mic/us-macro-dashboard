@@ -2671,12 +2671,24 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=900, show_spinner=False)
-def _fetch_eod_raw(tickers: tuple) -> pd.DataFrame:
-    """Fetch enough history to reliably get the last two completed sessions."""
+def _fetch_eod_raw(tickers: tuple, et_date_str: str) -> pd.DataFrame:
+    """
+    Fetch daily bars with explicit ET-anchored start/end dates rather than
+    period=, which yfinance anchors to the server (SGT) clock and can land
+    during a window where Yahoo still considers the latest US session open —
+    causing it to return the session BEFORE the one we want.  Explicit dates
+    in ET eliminate that timezone ambiguity entirely.  et_date_str also pins
+    the cache so it rebuilds at most once per ET calendar day; the ttl=900s
+    backstop handles late Yahoo data posts within the same day.
+    """
     try:
+        target = datetime.strptime(et_date_str, "%Y-%m-%d").date()
+        start  = target - timedelta(days=15)   # 15-day buffer covers long weekends
+        end    = target + timedelta(days=1)    # yfinance end is exclusive
         return yf.download(
             list(tickers),
-            period="10d",           # Increased from 5d for safety
+            start=str(start),
+            end=str(end),
             interval="1d",
             auto_adjust=True,
             progress=False,
@@ -2690,14 +2702,29 @@ def _fetch_eod_raw(tickers: tuple) -> pd.DataFrame:
 def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
     """
     Always returns the MOST RECENT COMPLETED trading session's prices.
-    This fixes the bug where on July 29 it was showing July 27 instead of July 28.
+    Uses explicit ET-anchored dates (not period=) and strips any partial bar
+    for today, matching the pattern in _fetch_prev_close and fetch_market_backdrop.
     """
-    raw = _fetch_eod_raw(tickers)
+    et         = timezone(timedelta(hours=-4))
+    today_et   = datetime.now(et).date()
+    et_date_str = str(today_et)
+
+    raw = _fetch_eod_raw(tickers, et_date_str)
     if raw.empty or "Close" not in raw or raw["Close"].empty:
         return pd.DataFrame()
 
     close  = raw["Close"]
     volume = raw.get("Volume", pd.DataFrame())
+
+    # Strip any intraday/partial bar that yfinance may include for today
+    # (same guard used in _fetch_prev_close and fetch_market_backdrop).
+    completed_idx = [d for d in close.index if d.date() < today_et]
+    if not completed_idx:
+        return pd.DataFrame()
+    close = close.loc[completed_idx]
+    if isinstance(volume, pd.DataFrame) and not volume.empty:
+        vol_idx = [d for d in volume.index if d.date() < today_et]
+        volume  = volume.loc[vol_idx] if vol_idx else pd.DataFrame()
 
     rows = []
     for ticker in tickers:
@@ -2720,7 +2747,7 @@ def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
 
         # Volume
         try:
-            vol_col = volume[ticker].dropna() if ticker in volume.columns else pd.Series()
+            vol_col = volume[ticker].dropna() if isinstance(volume, pd.DataFrame) and ticker in volume.columns else pd.Series()
             vol = int(vol_col.iloc[-1]) if not vol_col.empty else 0
         except Exception:
             vol = 0
