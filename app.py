@@ -2382,6 +2382,73 @@ def _ndx_fallback() -> pd.DataFrame:
     return df
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# EXCHANGE-TIME + SESSION RESOLUTION (shared by Screener and Market Backdrop)
+# ─────────────────────────────────────────────────────────────────────────────
+# Everything below resolves "which US session am I looking at" ONE way, and
+# every price consumer (screener EOD, extended-hours baselines, events-calendar
+# market backdrop) goes through it. Previously each call site re-derived the
+# session from a hardcoded UTC-4 offset plus ad-hoc date filters, which drifted
+# apart from each other and from the exchange's real clock.
+try:                                             # DST-aware; -4 was wrong Nov–Mar
+    from zoneinfo import ZoneInfo
+    _ET_TZ = ZoneInfo("America/New_York")
+except Exception:                                # pragma: no cover — fallback
+    _ET_TZ = timezone(timedelta(hours=-4))
+
+_REGULAR_CLOSE_MIN = 16 * 60                     # 16:00 ET
+
+
+def _now_et() -> datetime:
+    """Current time in the exchange's own timezone (handles EST/EDT)."""
+    return datetime.now(_ET_TZ)
+
+
+def _session_is_complete(session_date, now_et: datetime = None) -> bool:
+    """
+    True once `session_date`'s REGULAR session (09:30–16:00 ET) has finished.
+
+    This is the single rule that decides whether a daily bar is an official
+    close or a still-forming/partial bar. It is deliberately time-based rather
+    than market-state-based:
+
+      • date < today ET                      → complete
+      • date == today ET and now >= 16:00 ET → complete (the close just printed)
+      • date == today ET and now <  16:00 ET → NOT complete (pre-market or the
+                                               live session's running bar)
+      • date > today ET                      → not complete
+
+    The old code only stripped a same-day bar when get_market_state()=="open",
+    which left the pre-market window (04:00–09:30 ET) able to treat a stray
+    same-day daily bar as a finished close.
+    """
+    if now_et is None:
+        now_et = _now_et()
+    today = now_et.date()
+    if session_date < today:
+        return True
+    if session_date > today:
+        return False
+    return (now_et.hour * 60 + now_et.minute) >= _REGULAR_CLOSE_MIN
+
+
+def _eod_cache_bucket() -> str:
+    """
+    Cache key for anything anchored to "the most recent completed session".
+
+    Rolls forward at 16:00 ET — the moment a new official close exists — NOT at
+    ET midnight. An ET-midnight bucket meant the key for, say, 28 Jul was first
+    created ~12 h BEFORE the 28 Jul session even opened, so a cached frame built
+    then legitimately contained nothing newer than 25 Jul. Rolling at the close
+    guarantees the first read after 16:00 ET is always a fresh fetch.
+    """
+    now = _now_et()
+    d   = now.date()
+    if (now.hour * 60 + now.minute) < _REGULAR_CLOSE_MIN:
+        d = d - timedelta(days=1)
+    return str(d)
+
+
 def get_market_state() -> str:
     """
     Returns the NYSE session state, determined entirely in US/Eastern time —
@@ -2403,8 +2470,7 @@ def get_market_state() -> str:
       20:00 – 24:00 ET  →  closed
     Saturday/Sunday (Eastern calendar day) → closed.
     """
-    et   = timezone(timedelta(hours=-4))   # EDT — matches the rest of the module
-    now  = datetime.now(et)
+    now  = _now_et()              # DST-aware: EST in winter, EDT in summer
     if now.weekday() >= 5:        # Sat/Sun, Eastern calendar day
         return "closed"
     mins = now.hour * 60 + now.minute
@@ -2420,46 +2486,163 @@ def get_market_state() -> str:
         return "closed"
 
 
-def _fetch_prev_close(tickers: list) -> dict:
+@st.cache_data(ttl=900, show_spinner=False)
+def _fetch_daily_bars(tickers: tuple, lookback_days: int, bucket: str):
     """
-    Previous COMPLETED session's official close for each ticker, used as the
-    chg% baseline in all intraday/extended modes.
+    THE single daily-bar fetch for the whole app. Returns (close_df, volume_df),
+    both wide: index = tz-naive normalised session date, columns = ticker.
 
-    Bug fix: do NOT use Close.iloc[-1] of a multi-day frame — during market
-    hours the last daily row is the in-progress session, so iloc[-1] would be
-    today's price and every chg% would collapse toward 0. We take each
-    ticker's own last *completed* daily close instead (the row before today
-    when a partial bar exists), via per-column last-valid logic.
+    Three deliberate changes vs. the previous per-call-site downloads, each of
+    which independently caused the "stuck one session behind" symptom:
+
+    1. auto_adjust=False, then Adj Close combine_first Close.
+       ---------------------------------------------------------------
+       THIS IS THE MAIN FIX. With auto_adjust=True, yfinance rebuilds every
+       price column as `raw * (Adj Close / Close)`. Yahoo's `adjclose` array is
+       populated by a separate batch job that routinely lags the `quote` array
+       by several hours after the US close — so in the window we care about
+       (SGT morning = late ET evening) the newest bar often has Adj Close = NaN
+       while Open/High/Low/Close/Volume are all perfectly good. The ratio then
+       evaluates to NaN, auto_adjust nukes the entire OHLC row to NaN, and the
+       app's own `.dropna()` deletes the session. The frame silently ends one
+       day early and every downstream figure — last price, chg%, 1D/1M/1Y —
+       quietly refers to the session before the one you wanted.
+       Pulling unadjusted bars and filling any missing Adj Close from raw Close
+       keeps the session. This is exact, not an approximation: Yahoo's
+       adjustment factor on the most recent bar is 1.0 by construction.
+
+    2. No `end=` cap. The far end is left open so yfinance defaults it to "now".
+       Any end date derived from an ET-vs-SGT calendar day is one more place the
+       newest session can be clipped off; removing it removes the risk entirely.
+       Session selection is done below on the returned data instead.
+
+    3. `bucket` (from _eod_cache_bucket) rolls at 16:00 ET, so the cache cannot
+       serve a pre-close snapshot after a new close has printed. ttl=900 is a
+       backstop for late Yahoo posts within the same session.
     """
     try:
-        raw = yf.download(
-            tickers, period="7d", interval="1d",
-            auto_adjust=True, progress=False, threads=True,
-        )
-        if raw.empty:
-            return {}
-        close = raw["Close"]
-        # Identify whether the final row is today's (partial) session in ET.
-        et       = timezone(timedelta(hours=-4))
-        today_et = datetime.now(et).date()
-        idx_dates = [ts.date() for ts in close.index]
+        start = (datetime.strptime(bucket, "%Y-%m-%d").date()
+                 - timedelta(days=int(lookback_days)))
+    except Exception:
+        start = _now_et().date() - timedelta(days=int(lookback_days))
 
-        out = {}
-        for tk in tickers:
-            if tk not in close.columns:
-                continue
-            col = close[tk].dropna()
-            if col.empty:
-                continue
-            # Drop today's in-progress bar if present, then take last close.
-            completed = col[[d != today_et for d in
-                             (col.index.map(lambda x: x.date()))]]
-            series = completed if not completed.empty else col
-            out[tk] = float(series.iloc[-1])
-        return out
+    try:
+        raw = yf.download(
+            list(tickers),
+            start=str(start),
+            interval="1d",
+            auto_adjust=False,      # keep BOTH Close and Adj Close — see (1)
+            actions=False,
+            progress=False,
+            threads=True,
+        )
     except Exception as e:
-        print(f"Prev close fetch failed: {e}")
+        print(f"Daily bar fetch failed: {e}")
+        return pd.DataFrame(), pd.DataFrame()
+
+    if raw is None or raw.empty:
+        return pd.DataFrame(), pd.DataFrame()
+
+    def _field(name: str) -> pd.DataFrame:
+        """Pull one price field out as a wide ticker-columned frame."""
+        try:
+            if isinstance(raw.columns, pd.MultiIndex):
+                if name not in raw.columns.get_level_values(0):
+                    return pd.DataFrame()
+                return raw[name]
+            if name not in raw.columns:
+                return pd.DataFrame()
+            single = list(tickers)[0] if len(tickers) == 1 else name
+            return raw[[name]].rename(columns={name: single})
+        except Exception:
+            return pd.DataFrame()
+
+    close_raw = _field("Close")
+    adj_close = _field("Adj Close")
+    volume    = _field("Volume")
+
+    if close_raw.empty and adj_close.empty:
+        return pd.DataFrame(), pd.DataFrame()
+    if adj_close.empty:
+        close = close_raw
+    elif close_raw.empty:
+        close = adj_close
+    else:
+        # Adjusted where Yahoo has posted it, raw where it hasn't yet.
+        close = adj_close.combine_first(close_raw)
+
+    def _normalise(df: pd.DataFrame) -> pd.DataFrame:
+        """Index → tz-naive, midnight-normalised ET session dates."""
+        if df is None or df.empty:
+            return pd.DataFrame()
+        df = df.copy()
+        idx = pd.to_datetime(df.index)
+        try:
+            if getattr(idx, "tz", None) is not None:
+                idx = idx.tz_convert(_ET_TZ).tz_localize(None)
+        except Exception:
+            pass
+        df.index = pd.DatetimeIndex(idx).normalize()
+        df = df[~df.index.duplicated(keep="last")]
+        return df.sort_index()
+
+    close  = _normalise(close)
+    volume = _normalise(volume)
+    if not close.empty:
+        close = close.dropna(how="all")
+    if not volume.empty and not close.empty:
+        volume = volume.reindex(close.index)
+    return close, volume
+
+
+def _trim_to_completed_sessions(close: pd.DataFrame, volume: pd.DataFrame = None):
+    """
+    Drop any trailing rows that are not yet a finished regular session, so
+    `.iloc[-1]` is ALWAYS the most recent official close and `.iloc[-2]` the one
+    before it. Applied uniformly by every consumer — screener and backdrop — so
+    the two can never disagree about which session they are showing.
+    """
+    if close is None or close.empty:
+        return close, volume
+    now_et = _now_et()
+    keep = [ts for ts in close.index if _session_is_complete(ts.date(), now_et)]
+    if not keep:
+        empty_v = volume.iloc[0:0] if isinstance(volume, pd.DataFrame) and not volume.empty else volume
+        return close.iloc[0:0], empty_v
+    trimmed_close = close.loc[keep]
+    if isinstance(volume, pd.DataFrame) and not volume.empty:
+        volume = volume.reindex(keep)
+    return trimmed_close, volume
+
+
+def _fetch_prev_close(tickers: list) -> dict:
+    """
+    The most recent COMPLETED regular-session close for each ticker — the chg%
+    baseline for live and after-hours modes.
+
+    Behaviour fix: this used to unconditionally discard any bar dated "today
+    ET". That is right during the live session (the last daily row is the
+    in-progress bar) but WRONG after 16:00 ET, when that same row IS the
+    official close that after-hours prints should be measured against. In the
+    after-hours window the baseline therefore fell back a further session and
+    every after-hours chg% was a two-day move.
+
+    _session_is_complete() gets both cases right from one rule: before 16:00 ET
+    today's bar is excluded, from 16:00 ET it becomes the baseline.
+    """
+    close, _ = _fetch_daily_bars(tuple(tickers), 20, _eod_cache_bucket())
+    close, _ = _trim_to_completed_sessions(close, None)
+    if close is None or close.empty:
         return {}
+    out = {}
+    for tk in tickers:
+        if tk not in close.columns:
+            continue
+        col = close[tk].dropna()
+        if col.empty:
+            continue
+        out[tk] = float(col.iloc[-1])
+    return out
 
 
 def _last_valid_per_ticker(frame: pd.DataFrame, tickers) -> dict:
@@ -2559,7 +2742,7 @@ def _pre_market_prev_close(tickers: list, ref_date) -> dict:
     recent session strictly BEFORE ref_date (today's ET date) is that session's
     close. This is immune to the daily-bar dating quirk.
     """
-    ET = timezone(timedelta(hours=-4))   # EDT, matches the rest of the module
+    ET = _ET_TZ   # DST-aware; a fixed -4 offset misdated bars Nov–Mar
 
     def _et_date(ts):
         try:
@@ -2621,16 +2804,18 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
         if not ticker_data:
             return fetch_price_data_eod(tickers)
 
-        et       = timezone(timedelta(hours=-4))   # EDT
-        now_et   = datetime.now(et)
+        # DST-aware: a fixed -4 offset silently shifted every session boundary
+        # by an hour from Nov–Mar, so the pre/after-hours slices were cut at
+        # the wrong time and could pick up bars from the neighbouring session.
+        now_et   = _now_et()
         today_et = now_et.date()
 
         if session == "pre":
-            day_start  = datetime(today_et.year, today_et.month, today_et.day, 0, 0, tzinfo=et)
-            day_cutoff = datetime(today_et.year, today_et.month, today_et.day, 9, 30, tzinfo=et)
+            day_start  = datetime(today_et.year, today_et.month, today_et.day, 0, 0, tzinfo=_ET_TZ)
+            day_cutoff = datetime(today_et.year, today_et.month, today_et.day, 9, 30, tzinfo=_ET_TZ)
             def in_session(idx): return day_start <= idx < day_cutoff
         else:
-            cutoff = datetime(today_et.year, today_et.month, today_et.day, 16, 0, tzinfo=et)
+            cutoff = datetime(today_et.year, today_et.month, today_et.day, 16, 0, tzinfo=_ET_TZ)
             def in_session(idx): return idx >= cutoff
 
         if session == "pre":
@@ -2670,66 +2855,21 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
         return fetch_price_data_eod(tickers)
 
 
-@st.cache_data(ttl=900, show_spinner=False)
-def _fetch_eod_raw(tickers: tuple, et_date_str: str) -> pd.DataFrame:
-    """
-    Fetch daily bars with explicit ET-anchored start/end dates rather than
-    period=, which yfinance anchors to the server (SGT) clock and can land
-    during a window where Yahoo still considers the latest US session open —
-    causing it to return the session BEFORE the one we want.  Explicit dates
-    in ET eliminate that timezone ambiguity entirely.  et_date_str also pins
-    the cache so it rebuilds at most once per ET calendar day; the ttl=900s
-    backstop handles late Yahoo data posts within the same day.
-    """
-    try:
-        target = datetime.strptime(et_date_str, "%Y-%m-%d").date()
-        start  = target - timedelta(days=15)   # 15-day buffer covers long weekends
-        end    = target + timedelta(days=1)    # yfinance end is exclusive
-        return yf.download(
-            list(tickers),
-            start=str(start),
-            end=str(end),
-            interval="1d",
-            auto_adjust=True,
-            progress=False,
-            threads=True,
-        )
-    except Exception as e:
-        print(f"EOD fetch failed: {e}")
-        return pd.DataFrame()
-
-
 def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
     """
     Always returns the MOST RECENT COMPLETED trading session's prices.
 
-    Key insight: SGT is 12 h ahead of ET.  At 10 AM SGT July 29, ET is still
-    July 28 -- so today_et = July 28.  Filtering close.index < July 28 would
-    strip the July 28 session we actually want.  The partial-bar guard must
-    run ONLY when the market is open (the sole moment a true intraday daily
-    bar exists).  After-hours / closed / pre: the last daily bar is a
-    completed official close and must not be stripped.
+    Session selection is now done on the data, not on the clock: fetch a
+    generous, uncapped window of daily bars (_fetch_daily_bars, which no longer
+    lets a lagging Yahoo `adjclose` delete the newest bar), trim off anything
+    whose regular session hasn't finished (_trim_to_completed_sessions), then
+    take the last two rows. At 11 AM SGT on 29 Jul that resolves to the 28 Jul
+    close vs the 25 Jul close, which is what the screener should show.
     """
-    et          = timezone(timedelta(hours=-4))
-    today_et    = datetime.now(et).date()
-    et_date_str = str(today_et)
-
-    raw = _fetch_eod_raw(tickers, et_date_str)
-    if raw.empty or "Close" not in raw or raw["Close"].empty:
+    close, volume = _fetch_daily_bars(tickers, 20, _eod_cache_bucket())
+    close, volume = _trim_to_completed_sessions(close, volume)
+    if close is None or close.empty:
         return pd.DataFrame()
-
-    close  = raw["Close"]
-    volume = raw.get("Volume", pd.DataFrame())
-
-    # Only strip today's partial bar during live market hours.
-    if get_market_state() == "open":
-        completed_idx = [d for d in close.index if d.date() < today_et]
-        if not completed_idx:
-            return pd.DataFrame()
-        close = close.loc[completed_idx]
-        if isinstance(volume, pd.DataFrame) and not volume.empty:
-            vol_idx = [d for d in volume.index if d.date() < today_et]
-            volume  = volume.loc[vol_idx] if vol_idx else pd.DataFrame()
 
     rows = []
     for ticker in tickers:
@@ -2920,7 +3060,7 @@ def fetch_recent_splits(tickers: tuple, cache_bucket: str, lookback_days: int = 
 
     cache_bucket: caller passes a date-keyed string (ET) so this can't serve
     a stale "no splits today" result across a calendar-day boundary — same
-    pattern as _fetch_eod_raw's cache_bucket.
+    pattern as _fetch_daily_bars' bucket.
     """
     try:
         raw = yf.download(
@@ -2930,8 +3070,7 @@ def fetch_recent_splits(tickers: tuple, cache_bucket: str, lookback_days: int = 
         if raw.empty or "Stock Splits" not in raw.columns.get_level_values(0):
             return {}
         splits = raw["Stock Splits"]
-        et     = timezone(timedelta(hours=-4))
-        cutoff = (datetime.now(et) - timedelta(days=lookback_days)).date()
+        cutoff = (_now_et() - timedelta(days=lookback_days)).date()
 
         out = {}
         for tk in tickers:
@@ -3219,8 +3358,7 @@ def render_screener() -> None:
     # for an arbitrary past date, whose split-adjustment is already handled
     # correctly by auto_adjust=True in the historical fetch itself.
     if not hist_mode:
-        et_now       = timezone(timedelta(hours=-4))
-        split_bucket = str(datetime.now(et_now).date())
+        split_bucket = str(_now_et().date())
         with st.spinner("Checking for recent stock splits…"):
             splits_map = fetch_recent_splits(tickers_tuple, split_bucket)
 
@@ -3509,26 +3647,12 @@ def render_screener() -> None:
             # today's market caps instead of the backdated ones.
             prev_prices = tuple(zip(direction_pool["ticker"], direction_pool["prev_close"]))
         else:
+            # Was a private copy of the old "drop any bar dated today ET"
+            # logic, which inherited the same one-session-late behaviour after
+            # 16:00 ET. Now shares the single session-resolved helper.
             try:
-                raw_prev = yf.download(
-                    list(pool_tickers), period="7d", interval="1d",
-                    auto_adjust=True, progress=False, threads=True,
-                )
-                prev_prices = tuple()
-                if not raw_prev.empty:
-                    pc_close = raw_prev["Close"]
-                    et       = timezone(timedelta(hours=-4))
-                    today_et = datetime.now(et).date()
-                    pp = []
-                    for tk in pool_tickers:
-                        if tk not in pc_close.columns:
-                            continue
-                        colp = pc_close[tk].dropna()
-                        completed = colp[[d != today_et for d in colp.index.map(lambda x: x.date())]]
-                        series = completed if not completed.empty else colp
-                        if not series.empty:
-                            pp.append((tk, float(series.iloc[-1])))
-                    prev_prices = tuple(pp)
+                pc_map      = _fetch_prev_close(list(pool_tickers))
+                prev_prices = tuple((tk, px) for tk, px in pc_map.items())
             except Exception:
                 prev_prices = tuple()
 
@@ -3873,42 +3997,24 @@ def fetch_market_backdrop(cache_bucket: str):
     non-trading day), asof naturally resolves to the last trading day AT OR
     BEFORE it (walking back one day at a time until a trading day is found).
     YTD compares against the last trading close of the prior calendar year
-    (i.e. as of 31 Dec, same asof logic). cache_bucket = today's ET date
-    (rebuild-once-per-day); ttl=900s is just a backstop. Fetches 3y of
+    (i.e. as of 31 Dec, same asof logic). cache_bucket = _eod_cache_bucket(),
+    i.e. the date of the most recently COMPLETED US session (rolls at 16:00
+    ET, not at ET or SGT midnight); ttl=900s is just a backstop. Fetches 3y of
     history so even the 1Y/YTD lookups have safe buffer at the boundary.
     """
-    tickers = [tk for _, tk in BACKDROP_TICKERS] + ["^VIX"]
-    # Use explicit start/end instead of period="3y" — the period param
-    # computes its epoch range from the local system clock, which on a
-    # non-US-timezone host can land on or before the latest US close and
-    # silently exclude the most recent trading day. Anchoring to the
-    # ET-aware cache_bucket + 1 day (yfinance end is exclusive) guarantees
-    # the latest US close is always captured.
-    today_et   = datetime.strptime(cache_bucket, "%Y-%m-%d").date()
-    end_date   = today_et + timedelta(days=1)
-    start_date = today_et - timedelta(days=3 * 365 + 30)
-    try:
-        raw = yf.download(tickers, start=str(start_date), end=str(end_date),
-                           interval="1d",
-                           auto_adjust=True, progress=False, threads=True)
-    except Exception as e:
-        print(f"Market backdrop fetch failed: {e}")
-        return pd.DataFrame(), None, None, None
+    tickers = tuple([tk for _, tk in BACKDROP_TICKERS] + ["^VIX"])
 
-    if raw.empty or "Close" not in raw:
+    # Same fetch + same session rule as the Market Screener, so the two panels
+    # can never disagree about which close they are quoting. See
+    # _fetch_daily_bars for why the previous auto_adjust=True + explicit `end`
+    # combination kept dropping the newest session, which is what made every
+    # 1D/1M/1Y figure here anchor to the session before the intended one.
+    # cache_bucket must be the ET/session-anchored bucket from
+    # _eod_cache_bucket(), not an SGT calendar date.
+    close, _volume = _fetch_daily_bars(tickers, 3 * 365 + 45, cache_bucket)
+    close, _       = _trim_to_completed_sessions(close, None)
+    if close is None or close.empty:
         return pd.DataFrame(), None, None, None
-    close = raw["Close"]
-
-    # Strip today's partial bar ONLY when the US market is currently open.
-    # At 10 AM SGT July 29 ET is still July 28; unconditionally filtering
-    # < today_ET would exclude the July 28 session we want to show.
-    # Outside open hours the last daily bar is always the completed close.
-    et            = timezone(timedelta(hours=-4))
-    today_date_et = datetime.now(et).date()
-    if get_market_state() == "open":
-        completed_idx = [d for d in close.index if d.date() < today_date_et]
-        if completed_idx:
-            close = close.loc[completed_idx]
 
     def _asof_pct(col: pd.Series, last_val: float, target: pd.Timestamp):
         base = col.asof(target)
@@ -4087,9 +4193,18 @@ def make_catalyst_tape(df: pd.DataFrame, today: date, window_days: int = 180) ->
 # EVENTS CALENDAR — PAGE RENDERER
 # ─────────────────────────────────────────────────────────────────────────────
 def render_events_calendar() -> None:
-    sgt      = timezone(timedelta(hours=8))
-    today_et = datetime.now(sgt).date()
-    cache_bucket = str(today_et)
+    sgt = timezone(timedelta(hours=8))
+    # Two DIFFERENT clocks, previously conflated: the variable feeding the
+    # backdrop was named today_et but computed from SGT, so the price panel was
+    # keyed to a Singapore calendar date while the prices themselves live on the
+    # US session calendar.
+    #   • today_local — the user's own date; drives "days away" on the events
+    #     list and the catalyst tape marker. Unchanged behaviour.
+    #   • price_bucket — the most recently COMPLETED US session (rolls 16:00 ET).
+    #     Everything price-related keys off this.
+    today_local  = datetime.now(sgt).date()
+    cache_bucket = str(today_local)
+    price_bucket = _eod_cache_bucket()
 
     st.markdown(
         f"<div style='font-weight:700;color:#1A2540;padding:20px 0 4px;"
@@ -4104,7 +4219,7 @@ def render_events_calendar() -> None:
     with st.spinner("Loading events calendar…"):
         events_df, _events_diag = build_events_calendar(cache_bucket)
     with st.spinner("Loading market backdrop…"):
-        backdrop_df, vix_last, vix_chg, vix_chg_pct = fetch_market_backdrop(cache_bucket)
+        backdrop_df, vix_last, vix_chg, vix_chg_pct = fetch_market_backdrop(price_bucket)
 
     if events_df.empty:
         st.error("Could not load the events calendar (FRED release-calendar fetch failed). Try refreshing.")
@@ -4167,7 +4282,7 @@ def render_events_calendar() -> None:
         "Fed's own tentative schedule.</div>",
         unsafe_allow_html=True,
     )
-    fig = make_catalyst_tape(events_df, today_et)
+    fig = make_catalyst_tape(events_df, today_local)
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key="catalyst_tape")
 
     # ── Market backdrop ──────────────────────────────────────────────────────
@@ -4418,8 +4533,7 @@ def main():
             # day. Off by default (live/EOD data as before). Picking a
             # weekend/holiday date snaps to the last session that traded.
             st.markdown('<div class="sb-section-label">Date</div>', unsafe_allow_html=True)
-            _et_now   = timezone(timedelta(hours=-4))
-            _today_et = datetime.now(_et_now).date()
+            _today_et = _now_et().date()
 
             hist_mode = st.checkbox(
                 "View a past date",
