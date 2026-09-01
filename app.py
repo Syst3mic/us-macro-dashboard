@@ -2590,9 +2590,96 @@ def _fetch_daily_bars(tickers: tuple, lookback_days: int, bucket: str):
     volume = _normalise(volume)
     if not close.empty:
         close = close.dropna(how="all")
+        close = _repair_tail_gaps(close, bucket)
     if not volume.empty and not close.empty:
         volume = volume.reindex(close.index)
     return close, volume
+
+
+def _repair_tail_gaps(close: pd.DataFrame, bucket: str,
+                      lookback_rows: int = 6, max_repairs: int = 10):
+    """
+    Patch per-ticker holes in the most recent `lookback_rows` sessions.
+
+    yf.download() with a LIST of symbols returns one frame indexed on the
+    union of every symbol's sessions. When Yahoo's per-symbol chart response
+    for one ticker lags or gets throttled — routine with threads=True — that
+    symbol's newest one or two cells come back NaN while every other column
+    is complete. Nothing upstream notices: the frame is the right shape, the
+    row exists, and the other tickers are correct.
+
+    That single NaN is what corrupts the trailing-return maths downstream.
+    Every consumer does close[tk].dropna() and then looks a fixed number of
+    CALENDAR days back with asof(), which resolves to the last observation at
+    or before the target. Drop one session out of a column and:
+
+      • a hole on the PREVIOUS session makes the "1 day ago" lookup resolve
+        to TWO sessions ago, so the 1D cell silently reports a two-session
+        move (this is the IWM symptom: -1.96% where the true 1D was -0.62%);
+      • a hole on the NEWEST session makes that ticker's whole row anchor to
+        an older date than every other row in the table.
+
+    Neither is visible in the output. Re-requesting just the affected symbols
+    on their own — no threading, no union index — almost always returns the
+    missing bar, so we patch it back in. combine_first means a repair can only
+    ever FILL a NaN; it can never overwrite a price we already have. Bounded
+    (at most `max_repairs` symbols) and fully guarded, so a failed retry
+    leaves the frame exactly as it was.
+    """
+    if close is None or close.empty:
+        return close
+    try:
+        tail    = close.tail(lookback_rows)
+        missing = [tk for tk in tail.columns if bool(tail[tk].isna().any())]
+        if not missing or len(missing) > max_repairs:
+            return close
+        try:
+            start = (datetime.strptime(bucket, "%Y-%m-%d").date()
+                     - timedelta(days=45))
+        except Exception:
+            start = _now_et().date() - timedelta(days=45)
+
+        fixed = close.copy()
+        for tk in missing:
+            try:
+                r = yf.download(tk, start=str(start), interval="1d",
+                                auto_adjust=False, actions=False,
+                                progress=False, threads=False)
+                if r is None or r.empty:
+                    continue
+                if isinstance(r.columns, pd.MultiIndex):
+                    r.columns = r.columns.get_level_values(0)
+                if "Adj Close" in r.columns and "Close" in r.columns:
+                    s = r["Adj Close"].combine_first(r["Close"])
+                elif "Close" in r.columns:
+                    s = r["Close"]
+                elif "Adj Close" in r.columns:
+                    s = r["Adj Close"]
+                else:
+                    continue
+                if isinstance(s, pd.DataFrame):
+                    s = s.iloc[:, 0]
+                s = s.dropna()
+                if s.empty:
+                    continue
+                idx = pd.to_datetime(s.index)
+                try:
+                    if getattr(idx, "tz", None) is not None:
+                        idx = idx.tz_convert(_ET_TZ).tz_localize(None)
+                except Exception:
+                    pass
+                s.index = pd.DatetimeIndex(idx).normalize()
+                s = s[~s.index.duplicated(keep="last")].sort_index()
+                # Only patch sessions the combined frame already knows about,
+                # so a repair can never invent a row of its own.
+                fixed[tk] = fixed[tk].combine_first(s.reindex(fixed.index))
+            except Exception as e:
+                print(f"Tail-gap repair failed [{tk}]: {type(e).__name__}: {e}")
+                continue
+        return fixed
+    except Exception as e:
+        print(f"Tail-gap repair skipped: {type(e).__name__}: {e}")
+        return close
 
 
 def _trim_to_completed_sessions(close: pd.DataFrame, volume: pd.DataFrame = None):
@@ -3989,18 +4076,29 @@ def build_events_calendar(cache_bucket: str):
 def fetch_market_backdrop(cache_bucket: str):
     """
     Trailing returns for the backdrop tickers + VIX level/1D change.
-    Horizons are anchored to the SAME calendar day-of-month, N months/years
-    back (e.g. today 13 Jul 2026 → 1M target is 13 Jun 2026, 3M target is
-    13 Apr 2026, 1Y target is 13 Jul 2025) via pd.DateOffset, not a fixed
-    day-count. For each horizon we look up the price as of that target date
-    via pandas' asof(): if the target lands on a weekend/holiday (a
-    non-trading day), asof naturally resolves to the last trading day AT OR
-    BEFORE it (walking back one day at a time until a trading day is found).
-    YTD compares against the last trading close of the prior calendar year
-    (i.e. as of 31 Dec, same asof logic). cache_bucket = _eod_cache_bucket(),
-    i.e. the date of the most recently COMPLETED US session (rolls at 16:00
-    ET, not at ET or SGT midnight); ttl=900s is just a backstop. Fetches 3y of
-    history so even the 1Y/YTD lookups have safe buffer at the boundary.
+
+    Returns (backdrop_df, vix_last, vix_chg, vix_chg_pct, as_of) — `as_of` is
+    the single session date every figure in the panel is quoted against, so
+    the UI can label the table instead of leaving the reader to assume.
+
+    Anchoring, in two tiers:
+
+      • 1D is a SESSION step — the close of the session immediately before
+        `as_of` on the shared grid, read at that exact date. It is NOT a
+        calendar offset, because asof() on a calendar offset absorbs any hole
+        in a ticker's column and turns a two-session move into a "1D" cell.
+
+      • 1W/1M/3M/6M/1Y stay calendar-anchored to the same day-of-month N
+        periods back (13 Jul 2026 → 1M target 13 Jun 2026) via pd.DateOffset,
+        resolved with asof() so a weekend/holiday target falls back to the
+        last trading day at or before it. That fallback is correct here, where
+        the target is meant to be an arbitrary calendar date. YTD compares
+        against the last close of the prior calendar year, same logic.
+
+    cache_bucket = _eod_cache_bucket(), i.e. the date of the most recently
+    COMPLETED US session (rolls at 16:00 ET, not at ET or SGT midnight);
+    ttl=900s is just a backstop. Fetches 3y of history so even the 1Y/YTD
+    lookups have safe buffer at the boundary.
     """
     tickers = tuple([tk for _, tk in BACKDROP_TICKERS] + ["^VIX"])
 
@@ -4014,13 +4112,36 @@ def fetch_market_backdrop(cache_bucket: str):
     close, _volume = _fetch_daily_bars(tickers, 3 * 365 + 45, cache_bucket)
     close, _       = _trim_to_completed_sessions(close, None)
     if close is None or close.empty:
-        return pd.DataFrame(), None, None, None
+        return pd.DataFrame(), None, None, None, None
 
-    def _asof_pct(col: pd.Series, last_val: float, target: pd.Timestamp):
-        base = col.asof(target)
-        if base is None or (isinstance(base, float) and pd.isna(base)) or base == 0:
+    # ── ONE session grid for the whole panel ─────────────────────────────
+    # Previously every row derived its own anchor from col.index[-1] AFTER a
+    # per-ticker .dropna(), so a ticker whose newest print was missing quietly
+    # described a different date from the rows above it, with nothing in the
+    # UI to say so. The grid is built from the traded ETF columns only (^VIX
+    # is an index, not an ETF, and is not allowed to define the session set).
+    grid_cols = [tk for _, tk in BACKDROP_TICKERS if tk in close.columns]
+    grid = close[grid_cols].dropna(how="all").index if grid_cols else close.index
+    if len(grid) == 0:
+        return pd.DataFrame(), None, None, None, None
+
+    grid_list = list(grid)
+    grid_pos  = {ts: i for i, ts in enumerate(grid_list)}
+    as_of     = grid_list[-1]                   # shared "prices as of" session
+
+    def _at(col: pd.Series, ts):
+        """Value at an EXACT session date, or None. No walking backwards."""
+        if ts is None or ts not in col.index:
             return None
-        return (last_val / float(base) - 1) * 100
+        v = col.loc[ts]
+        if isinstance(v, pd.Series):
+            v = v.iloc[-1]
+        return None if pd.isna(v) else float(v)
+
+    def _pct(last_val, base):
+        if base is None or pd.isna(base) or float(base) == 0:
+            return None
+        return (float(last_val) / float(base) - 1) * 100
 
     rows = []
     for label, tk in BACKDROP_TICKERS:
@@ -4029,27 +4150,71 @@ def fetch_market_backdrop(cache_bucket: str):
         col = close[tk].dropna()
         if col.empty:
             continue
-        last_date = col.index[-1]
-        last      = float(col.iloc[-1])
-        row       = {"label": label, "ticker": tk, "last": last}
+
+        # Last price is pinned to the SHARED as-of session rather than to this
+        # ticker's own final index entry, so no row can drift to an older date
+        # without saying so.
+        row_asof = as_of
+        last     = _at(col, as_of)
+        if last is None:
+            # Still no print for the shared session even after the tail-gap
+            # repair. Fall back to this ticker's own newest close, but keep
+            # the real date and FLAG it. Silently sliding the anchor is the
+            # original bug; dropping the row entirely just hides the asset.
+            earlier = col.index[col.index <= as_of]
+            if len(earlier) == 0:
+                continue
+            row_asof = earlier[-1]
+            last     = float(col.loc[row_asof])
+        row = {"label": label, "ticker": tk, "last": last,
+               "as_of": row_asof, "stale": row_asof != as_of}
+
+        # 1D is a SESSION step, not a calendar step. The old code took
+        # asof(anchor - 1 calendar day), and asof() resolves to the last
+        # observation AT OR BEFORE the target — so if this ticker had no print
+        # on the previous session the base fell through to the session before
+        # THAT, and the cell reported a two-session move under a "1D" heading.
+        # Stepping back one position on the shared session grid cannot do
+        # that: if the print genuinely is not there we show "—" rather than a
+        # confidently wrong number.
+        i         = grid_pos.get(row_asof)
+        prev_sess = grid_list[i - 1] if i is not None and i >= 1 else None
+        row["1D"] = _pct(last, _at(col, prev_sess))
+
+        # Longer horizons stay calendar-anchored (same day-of-month N periods
+        # back, resolved with asof) — the right convention there, since those
+        # targets routinely land on weekends and holidays.
         for h_label, offset in BACKDROP_HORIZONS:
-            target = last_date - offset
-            row[h_label] = _asof_pct(col, last, target)
-        ytd_target = pd.Timestamp(year=last_date.year - 1, month=12, day=31)
-        row["YTD"] = _asof_pct(col, last, ytd_target)
+            if h_label == "1D":
+                continue
+            row[h_label] = _pct(last, col.asof(row_asof - offset))
+        row["YTD"] = _pct(last, col.asof(
+            pd.Timestamp(year=row_asof.year - 1, month=12, day=31)))
         rows.append(row)
     backdrop_df = pd.DataFrame(rows)
 
+    # VIX card is anchored to the same two sessions as the table, so the
+    # "1D" on the card and the "1D" column can never mean different days.
     vix_last, vix_chg, vix_chg_pct = None, None, None
+    vix_prev_sess = grid_list[-2] if len(grid_list) >= 2 else None
     if "^VIX" in close.columns:
         vix_col = close["^VIX"].dropna()
-        if len(vix_col) >= 2:
-            vix_last = float(vix_col.iloc[-1])
-            vix_prev = float(vix_col.iloc[-2])
-            vix_chg  = vix_last - vix_prev
-            vix_chg_pct = (vix_last / vix_prev - 1) * 100 if vix_prev else None
+        if not vix_col.empty:
+            v_last = _at(vix_col, as_of)
+            if v_last is None:                      # VIX holiday calendar edge
+                b = vix_col.asof(as_of)
+                v_last = float(b) if b is not None and not pd.isna(b) else None
+            v_prev = _at(vix_col, vix_prev_sess)
+            if v_prev is None and vix_prev_sess is not None:
+                b = vix_col.asof(vix_prev_sess)
+                v_prev = float(b) if b is not None and not pd.isna(b) else None
+            if v_last is not None:
+                vix_last = v_last
+                if v_prev:
+                    vix_chg     = v_last - v_prev
+                    vix_chg_pct = (v_last / v_prev - 1) * 100
 
-    return backdrop_df, vix_last, vix_chg, vix_chg_pct
+    return backdrop_df, vix_last, vix_chg, vix_chg_pct, as_of
 
 # ─────────────────────────────────────────────────────────────────────────────
 # EVENTS CALENDAR — DISPLAY HELPERS
@@ -4132,9 +4297,19 @@ def render_backdrop_table_html(df: pd.DataFrame) -> str:
             bg, txt = _diverging_bg(v, vmax=vmax)
             disp = f"{v:+.2f}%" if v is not None and not pd.isna(v) else "—"
             cells += f"<td style='background:{bg};color:{txt};border-radius:3px'>{disp}</td>"
+        # A row can only carry a different anchor date if Yahoo never posted
+        # that ticker's close for the shared session. Say so in-line rather
+        # than letting it sit next to rows priced a day later.
+        stale_mark = ""
+        if bool(row.get("stale")) and row.get("as_of") is not None:
+            stale_mark = (
+                f"<span style=\"font-size:10px;font-weight:600;color:#C8303F;"
+                f"margin-left:6px\" title=\"No close posted for the table's as-of "
+                f"session; this row is priced to its own last available close\">"
+                f"as of {pd.Timestamp(row['as_of']).strftime('%d %b')}</span>")
         rows_html += f"""
         <tr>
-          <td>{row['label']}<span class="backdrop-ticker-chip">{row['ticker']}</span></td>
+          <td>{row['label']}<span class="backdrop-ticker-chip">{row['ticker']}</span>{stale_mark}</td>
           {cells}
         </tr>"""
     return f"""
@@ -4219,7 +4394,8 @@ def render_events_calendar() -> None:
     with st.spinner("Loading events calendar…"):
         events_df, _events_diag = build_events_calendar(cache_bucket)
     with st.spinner("Loading market backdrop…"):
-        backdrop_df, vix_last, vix_chg, vix_chg_pct = fetch_market_backdrop(price_bucket)
+        (backdrop_df, vix_last, vix_chg,
+         vix_chg_pct, price_as_of) = fetch_market_backdrop(price_bucket)
 
     if events_df.empty:
         st.error("Could not load the events calendar (FRED release-calendar fetch failed). Try refreshing.")
@@ -4315,6 +4491,37 @@ def render_events_calendar() -> None:
     """, unsafe_allow_html=True)
     st.markdown(render_backdrop_table_html(backdrop_df), unsafe_allow_html=True)
 
+    # ── "As of" stamp ────────────────────────────────────────────────────────
+    # Every cell above is quoted against ONE session; say which one. Without
+    # this the table looks live, so a panel legitimately anchored to the last
+    # completed close (e.g. loaded before 16:00 ET, when today's bar is still
+    # forming) reads as though it were wrong.
+    if price_as_of is not None:
+        as_of_txt = pd.Timestamp(price_as_of).strftime("%d %b %Y")
+        stale_note = ""
+        if not backdrop_df.empty and "stale" in backdrop_df.columns:
+            stale_tks = backdrop_df.loc[backdrop_df["stale"] == True, "ticker"].tolist()
+            if stale_tks:
+                stale_note = (
+                    f" <span style='color:#C8303F'>{', '.join(stale_tks)} "
+                    f"{'has' if len(stale_tks) == 1 else 'have'} no close posted for "
+                    f"this session and {'is' if len(stale_tks) == 1 else 'are'} priced "
+                    f"to the earlier date shown on the row.</span>")
+        st.markdown(
+            f"<div style='font-family:Inter,sans-serif;font-size:11.5px;color:#4D6080;"
+            f"margin-top:8px'>Prices as of the close on "
+            f"<span style='font-weight:700;color:#1A2540'>{as_of_txt}</span> "
+            f"— the most recent completed US session (16:00 ET). Every row and every "
+            f"horizon in the table is measured from this same session.{stale_note}</div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            "<div style='font-family:Inter,sans-serif;font-size:11.5px;color:#8898BB;"
+            "margin-top:8px'>Price as-of date unavailable.</div>",
+            unsafe_allow_html=True,
+        )
+
     st.markdown(
         "<div style='font-family:Inter,sans-serif;font-size:10px;color:#8898BB;margin-top:6px'>"
         "Colour scale is one consistent scale across the whole table, fixed at ±15% — a -12% cell "
@@ -4326,10 +4533,11 @@ def render_events_calendar() -> None:
     st.markdown("""
     <div style="font-family:'Inter', sans-serif;font-size:10px;color:#6B7A99;
         margin-top:8px;text-align:right">
-      Prices: Yahoo Finance (auto-adjusted daily close) · Horizons anchor to the same
-      day-of-month N months/years back (1M/3M/6M/1Y; 1D/1W = 1/7 calendar days) —
-      a non-trading anchor date resolves to the last trading day at or before it ·
-      YTD = vs. last close of the prior calendar year
+      Prices: Yahoo Finance (auto-adjusted daily close) · 1D = vs. the immediately
+      preceding trading session · 1W/1M/3M/6M/1Y anchor to the same day-of-month
+      N periods back (1W = 7 calendar days) — a non-trading anchor date resolves to
+      the last trading day at or before it · YTD = vs. last close of the prior
+      calendar year
     </div>
     """, unsafe_allow_html=True)
 
