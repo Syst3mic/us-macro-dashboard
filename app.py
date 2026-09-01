@@ -2640,8 +2640,16 @@ def _repair_tail_gaps(close: pd.DataFrame, bucket: str,
             start = _now_et().date() - timedelta(days=45)
 
         fixed = close.copy()
-        for tk in missing:
+        for n, tk in enumerate(missing):
             try:
+                if n:
+                    # Yahoo throttles bursts of single-symbol requests issued
+                    # straight after a batch call, and a throttled response
+                    # comes back EMPTY rather than as an error — the hole then
+                    # survives the repair. A short pause keeps the retries
+                    # under that limit.
+                    import time as _time
+                    _time.sleep(0.35)
                 r = yf.download(tk, start=str(start), interval="1d",
                                 auto_adjust=False, actions=False,
                                 progress=False, threads=False)
@@ -4112,7 +4120,7 @@ def fetch_market_backdrop(cache_bucket: str):
     close, _volume = _fetch_daily_bars(tickers, 3 * 365 + 45, cache_bucket)
     close, _       = _trim_to_completed_sessions(close, None)
     if close is None or close.empty:
-        return pd.DataFrame(), None, None, None, None
+        return pd.DataFrame(), None, None, None, None, {}
 
     # ── ONE session grid for the whole panel ─────────────────────────────
     # Previously every row derived its own anchor from col.index[-1] AFTER a
@@ -4120,10 +4128,18 @@ def fetch_market_backdrop(cache_bucket: str):
     # described a different date from the rows above it, with nothing in the
     # UI to say so. The grid is built from the traded ETF columns only (^VIX
     # is an index, not an ETF, and is not allowed to define the session set).
+    #
+    # Weekday filter: the frame index is the UNION of every symbol's dates, so
+    # a single symbol carrying a stray Saturday/Sunday bar — Yahoo does emit
+    # these — was enough to put a non-session date on the grid. That date then
+    # became "the previous session" for the whole panel, and every ticker
+    # without a bar on it lost its 1D cell.
     grid_cols = [tk for _, tk in BACKDROP_TICKERS if tk in close.columns]
-    grid = close[grid_cols].dropna(how="all").index if grid_cols else close.index
+    close_wd  = close[close.index.dayofweek < 5]
+    panel     = close_wd[grid_cols] if grid_cols else close_wd
+    grid      = panel.dropna(how="all").index
     if len(grid) == 0:
-        return pd.DataFrame(), None, None, None, None
+        return pd.DataFrame(), None, None, None, None, {}
 
     grid_list = list(grid)
     grid_pos  = {ts: i for i, ts in enumerate(grid_list)}
@@ -4145,9 +4161,12 @@ def fetch_market_backdrop(cache_bucket: str):
 
     rows = []
     for label, tk in BACKDROP_TICKERS:
-        if tk not in close.columns:
+        if tk not in close_wd.columns:
             continue
-        col = close[tk].dropna()
+        # Read from the weekday-filtered frame: a stray Saturday/Sunday bar on
+        # this ticker must not be allowed to become its "previous session"
+        # either, or the 1D cell measures from a date that is not a session.
+        col = close_wd[tk].dropna()
         if col.empty:
             continue
 
@@ -4173,13 +4192,26 @@ def fetch_market_backdrop(cache_bucket: str):
         # asof(anchor - 1 calendar day), and asof() resolves to the last
         # observation AT OR BEFORE the target — so if this ticker had no print
         # on the previous session the base fell through to the session before
-        # THAT, and the cell reported a two-session move under a "1D" heading.
-        # Stepping back one position on the shared session grid cannot do
-        # that: if the print genuinely is not there we show "—" rather than a
-        # confidently wrong number.
-        i         = grid_pos.get(row_asof)
-        prev_sess = grid_list[i - 1] if i is not None and i >= 1 else None
-        row["1D"] = _pct(last, _at(col, prev_sess))
+        # THAT, and the cell silently reported a two-session move under a "1D"
+        # heading. That is the original IWM bug.
+        #
+        # The base is this ticker's own last print before its anchor, so the
+        # cell is never blank while the data exists. What changed is that we
+        # now MEASURE the gap against the shared grid: if the base is more
+        # than one session back, `span` records how many, the renderer marks
+        # the cell, and the note under the table says so. A number that spans
+        # two sessions is still useful — passing it off as 1D is not.
+        i           = grid_pos.get(row_asof)
+        expect_prev = grid_list[i - 1] if i is not None and i >= 1 else None
+        earlier_p   = col.index[col.index < row_asof]
+        prev_used   = earlier_p[-1] if len(earlier_p) else None
+        row["1D"]   = _pct(last, _at(col, prev_used))
+        span = None
+        if prev_used is not None and expect_prev is not None and prev_used != expect_prev:
+            j = grid_pos.get(prev_used)
+            span = (i - j) if (i is not None and j is not None) else None
+        row["1D_span"]     = span
+        row["1D_prev_date"] = prev_used
 
         # Longer horizons stay calendar-anchored (same day-of-month N periods
         # back, resolved with asof) — the right convention there, since those
@@ -4197,8 +4229,8 @@ def fetch_market_backdrop(cache_bucket: str):
     # "1D" on the card and the "1D" column can never mean different days.
     vix_last, vix_chg, vix_chg_pct = None, None, None
     vix_prev_sess = grid_list[-2] if len(grid_list) >= 2 else None
-    if "^VIX" in close.columns:
-        vix_col = close["^VIX"].dropna()
+    if "^VIX" in close_wd.columns:
+        vix_col = close_wd["^VIX"].dropna()
         if not vix_col.empty:
             v_last = _at(vix_col, as_of)
             if v_last is None:                      # VIX holiday calendar edge
@@ -4214,7 +4246,17 @@ def fetch_market_backdrop(cache_bucket: str):
                     vix_chg     = v_last - v_prev
                     vix_chg_pct = (v_last / v_prev - 1) * 100
 
-    return backdrop_df, vix_last, vix_chg, vix_chg_pct, as_of
+    # Diagnostics: enough to tell, from the UI, whether a marked 1D cell is a
+    # stray non-session row on the union index or a genuinely missing close.
+    diag = {
+        "as_of":      as_of,
+        "prev":       grid_list[-2] if len(grid_list) >= 2 else None,
+        "grid_tail":  [pd.Timestamp(t) for t in grid_list[-6:]],
+        "raw_tail":   close.tail(6),
+        "dropped_non_weekday": [pd.Timestamp(t) for t in close.index[-10:]
+                                if t.dayofweek >= 5],
+    }
+    return backdrop_df, vix_last, vix_chg, vix_chg_pct, as_of, diag
 
 # ─────────────────────────────────────────────────────────────────────────────
 # EVENTS CALENDAR — DISPLAY HELPERS
@@ -4292,10 +4334,22 @@ def render_backdrop_table_html(df: pd.DataFrame) -> str:
     rows_html = ""
     for _, row in df.iterrows():
         cells = ""
+        span  = row.get("1D_span")
         for h in horizon_labels:
             v = row.get(h)
             bg, txt = _diverging_bg(v, vmax=vmax)
             disp = f"{v:+.2f}%" if v is not None and not pd.isna(v) else "—"
+            # A 1D cell whose base is more than one session back is still
+            # shown — it is the best available reading — but it is marked so
+            # it can never be mistaken for a clean single-session move.
+            if (h == "1D" and span is not None and not pd.isna(span)
+                    and disp != "—"):
+                prev_d = row.get("1D_prev_date")
+                prev_s = pd.Timestamp(prev_d).strftime("%d %b") if prev_d is not None else "?"
+                disp += (f"<span style='font-size:9px;vertical-align:super;"
+                         f"margin-left:2px' title='No close posted for the "
+                         f"preceding session; measured from {prev_s}, "
+                         f"{int(span)} sessions back'>*</span>")
             cells += f"<td style='background:{bg};color:{txt};border-radius:3px'>{disp}</td>"
         # A row can only carry a different anchor date if Yahoo never posted
         # that ticker's close for the shared session. Say so in-line rather
@@ -4395,7 +4449,7 @@ def render_events_calendar() -> None:
         events_df, _events_diag = build_events_calendar(cache_bucket)
     with st.spinner("Loading market backdrop…"):
         (backdrop_df, vix_last, vix_chg,
-         vix_chg_pct, price_as_of) = fetch_market_backdrop(price_bucket)
+         vix_chg_pct, price_as_of, price_diag) = fetch_market_backdrop(price_bucket)
 
     if events_df.empty:
         st.error("Could not load the events calendar (FRED release-calendar fetch failed). Try refreshing.")
@@ -4498,21 +4552,31 @@ def render_events_calendar() -> None:
     # forming) reads as though it were wrong.
     if price_as_of is not None:
         as_of_txt = pd.Timestamp(price_as_of).strftime("%d %b %Y")
-        stale_note = ""
+        notes = []
         if not backdrop_df.empty and "stale" in backdrop_df.columns:
             stale_tks = backdrop_df.loc[backdrop_df["stale"] == True, "ticker"].tolist()
             if stale_tks:
-                stale_note = (
-                    f" <span style='color:#C8303F'>{', '.join(stale_tks)} "
+                notes.append(
+                    f"{', '.join(stale_tks)} "
                     f"{'has' if len(stale_tks) == 1 else 'have'} no close posted for "
                     f"this session and {'is' if len(stale_tks) == 1 else 'are'} priced "
-                    f"to the earlier date shown on the row.</span>")
+                    f"to the earlier date shown on the row.")
+        if not backdrop_df.empty and "1D_span" in backdrop_df.columns:
+            spanned = backdrop_df[backdrop_df["1D_span"].notna()]
+            if not spanned.empty:
+                bits = [f"{r['ticker']} ({int(r['1D_span'])} sessions)"
+                        for _, r in spanned.iterrows()]
+                notes.append(
+                    f"1D marked * spans more than one session because Yahoo posted "
+                    f"no close for the intervening date: {', '.join(bits)}.")
+        note_html = ("" if not notes else
+                     f" <span style='color:#C8303F'>{' '.join(notes)}</span>")
         st.markdown(
             f"<div style='font-family:Inter,sans-serif;font-size:11.5px;color:#4D6080;"
             f"margin-top:8px'>Prices as of the close on "
             f"<span style='font-weight:700;color:#1A2540'>{as_of_txt}</span> "
             f"— the most recent completed US session (16:00 ET). Every row and every "
-            f"horizon in the table is measured from this same session.{stale_note}</div>",
+            f"horizon in the table is measured from this same session.{note_html}</div>",
             unsafe_allow_html=True,
         )
     else:
@@ -4521,6 +4585,27 @@ def render_events_calendar() -> None:
             "margin-top:8px'>Price as-of date unavailable.</div>",
             unsafe_allow_html=True,
         )
+
+    # ── Price-data diagnostics ───────────────────────────────────────────────
+    # Collapsed by default. Shows the raw tail of the fetched frame so a blank
+    # or starred 1D can be traced to its cause without leaving the app: a
+    # non-weekday row on the union index, or a genuinely absent close.
+    if price_diag:
+        with st.expander("Price data diagnostics", expanded=False):
+            st.caption(
+                f"As-of session: {pd.Timestamp(price_diag['as_of']).date()} · "
+                f"Preceding session: "
+                f"{pd.Timestamp(price_diag['prev']).date() if price_diag.get('prev') is not None else '—'}"
+            )
+            stray = price_diag.get("dropped_non_weekday") or []
+            if stray:
+                st.caption("Non-weekday rows present in the fetched frame and "
+                           "excluded from the session grid: "
+                           + ", ".join(pd.Timestamp(d).strftime("%a %d %b") for d in stray))
+            raw_tail = price_diag.get("raw_tail")
+            if raw_tail is not None and not raw_tail.empty:
+                st.caption("Last 6 rows as returned by Yahoo (NaN = no close posted):")
+                st.dataframe(raw_tail.round(2), use_container_width=True)
 
     st.markdown(
         "<div style='font-family:Inter,sans-serif;font-size:10px;color:#8898BB;margin-top:6px'>"
