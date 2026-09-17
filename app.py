@@ -2591,7 +2591,12 @@ def _fetch_daily_bars(tickers: tuple, lookback_days: int, bucket: str):
     if not close.empty:
         close = close.dropna(how="all")
         close = _repair_tail_gaps(close, bucket)
-    if not volume.empty and not close.empty:
+        # Yahoo often posts O/H/L/Volume for the newest daily bar while
+        # Close/Adj Close stay null for hours after 16:00 ET. Repairing via
+        # another daily download cannot fill that (same null). Pull the
+        # official regular-session last from quote metadata instead.
+        close, volume = _fill_null_latest_closes(close, volume)
+    if isinstance(volume, pd.DataFrame) and not volume.empty and not close.empty:
         volume = volume.reindex(close.index)
     return close, volume
 
@@ -2688,6 +2693,139 @@ def _repair_tail_gaps(close: pd.DataFrame, bucket: str,
     except Exception as e:
         print(f"Tail-gap repair skipped: {type(e).__name__}: {e}")
         return close
+
+
+def _yahoo_regular_market_quote(ticker: str) -> dict:
+    """
+    Official regular-session last price for one ticker.
+
+    Yahoo's daily chart `close` array routinely stays `null` on the newest
+    session for hours after 16:00 ET (Open/High/Low/Volume are already there).
+    The same payload's `meta.regularMarketPrice` — and yfinance `fast_info.
+    last_price` — is the official regular-session last and is populated as
+    soon as the auction prints. Prefer the chart meta field because it is
+    explicitly the REGULAR session last, not a post-market print.
+    """
+    # 1) Chart meta — regularMarketPrice is the official close
+    try:
+        url = (
+            f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
+            f"?interval=1d&range=5d"
+        )
+        resp = requests.get(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; USMacroDashboard/1.0)"},
+            timeout=12,
+        )
+        resp.raise_for_status()
+        meta = resp.json()["chart"]["result"][0]["meta"]
+        px = meta.get("regularMarketPrice")
+        vol = meta.get("regularMarketVolume")
+        if px is not None and float(px) > 0:
+            return {
+                "price": float(px),
+                "volume": int(vol) if vol not in (None, "") else None,
+            }
+    except Exception as e:
+        print(f"Chart-meta quote failed [{ticker}]: {type(e).__name__}: {e}")
+
+    # 2) fast_info last_price — usually the regular last even after hours
+    try:
+        fi = yf.Ticker(ticker).fast_info
+        px = None
+        if hasattr(fi, "get"):
+            px = fi.get("lastPrice", None)
+        if px is None:
+            px = getattr(fi, "last_price", None)
+        vol = None
+        if hasattr(fi, "get"):
+            vol = fi.get("lastVolume", None)
+        if px is not None and pd.notna(px) and float(px) > 0:
+            return {
+                "price": float(px),
+                "volume": int(vol) if vol not in (None, "") and pd.notna(vol) else None,
+            }
+    except Exception as e:
+        print(f"fast_info quote failed [{ticker}]: {type(e).__name__}: {e}")
+
+    return {}
+
+
+def _fill_null_latest_closes(close: pd.DataFrame, volume: pd.DataFrame = None,
+                             max_fills: int = 80):
+    """
+    Backfill tickers whose newest daily Close is still null.
+
+    After a batch `yf.download()`, the union index already has a row for the
+    latest session (because most names posted a Close). Names Yahoo has not
+    written a Close for yet sit as NaN on that row. Every consumer then does
+    `close[tk].dropna()` and silently slides that ticker back one session —
+    which is exactly the CRWD / LITE symptom: price + chg% from T-1, volume
+    from T (volume *does* publish on the same incomplete bar).
+
+    Filling only the last row from regular-session quote metadata keeps the
+    rest of the history untouched and never overwrites a Close we already have.
+    """
+    if close is None or close.empty:
+        return close, volume
+
+    last_dt = close.index.max()
+    try:
+        last_row = close.loc[last_dt]
+    except Exception:
+        return close, volume
+
+    if isinstance(last_row, pd.DataFrame):
+        last_row = last_row.iloc[-1]
+
+    missing = [tk for tk in close.columns if pd.isna(last_row.get(tk))]
+    if not missing:
+        return close, volume
+
+    print(f"Latest-close backfill: {len(missing)} tickers missing "
+          f"{pd.Timestamp(last_dt).date()} Close: {missing[:20]}"
+          f"{'…' if len(missing) > 20 else ''}")
+
+    fixed = close.copy()
+    vol_fixed = (
+        volume.copy()
+        if isinstance(volume, pd.DataFrame) and not volume.empty
+        else volume
+    )
+
+    import time as _time
+    filled = 0
+    for i, tk in enumerate(missing):
+        if filled >= max_fills:
+            print(f"Latest-close backfill capped at {max_fills}")
+            break
+        if i:
+            _time.sleep(0.12)
+        quote = _yahoo_regular_market_quote(tk)
+        if not quote:
+            continue
+        px = quote["price"]
+        prior = close[tk].dropna()
+        if not prior.empty:
+            prev = float(prior.iloc[-1])
+            # Guard against a bad quote / ticker mismatch blowing up chg%.
+            if prev > 0 and abs(px / prev - 1.0) > 0.80:
+                print(f"Latest-close backfill rejected [{tk}]: "
+                      f"{px} vs prior close {prev}")
+                continue
+        fixed.loc[last_dt, tk] = px
+        filled += 1
+        if (
+            quote.get("volume")
+            and isinstance(vol_fixed, pd.DataFrame)
+            and tk in vol_fixed.columns
+            and last_dt in vol_fixed.index
+            and pd.isna(vol_fixed.loc[last_dt, tk])
+        ):
+            vol_fixed.loc[last_dt, tk] = quote["volume"]
+
+    print(f"Latest-close backfill: filled {filled}/{len(missing)}")
+    return fixed, vol_fixed
 
 
 def _trim_to_completed_sessions(close: pd.DataFrame, volume: pd.DataFrame = None):
@@ -2966,29 +3104,46 @@ def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
     if close is None or close.empty:
         return pd.DataFrame()
 
+    # Anchor EVERY ticker to the same latest completed session. Using each
+    # column's own last non-null row lets a name whose newest Close is still
+    # null on Yahoo slide back to T-1 while the badge says T — the CRWD/LITE
+    # bug. Names still missing after _fill_null_latest_closes are skipped
+    # rather than shown with a stale session's move.
+    last_session = close.index.max()
+    prev_candidates = close.index[close.index < last_session]
+    prev_session = prev_candidates.max() if len(prev_candidates) else None
+
     rows = []
     for ticker in tickers:
         if ticker not in close.columns:
             continue
-
-        col = close[ticker].dropna()
-        if len(col) < 2:
+        if pd.isna(close.at[last_session, ticker]):
             continue
+        if prev_session is None or pd.isna(close.at[prev_session, ticker]):
+            # Rare: no T-1 print on the shared grid — fall back to that
+            # ticker's own previous non-null observation.
+            col = close[ticker].dropna()
+            col = col[col.index < last_session]
+            if col.empty:
+                continue
+            pc = float(col.iloc[-1])
+        else:
+            pc = float(close.at[prev_session, ticker])
 
-        # Last completed session
-        lc = float(col.iloc[-1])
-        pc = float(col.iloc[-2])   # Previous completed session
-
+        lc = float(close.at[last_session, ticker])
         if pc == 0:
             continue
 
         chg_pct = (lc / pc - 1) * 100
         chg_abs = lc - pc
 
-        # Volume
+        # Volume from the same last session, not from a later dropna() tail
         try:
-            vol_col = volume[ticker].dropna() if isinstance(volume, pd.DataFrame) and ticker in volume.columns else pd.Series()
-            vol = int(vol_col.iloc[-1]) if not vol_col.empty else 0
+            if isinstance(volume, pd.DataFrame) and ticker in volume.columns:
+                v = volume.at[last_session, ticker]
+                vol = int(v) if pd.notna(v) else 0
+            else:
+                vol = 0
         except Exception:
             vol = 0
 
@@ -2999,7 +3154,7 @@ def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
             "chg_abs":    chg_abs,
             "prev_close": pc,            # t-1 anchor for the weight base
             "volume":     vol,
-            "trade_date": str(col.index[-1].date()),
+            "trade_date": str(pd.Timestamp(last_session).date()),
         })
 
     return pd.DataFrame(rows)
