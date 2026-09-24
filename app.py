@@ -3184,108 +3184,189 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
         return fetch_price_data_eod(tickers)
 
 
+def _spy_session_index(bucket: str) -> pd.DatetimeIndex:
+    """Completed NYSE sessions from SPY daily closes — the market calendar."""
+    spy_close, _ = _fetch_daily_bars(("SPY",), 30, bucket)
+    spy_close, _ = _trim_to_completed_sessions(spy_close, None)
+    if spy_close is None or spy_close.empty:
+        return pd.DatetimeIndex([])
+    col = spy_close["SPY"] if "SPY" in spy_close.columns else spy_close.iloc[:, 0]
+    return pd.DatetimeIndex(col.dropna().index)
+
+
+def _hourly_closes_on_dates(tickers, dates) -> dict:
+    """
+    {ticker: {date: close}} from one batched 1-hour download.
+    Takes the last regular-session hour on each requested date.
+    """
+    tickers = [t for t in tickers if t]
+    dates = [pd.Timestamp(d).date() for d in dates]
+    if not tickers or not dates:
+        return {}
+    start = min(dates) - timedelta(days=2)
+    end   = max(dates) + timedelta(days=1)
+    try:
+        raw = yf.download(
+            tickers,
+            start=start.isoformat(),
+            end=end.isoformat(),
+            interval="1h",
+            auto_adjust=False,
+            prepost=False,
+            progress=False,
+            threads=True,
+            group_by="ticker",
+        )
+    except Exception as e:
+        print(f"Hourly batch fill failed: {type(e).__name__}: {e}")
+        return {}
+    if raw is None or raw.empty:
+        return {}
+
+    def _one_close_series(tk):
+        try:
+            if isinstance(raw.columns, pd.MultiIndex):
+                lvl0 = raw.columns.get_level_values(0)
+                if tk in lvl0 and "Close" in raw[tk].columns:
+                    s = raw[tk]["Close"]
+                elif "Close" in raw.columns.get_level_values(0) and tk in raw["Close"].columns:
+                    s = raw["Close"][tk]
+                else:
+                    return pd.Series(dtype=float)
+            else:
+                if "Close" not in raw.columns:
+                    return pd.Series(dtype=float)
+                s = raw["Close"]
+            return s.dropna()
+        except Exception:
+            return pd.Series(dtype=float)
+
+    out = {tk: {} for tk in tickers}
+    wanted = set(dates)
+    for tk in tickers:
+        s = _one_close_series(tk)
+        if s.empty:
+            continue
+        idx = pd.to_datetime(s.index)
+        try:
+            if getattr(idx, "tz", None) is not None:
+                idx = idx.tz_convert(_ET_TZ)
+        except Exception:
+            pass
+        for ts, val in zip(idx, s.values):
+            try:
+                d = ts.date() if hasattr(ts, "date") else pd.Timestamp(ts).date()
+            except Exception:
+                continue
+            if d not in wanted:
+                continue
+            hour = getattr(ts, "hour", 16)
+            minute = getattr(ts, "minute", 0)
+            mins = hour * 60 + minute
+            if mins < 9 * 60 + 30 or mins > 16 * 60:
+                continue
+            out[tk][d] = float(val)
+    return out
+
+
 def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
     """
-    Overnight screener: last completed regular close vs the immediately
-    preceding regular close.
+    Overnight screener math, nothing else:
 
-    The market calendar is the set of dates MOST constituents actually
-    printed a close. A ticker whose daily bar is null on T-1 (Yahoo
-    routinely publishes a ghost null row — MPWR/PANW on 22 Sep 2026)
-    is filled from the 1-hour chart / official previousClose. We never
-    skip back to T-2; that is what turned MPWR's real −1.82% into a
-    fake +6.09%.
+        chg$  = close(T) − close(T-1)
+        chg%  = close(T) / close(T-1) − 1
+
+    T and T-1 come from SPY's completed daily sessions (so a holiday is
+    skipped automatically). A name whose *daily* Close is null on T or
+    T-1 is filled from that day's last regular-hour bar — we never fall
+    back to T-2.
     """
-    close, volume = _fetch_daily_bars(tickers, 20, _eod_cache_bucket())
+    bucket = _eod_cache_bucket() + "_eodv4"
+    close, volume = _fetch_daily_bars(tickers, 20, bucket)
     close, volume = _trim_to_completed_sessions(close, volume)
     if close is None or close.empty:
         return pd.DataFrame()
 
-    sessions = _market_sessions(close)
-    if len(sessions) < 2:
-        return pd.DataFrame()
-    last_session = sessions[-1]
-    prev_session = sessions[-2]
-    last_date = pd.Timestamp(last_session).date()
-    prev_date = pd.Timestamp(prev_session).date()
+    spy_sessions = _spy_session_index(bucket)
+    if len(spy_sessions) >= 2:
+        last_session = spy_sessions[-1]
+        prev_session = spy_sessions[-2]
+    else:
+        sessions = _market_sessions(close)
+        if len(sessions) < 2:
+            return pd.DataFrame()
+        last_session = sessions[-1]
+        prev_session = sessions[-2]
+
+    last_date = pd.Timestamp(last_session).normalize()
+    prev_date = pd.Timestamp(prev_session).normalize()
+    last_d = last_date.date()
+    prev_d = prev_date.date()
+
+    # Make sure both session rows exist so .at lookups are safe.
+    for ts in (prev_date, last_date):
+        if ts not in close.index:
+            close.loc[ts] = pd.NA
+    close = close.sort_index()
+
+    missing = []
+    for tk in tickers:
+        if tk not in close.columns:
+            continue
+        last_ok = last_date in close.index and pd.notna(close.at[last_date, tk])
+        prev_ok = prev_date in close.index and pd.notna(close.at[prev_date, tk])
+        if not last_ok or not prev_ok:
+            missing.append(tk)
+
+    hourly_map = _hourly_closes_on_dates(missing, [prev_d, last_d]) if missing else {}
 
     import time as _time
-    quote_cache = {}
-
-    def _quote(tk: str) -> dict:
-        if tk not in quote_cache:
-            if quote_cache:
-                _time.sleep(0.08)
-            quote_cache[tk] = _yahoo_regular_market_quote(tk)
-        return quote_cache[tk]
-
     rows = []
+    quote_calls = 0
     for ticker in tickers:
         if ticker not in close.columns:
             continue
 
-        lc = close.at[last_session, ticker] if last_session in close.index else None
-        pc = close.at[prev_session, ticker] if prev_session in close.index else None
+        lc = close.at[last_date, ticker] if last_date in close.index else None
+        pc = close.at[prev_date, ticker] if prev_date in close.index else None
         lc = float(lc) if pd.notna(lc) else None
         pc = float(pc) if pd.notna(pc) else None
 
-        quote = {}
-        if lc is None or pc is None:
-            quote = _quote(ticker)
-
+        by_hour = hourly_map.get(ticker, {})
         if lc is None:
-            lc = quote.get("price")
-            # If the quote last doesn't correspond to last_session, try hourly.
-            if lc is None and quote.get("_hourly") is not None:
-                lc = _hourly_close_on_date(quote["_hourly"], last_date)
-
+            lc = by_hour.get(last_d)
         if pc is None:
-            # Official previous regular close — NOT the last non-null daily
-            # bar, which may be T-2 when T-1's daily close is still null.
-            pc = quote.get("prev_close")
+            pc = by_hour.get(prev_d)
+
+        # Last resort: official quote pair. Never walk back to T-2.
+        if lc is None or pc is None:
+            if quote_calls:
+                _time.sleep(0.08)
+            quote = _yahoo_regular_market_quote(ticker)
+            quote_calls += 1
+            if lc is None:
+                lc = quote.get("price")
+            if pc is None:
+                pc = quote.get("prev_close")
             if pc is None and quote.get("_hourly") is not None:
-                pc = _hourly_close_on_date(quote["_hourly"], prev_date)
-            if pc is None and lc is not None and quote.get("chg_pct") is not None:
-                denom = 1.0 + float(quote["chg_pct"]) / 100.0
-                if denom != 0:
-                    pc = lc / denom
+                pc = _hourly_close_on_date(quote["_hourly"], prev_d)
+            if lc is None and quote.get("_hourly") is not None:
+                lc = _hourly_close_on_date(quote["_hourly"], last_d)
 
         if lc is None or pc is None or pc == 0:
             continue
 
-        if quote.get("chg_pct") is not None and quote.get("price") is not None:
-            # When we had to ask Yahoo for the official pair, use its %.
-            # Otherwise compute from the two daily closes we already have.
-            used_quote_pair = (close.at[last_session, ticker] if last_session in close.index else None)
-            used_quote_pair = pd.isna(used_quote_pair) or (
-                prev_session in close.index and pd.isna(close.at[prev_session, ticker])
-            )
-            if used_quote_pair:
-                chg_pct = float(quote["chg_pct"])
-                # Keep $ move consistent with the official % on the last price.
-                chg_abs = lc * (chg_pct / 100.0) / (1.0 + chg_pct / 100.0) if chg_pct != -100 else lc - pc
-                # Prefer explicit prev if we have it
-                if quote.get("prev_close"):
-                    pc = float(quote["prev_close"])
-                    chg_abs = lc - pc
-                    chg_pct = (lc / pc - 1) * 100
-            else:
-                chg_pct = (lc / pc - 1) * 100
-                chg_abs = lc - pc
-        else:
-            chg_pct = (lc / pc - 1) * 100
-            chg_abs = lc - pc
+        chg_pct = (lc / pc - 1.0) * 100.0
+        chg_abs = lc - pc
 
         try:
             if isinstance(volume, pd.DataFrame) and ticker in volume.columns:
-                v = volume.at[last_session, ticker]
+                v = volume.at[last_date, ticker] if last_date in volume.index else None
                 vol = int(v) if pd.notna(v) else 0
             else:
                 vol = 0
         except Exception:
             vol = 0
-        if vol == 0 and quote.get("volume"):
-            vol = int(quote["volume"])
 
         rows.append({
             "ticker":     ticker,
@@ -3294,7 +3375,7 @@ def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
             "chg_abs":    chg_abs,
             "prev_close": pc,
             "volume":     vol,
-            "trade_date": str(last_date),
+            "trade_date": str(last_d),
         })
 
     return pd.DataFrame(rows)
@@ -3878,7 +3959,7 @@ def render_screener() -> None:
         )
     else:
         state_html = (
-            f"<span style='color:{_txt}'>as of {trade_date} official close · "
+            f"<span style='color:{_txt}'>as of {trade_date} official close vs prior session · "
             f"{active_count} stocks</span>"
         )
 
