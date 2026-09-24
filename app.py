@@ -2695,22 +2695,12 @@ def _repair_tail_gaps(close: pd.DataFrame, bucket: str,
         return close
 
 
-def _yahoo_regular_market_quote(ticker: str) -> dict:
-    """
-    Official regular-session last price for one ticker.
-
-    Yahoo's daily chart `close` array routinely stays `null` on the newest
-    session for hours after 16:00 ET (Open/High/Low/Volume are already there).
-    The same payload's `meta.regularMarketPrice` — and yfinance `fast_info.
-    last_price` — is the official regular-session last and is populated as
-    soon as the auction prints. Prefer the chart meta field because it is
-    explicitly the REGULAR session last, not a post-market print.
-    """
-    # 1) Chart meta — regularMarketPrice is the official close
+def _yahoo_chart(ticker: str, interval: str, range_: str) -> dict:
+    """Raw Yahoo v8 chart payload, or {} on failure."""
     try:
         url = (
             f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
-            f"?interval=1d&range=5d"
+            f"?interval={interval}&range={range_}"
         )
         resp = requests.get(
             url,
@@ -2718,37 +2708,143 @@ def _yahoo_regular_market_quote(ticker: str) -> dict:
             timeout=12,
         )
         resp.raise_for_status()
-        meta = resp.json()["chart"]["result"][0]["meta"]
-        px = meta.get("regularMarketPrice")
-        vol = meta.get("regularMarketVolume")
-        if px is not None and float(px) > 0:
-            return {
-                "price": float(px),
-                "volume": int(vol) if vol not in (None, "") else None,
-            }
+        result = resp.json().get("chart", {}).get("result") or []
+        return result[0] if result else {}
     except Exception as e:
-        print(f"Chart-meta quote failed [{ticker}]: {type(e).__name__}: {e}")
+        print(f"Yahoo chart failed [{ticker} {interval}]: {type(e).__name__}: {e}")
+        return {}
 
-    # 2) fast_info last_price — usually the regular last even after hours
-    try:
-        fi = yf.Ticker(ticker).fast_info
-        px = None
-        if hasattr(fi, "get"):
-            px = fi.get("lastPrice", None)
-        if px is None:
-            px = getattr(fi, "last_price", None)
-        vol = None
-        if hasattr(fi, "get"):
-            vol = fi.get("lastVolume", None)
-        if px is not None and pd.notna(px) and float(px) > 0:
-            return {
-                "price": float(px),
-                "volume": int(vol) if vol not in (None, "") and pd.notna(vol) else None,
-            }
-    except Exception as e:
-        print(f"fast_info quote failed [{ticker}]: {type(e).__name__}: {e}")
 
-    return {}
+def _hourly_close_on_date(chart: dict, session_date) -> float:
+    """Last regular-session hourly close on an ET calendar date."""
+    if not chart:
+        return None
+    ts_list = chart.get("timestamp") or []
+    quote = (chart.get("indicators") or {}).get("quote") or []
+    if not ts_list or not quote:
+        return None
+    closes = quote[0].get("close") or []
+    meta = chart.get("meta") or {}
+    gmt_off = int(meta.get("gmtoffset") or 0)
+    last = None
+    target = session_date if hasattr(session_date, "year") else pd.Timestamp(session_date).date()
+    for ts, c in zip(ts_list, closes):
+        if c is None:
+            continue
+        try:
+            et = datetime.fromtimestamp(int(ts) + gmt_off, timezone.utc)
+        except Exception:
+            continue
+        if et.date() != target:
+            continue
+        # Regular session bars only (09:30–16:00 ET).
+        mins = et.hour * 60 + et.minute
+        if 9 * 60 + 30 <= mins <= 16 * 60:
+            last = float(c)
+    return last
+
+
+def _yahoo_regular_market_quote(ticker: str) -> dict:
+    """
+    Official regular-session last AND previous close for one ticker.
+
+    Yahoo's *daily* close array is unreliable around the session we care
+    about: the newest bar often has Close=null for hours, and some names
+    also publish a fully-null bar on the prior session (MPWR/PANW on
+    22 Sep 2026). Falling back to the last non-null daily bar then
+    compares T vs T-2 and invents a fake gain.
+
+    The 1-hour chart is complete for those same dates, and its meta
+    carries the official pair:
+      regularMarketPrice  = last regular close
+      previousClose       = prior regular close
+      regularMarketChangePercent = official 1-session move
+    """
+    out = {}
+
+    # 1h chart — official last/prev pair + per-date reconstruction
+    hourly = _yahoo_chart(ticker, "1h", "15d")
+    if hourly:
+        meta = hourly.get("meta") or {}
+        last = meta.get("regularMarketPrice")
+        prev = meta.get("previousClose")
+        chg  = meta.get("regularMarketChangePercent")
+        vol  = meta.get("regularMarketVolume")
+        if last is not None and float(last) > 0:
+            out["price"] = float(last)
+        if prev is not None and float(prev) > 0:
+            out["prev_close"] = float(prev)
+        if chg is not None:
+            try:
+                out["chg_pct"] = float(chg)
+            except (TypeError, ValueError):
+                pass
+        if vol not in (None, ""):
+            try:
+                out["volume"] = int(vol)
+            except (TypeError, ValueError):
+                pass
+        if "price" in out and "prev_close" not in out and out.get("chg_pct") is not None:
+            denom = 1.0 + out["chg_pct"] / 100.0
+            if denom != 0:
+                out["prev_close"] = out["price"] / denom
+        out["_hourly"] = hourly
+
+    # Daily chart meta as a last-price fallback
+    if "price" not in out:
+        daily = _yahoo_chart(ticker, "1d", "5d")
+        if daily:
+            meta = daily.get("meta") or {}
+            last = meta.get("regularMarketPrice")
+            vol  = meta.get("regularMarketVolume")
+            chg  = meta.get("regularMarketChangePercent")
+            if last is not None and float(last) > 0:
+                out["price"] = float(last)
+            if vol not in (None, ""):
+                try:
+                    out["volume"] = int(vol)
+                except (TypeError, ValueError):
+                    pass
+            if chg is not None and "chg_pct" not in out:
+                try:
+                    out["chg_pct"] = float(chg)
+                except (TypeError, ValueError):
+                    pass
+            if "price" in out and "prev_close" not in out and out.get("chg_pct") is not None:
+                denom = 1.0 + out["chg_pct"] / 100.0
+                if denom != 0:
+                    out["prev_close"] = out["price"] / denom
+
+    # fast_info last-price last resort
+    if "price" not in out:
+        try:
+            fi = yf.Ticker(ticker).fast_info
+            px = fi.get("lastPrice") if hasattr(fi, "get") else None
+            if px is None:
+                px = getattr(fi, "last_price", None)
+            if px is not None and pd.notna(px) and float(px) > 0:
+                out["price"] = float(px)
+        except Exception as e:
+            print(f"fast_info quote failed [{ticker}]: {type(e).__name__}: {e}")
+
+    return out
+
+
+def _market_sessions(close: pd.DataFrame) -> pd.DatetimeIndex:
+    """
+    Trading days in `close`, ignoring ghost rows.
+
+    yf.download aligns every symbol onto the union of dates. A name
+    Yahoo failed to write a daily Close for still *creates* that date
+    on the index when any other name printed. Coverage filters out
+    empty holidays; a session most of the book traded stays in.
+    """
+    if close is None or close.empty:
+        return pd.DatetimeIndex([])
+    n = max(len(close.columns), 1)
+    min_count = 1 if n <= 3 else max(3, int(n * 0.15))
+    counts = close.notna().sum(axis=1)
+    return pd.DatetimeIndex(close.index[counts >= min_count])
 
 
 def _fill_null_latest_closes(close: pd.DataFrame, volume: pd.DataFrame = None,
@@ -3090,54 +3186,96 @@ def fetch_price_data_extended(tickers: tuple, session: str) -> pd.DataFrame:
 
 def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
     """
-    Always returns the MOST RECENT COMPLETED trading session's prices.
+    Overnight screener: last completed regular close vs the immediately
+    preceding regular close.
 
-    Session selection is now done on the data, not on the clock: fetch a
-    generous, uncapped window of daily bars (_fetch_daily_bars, which no longer
-    lets a lagging Yahoo `adjclose` delete the newest bar), trim off anything
-    whose regular session hasn't finished (_trim_to_completed_sessions), then
-    take the last two rows. At 11 AM SGT on 29 Jul that resolves to the 28 Jul
-    close vs the 25 Jul close, which is what the screener should show.
+    The market calendar is the set of dates MOST constituents actually
+    printed a close. A ticker whose daily bar is null on T-1 (Yahoo
+    routinely publishes a ghost null row — MPWR/PANW on 22 Sep 2026)
+    is filled from the 1-hour chart / official previousClose. We never
+    skip back to T-2; that is what turned MPWR's real −1.82% into a
+    fake +6.09%.
     """
     close, volume = _fetch_daily_bars(tickers, 20, _eod_cache_bucket())
     close, volume = _trim_to_completed_sessions(close, volume)
     if close is None or close.empty:
         return pd.DataFrame()
 
-    # Anchor EVERY ticker to the same latest completed session. Using each
-    # column's own last non-null row lets a name whose newest Close is still
-    # null on Yahoo slide back to T-1 while the badge says T — the CRWD/LITE
-    # bug. Names still missing after _fill_null_latest_closes are skipped
-    # rather than shown with a stale session's move.
-    last_session = close.index.max()
-    prev_candidates = close.index[close.index < last_session]
-    prev_session = prev_candidates.max() if len(prev_candidates) else None
+    sessions = _market_sessions(close)
+    if len(sessions) < 2:
+        return pd.DataFrame()
+    last_session = sessions[-1]
+    prev_session = sessions[-2]
+    last_date = pd.Timestamp(last_session).date()
+    prev_date = pd.Timestamp(prev_session).date()
+
+    import time as _time
+    quote_cache = {}
+
+    def _quote(tk: str) -> dict:
+        if tk not in quote_cache:
+            if quote_cache:
+                _time.sleep(0.08)
+            quote_cache[tk] = _yahoo_regular_market_quote(tk)
+        return quote_cache[tk]
 
     rows = []
     for ticker in tickers:
         if ticker not in close.columns:
             continue
-        if pd.isna(close.at[last_session, ticker]):
+
+        lc = close.at[last_session, ticker] if last_session in close.index else None
+        pc = close.at[prev_session, ticker] if prev_session in close.index else None
+        lc = float(lc) if pd.notna(lc) else None
+        pc = float(pc) if pd.notna(pc) else None
+
+        quote = {}
+        if lc is None or pc is None:
+            quote = _quote(ticker)
+
+        if lc is None:
+            lc = quote.get("price")
+            # If the quote last doesn't correspond to last_session, try hourly.
+            if lc is None and quote.get("_hourly") is not None:
+                lc = _hourly_close_on_date(quote["_hourly"], last_date)
+
+        if pc is None:
+            # Official previous regular close — NOT the last non-null daily
+            # bar, which may be T-2 when T-1's daily close is still null.
+            pc = quote.get("prev_close")
+            if pc is None and quote.get("_hourly") is not None:
+                pc = _hourly_close_on_date(quote["_hourly"], prev_date)
+            if pc is None and lc is not None and quote.get("chg_pct") is not None:
+                denom = 1.0 + float(quote["chg_pct"]) / 100.0
+                if denom != 0:
+                    pc = lc / denom
+
+        if lc is None or pc is None or pc == 0:
             continue
-        if prev_session is None or pd.isna(close.at[prev_session, ticker]):
-            # Rare: no T-1 print on the shared grid — fall back to that
-            # ticker's own previous non-null observation.
-            col = close[ticker].dropna()
-            col = col[col.index < last_session]
-            if col.empty:
-                continue
-            pc = float(col.iloc[-1])
+
+        if quote.get("chg_pct") is not None and quote.get("price") is not None:
+            # When we had to ask Yahoo for the official pair, use its %.
+            # Otherwise compute from the two daily closes we already have.
+            used_quote_pair = (close.at[last_session, ticker] if last_session in close.index else None)
+            used_quote_pair = pd.isna(used_quote_pair) or (
+                prev_session in close.index and pd.isna(close.at[prev_session, ticker])
+            )
+            if used_quote_pair:
+                chg_pct = float(quote["chg_pct"])
+                # Keep $ move consistent with the official % on the last price.
+                chg_abs = lc * (chg_pct / 100.0) / (1.0 + chg_pct / 100.0) if chg_pct != -100 else lc - pc
+                # Prefer explicit prev if we have it
+                if quote.get("prev_close"):
+                    pc = float(quote["prev_close"])
+                    chg_abs = lc - pc
+                    chg_pct = (lc / pc - 1) * 100
+            else:
+                chg_pct = (lc / pc - 1) * 100
+                chg_abs = lc - pc
         else:
-            pc = float(close.at[prev_session, ticker])
+            chg_pct = (lc / pc - 1) * 100
+            chg_abs = lc - pc
 
-        lc = float(close.at[last_session, ticker])
-        if pc == 0:
-            continue
-
-        chg_pct = (lc / pc - 1) * 100
-        chg_abs = lc - pc
-
-        # Volume from the same last session, not from a later dropna() tail
         try:
             if isinstance(volume, pd.DataFrame) and ticker in volume.columns:
                 v = volume.at[last_session, ticker]
@@ -3146,15 +3284,17 @@ def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
                 vol = 0
         except Exception:
             vol = 0
+        if vol == 0 and quote.get("volume"):
+            vol = int(quote["volume"])
 
         rows.append({
             "ticker":     ticker,
-            "price":      lc,            # full precision; rounded only at display
-            "chg_pct":    chg_pct,       # full precision; weighted sum needs it
+            "price":      lc,
+            "chg_pct":    chg_pct,
             "chg_abs":    chg_abs,
-            "prev_close": pc,            # t-1 anchor for the weight base
+            "prev_close": pc,
             "volume":     vol,
-            "trade_date": str(pd.Timestamp(last_session).date()),
+            "trade_date": str(last_date),
         })
 
     return pd.DataFrame(rows)
