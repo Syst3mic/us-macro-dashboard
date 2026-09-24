@@ -3230,14 +3230,13 @@ def fetch_price_data_historical(tickers: tuple, target_date) -> pd.DataFrame:
 
 
 def fetch_price_data(tickers: tuple) -> tuple:
-    """Router: picks correct fetch based on market state. Returns (DataFrame, state)."""
-    state = get_market_state()
-    if state == "open":
-        return fetch_price_data_live(tickers), state
-    elif state in ("pre", "after_hours"):
-        return fetch_price_data_extended(tickers, state), state
-    else:
-        return fetch_price_data_eod(tickers), state
+    """
+    Overnight-moves screener: always the last completed regular session
+    vs the session before it. Pre-market / live / after-hours prints are
+    intentionally not used — chg% and chg$ are official close vs official
+    close only.
+    """
+    return fetch_price_data_eod(tickers), "eod"
 
 
 def fmt_volume(v) -> str:
@@ -3564,20 +3563,16 @@ def render_screener() -> None:
     tickers_tuple  = tuple(constituents["ticker"].tolist())
     total_universe = len(tickers_tuple)
 
-    # ── Load price data (market-state-aware, or historical if a date is set) ─
+    # ── Load price data (last official close vs prior close) ───────────────
+    # Historical mode still backdates to a chosen session. Otherwise this is
+    # always the most recent completed regular session — never pre-market,
+    # live tape, or after-hours prints.
     if hist_mode and hist_date:
         with st.spinner(f"Fetching {total_universe} stocks as of {hist_date.strftime('%d %b %Y')}…"):
             prices = fetch_price_data_historical(tickers_tuple, hist_date)
         market_state = "historical"
     else:
-        market_state = get_market_state()
-        spinner_msgs = {
-            "open":        f"Fetching live prices for {total_universe} stocks (~15min delay)…",
-            "pre":         f"Fetching pre-market prices for {total_universe} stocks (~15min delay)…",
-            "after_hours": f"Fetching after-hours prices for {total_universe} stocks (~15min delay)…",
-            "closed":      f"Fetching EOD prices for {total_universe} stocks…",
-        }
-        with st.spinner(spinner_msgs.get(market_state, "Fetching prices…")):
+        with st.spinner(f"Fetching official closes for {total_universe} stocks…"):
             prices, market_state = fetch_price_data(tickers_tuple)
 
     if prices.empty:
@@ -3672,21 +3667,12 @@ def render_screener() -> None:
     priced["chg_for_idx"] = priced["chg_pct"].fillna(0.0)
     weighted_return = float((priced["weight"] * priced["chg_for_idx"]).sum())
 
-    # ── Headline index return = SPY / QQQ's OWN price change ───────────────
-    # The user wants the headline "S&P 500 Return" / "Nasdaq 100 Return" badge
-    # to match the ETF's actual tape tick-for-tick, at any point in the
-    # session — not a bottom-up constituent estimate. Re-use the exact same
-    # session-aware routing (live 2-min bars / pre/after-hours / EOD /
-    # historical) already used for the constituent universe above, just
-    # pointed at the ETF ticker itself, so the same market-state branch and
-    # hist_date apply consistently to both.
+    # ── Headline index return = SPY / QQQ's OWN official-close change ──────
+    # Same session as the constituent table: last completed regular close vs
+    # the close before it (or the backdated session in historical mode).
     try:
         if hist_mode and hist_date:
             etf_prices = fetch_price_data_historical((etf_label,), hist_date)
-        elif market_state == "open":
-            etf_prices = fetch_price_data_live((etf_label,))
-        elif market_state in ("pre", "after_hours"):
-            etf_prices = fetch_price_data_extended((etf_label,), market_state)
         else:
             etf_prices = fetch_price_data_eod((etf_label,))
     except Exception as e:
@@ -3738,43 +3724,21 @@ def render_screener() -> None:
     sgt           = timezone(timedelta(hours=8))
     now_sgt_str   = datetime.now(sgt).strftime("%H:%M SGT")
 
-    # ── Market state status badge ─────────────────────────────────────────
+    # ── Session stamp (overnight-moves screener — no live/pre/AH badge) ──
     _txt = "#1A2540"   # dark text for white background
-    if market_state == "open":
-        state_html = (
-            f"<span style='color:#0FD68A;font-weight:700'>● LIVE</span>"
-            f"<span style='color:{_txt}'> (~15min delay) · "
-            f"{active_count} of {total_universe} stocks active · "
-            f"as of {now_sgt_str}</span>"
-        )
-    elif market_state == "pre":
-        state_html = (
-            f"<span style='color:#F59E0B;font-weight:700'>● PRE-MARKET</span>"
-            f"<span style='color:{_txt}'> (~15min delay) · "
-            f"{active_count} of {total_universe} stocks active · "
-            f"as of {now_sgt_str}</span>"
-        )
-    elif market_state == "after_hours":
-        state_html = (
-            f"<span style='color:#A78BFA;font-weight:700'>● AFTER-HOURS</span>"
-            f"<span style='color:{_txt}'> (~15min delay) · "
-            f"{active_count} of {total_universe} stocks active · "
-            f"as of {now_sgt_str}</span>"
-        )
-    elif market_state == "historical":
+    if market_state == "historical":
         _picked_str = hist_date.strftime("%d %b %Y") if hist_date else trade_date
         _snap_note = ""
         if hist_date and trade_date != "—" and str(hist_date) != trade_date:
             _snap_note = f" — {_picked_str} was non-trading, showing the nearest prior session"
         state_html = (
             f"<span style='color:#5B8DEF;font-weight:700'>📅 HISTORICAL</span>"
-            f"<span style='color:{_txt}'> · showing {trade_date} official close{_snap_note} · "
+            f"<span style='color:{_txt}'> · as of {trade_date} official close{_snap_note} · "
             f"{active_count} stocks</span>"
         )
     else:
         state_html = (
-            f"<span style='color:#F0485A;font-weight:700'>● CLOSED</span>"
-            f"<span style='color:{_txt}'> · showing {trade_date} official close · "
+            f"<span style='color:{_txt}'>as of {trade_date} official close · "
             f"{active_count} stocks</span>"
         )
 
@@ -5089,9 +5053,9 @@ def main():
             st.markdown(f"""
             <div class="sb-footnote">
               <b style="color:#1A2540">Universe</b><br>{holdings_date}<br><br>
-              <b style="color:#1A2540">Prices</b><br>Yahoo Finance · Market-state aware<br><br>
-              <b style="color:#1A2540">Weights</b><br>Live shares × price<br><br>
-              <b style="color:#1A2540">Cache</b><br>Prices 5 min · Sectors 24 h<br><br>
+              <b style="color:#1A2540">Prices</b><br>Yahoo Finance · last official close<br><br>
+              <b style="color:#1A2540">Weights</b><br>Shares × prior close<br><br>
+              <b style="color:#1A2540">Cache</b><br>Prices roll at 16:00 ET · Sectors 24 h<br><br>
               <b style="color:#1A2540">Corp Actions</b><br>Splits auto-detected · chg% normalised
             </div>
             """, unsafe_allow_html=True)
