@@ -2581,8 +2581,21 @@ def _fetch_daily_bars(tickers: tuple, lookback_days: int, bucket: str):
             if getattr(idx, "tz", None) is not None:
                 idx = idx.tz_convert(_ET_TZ).tz_localize(None)
         except Exception:
-            pass
-        df.index = pd.DatetimeIndex(idx).normalize()
+            try:
+                idx = pd.to_datetime(idx).tz_localize(None)
+            except Exception:
+                pass
+        # Force naive midnight even if tz stripping failed above.
+        naive = []
+        for ts in idx:
+            t = pd.Timestamp(ts)
+            if getattr(t, "tzinfo", None) is not None:
+                try:
+                    t = t.tz_convert(_ET_TZ).tz_localize(None)
+                except Exception:
+                    t = t.tz_localize(None)
+            naive.append(t.normalize())
+        df.index = pd.DatetimeIndex(naive)
         df = df[~df.index.duplicated(keep="last")]
         return df.sort_index()
 
@@ -3281,69 +3294,77 @@ def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
     T-1 is filled from that day's last regular-hour bar — we never fall
     back to T-2.
     """
-    bucket = _eod_cache_bucket() + "_eodv4"
+    bucket = _eod_cache_bucket() + "_eodv5"
     close, volume = _fetch_daily_bars(tickers, 20, bucket)
     close, volume = _trim_to_completed_sessions(close, volume)
     if close is None or close.empty:
         return pd.DataFrame()
 
+    def _day(ts) -> date:
+        t = pd.Timestamp(ts)
+        if getattr(t, "tzinfo", None) is not None:
+            try:
+                t = t.tz_convert(_ET_TZ).tz_localize(None)
+            except Exception:
+                try:
+                    t = t.tz_localize(None)
+                except Exception:
+                    pass
+        return t.date()
+
+    def _value_on(frame, session_d, ticker):
+        if frame is None or frame.empty or ticker not in frame.columns:
+            return None
+        for idx in frame.index:
+            if _day(idx) != session_d:
+                continue
+            v = frame.at[idx, ticker]
+            if pd.notna(v):
+                return float(v)
+        return None
+
     spy_sessions = _spy_session_index(bucket)
     if len(spy_sessions) >= 2:
-        last_session = spy_sessions[-1]
-        prev_session = spy_sessions[-2]
+        last_d = _day(spy_sessions[-1])
+        prev_d = _day(spy_sessions[-2])
     else:
         sessions = _market_sessions(close)
         if len(sessions) < 2:
             return pd.DataFrame()
-        last_session = sessions[-1]
-        prev_session = sessions[-2]
-
-    last_date = pd.Timestamp(last_session).normalize()
-    prev_date = pd.Timestamp(prev_session).normalize()
-    last_d = last_date.date()
-    prev_d = prev_date.date()
-
-    # Make sure both session rows exist so .at lookups are safe.
-    for ts in (prev_date, last_date):
-        if ts not in close.index:
-            close.loc[ts] = pd.NA
-    close = close.sort_index()
+        last_d = _day(sessions[-1])
+        prev_d = _day(sessions[-2])
 
     missing = []
+    daily_last = {}
+    daily_prev = {}
+    daily_vol  = {}
     for tk in tickers:
         if tk not in close.columns:
             continue
-        last_ok = last_date in close.index and pd.notna(close.at[last_date, tk])
-        prev_ok = prev_date in close.index and pd.notna(close.at[prev_date, tk])
-        if not last_ok or not prev_ok:
+        daily_last[tk] = _value_on(close, last_d, tk)
+        daily_prev[tk] = _value_on(close, prev_d, tk)
+        daily_vol[tk]  = _value_on(volume, last_d, tk) if isinstance(volume, pd.DataFrame) else None
+        if daily_last[tk] is None or daily_prev[tk] is None:
             missing.append(tk)
 
     hourly_map = _hourly_closes_on_dates(missing, [prev_d, last_d]) if missing else {}
 
-    import time as _time
     rows = []
-    quote_calls = 0
     for ticker in tickers:
         if ticker not in close.columns:
             continue
 
-        lc = close.at[last_date, ticker] if last_date in close.index else None
-        pc = close.at[prev_date, ticker] if prev_date in close.index else None
-        lc = float(lc) if pd.notna(lc) else None
-        pc = float(pc) if pd.notna(pc) else None
-
+        lc = daily_last.get(ticker)
+        pc = daily_prev.get(ticker)
         by_hour = hourly_map.get(ticker, {})
         if lc is None:
             lc = by_hour.get(last_d)
         if pc is None:
             pc = by_hour.get(prev_d)
 
-        # Last resort: official quote pair. Never walk back to T-2.
+        # Still missing T-1: one official quote. Never use T-2.
         if lc is None or pc is None:
-            if quote_calls:
-                _time.sleep(0.08)
             quote = _yahoo_regular_market_quote(ticker)
-            quote_calls += 1
             if lc is None:
                 lc = quote.get("price")
             if pc is None:
@@ -3358,15 +3379,8 @@ def fetch_price_data_eod(tickers: tuple) -> pd.DataFrame:
 
         chg_pct = (lc / pc - 1.0) * 100.0
         chg_abs = lc - pc
-
-        try:
-            if isinstance(volume, pd.DataFrame) and ticker in volume.columns:
-                v = volume.at[last_date, ticker] if last_date in volume.index else None
-                vol = int(v) if pd.notna(v) else 0
-            else:
-                vol = 0
-        except Exception:
-            vol = 0
+        vol_v = daily_vol.get(ticker)
+        vol = int(vol_v) if vol_v is not None else 0
 
         rows.append({
             "ticker":     ticker,
